@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  FileSpreadsheet,
   Bell,
   Boxes,
   LayoutDashboard,
@@ -55,6 +56,7 @@ export const NAVIGATION: NavSection[] = [
   {
     heading: "Setup",
     items: [
+      { label: "Import data", href: "/imports", icon: FileSpreadsheet },
       { label: "Integrations", href: "/integrations", icon: Plug, phase: 9 },
       { label: "Settings", href: "/settings", icon: Settings, phase: 14 },
     ],

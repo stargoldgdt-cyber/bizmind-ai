@@ -309,6 +309,99 @@ pretend to work.
 
 ---
 
+## 2026-09-08 — File import built as the first connector
+
+**Decided:** CSV/Excel import shares one pipeline with every future
+integration: mapping, validation, normalisation and an atomic apply. A file
+connector and a Shopify connector differ only in how raw records arrive and
+whether the mapping is user-chosen or vendor-fixed.
+
+**Why:** Building import as a standalone feature would mean writing the same
+validation and upsert logic again for Shopify, then again for WooCommerce, and
+letting marketplace assumptions leak into the data model. The shared contract
+makes each new connector a mapping plus a fetch.
+
+**Cost to change:** High later, trivial now — which is why it was done now.
+
+---
+
+## 2026-09-08 — Ambiguity is refused, never resolved
+
+**Decided:** An ambiguous date (`03/04/2026`), a number contradicting the
+chosen decimal separator, an unrecognised order status, or a row in a foreign
+currency is REJECTED with an explanation. None of them is guessed.
+
+**Why:** Guessing produces a plausible wrong number, which is the most
+dangerous output this product can generate — worse than an error, because
+nobody investigates a figure that looks reasonable. `03/04/2026` read as
+month-first instead of day-first moves revenue into a different month and
+silently corrupts every period comparison.
+
+Currency is the sharpest case: converting would require an exchange rate, and
+inventing one would be inventing a financial figure. Foreign-currency rows are
+refused and the user is told to use a separate business.
+
+**Cost to change:** Low, but it should not change.
+
+---
+
+## 2026-09-08 — Missing recommended fields warn rather than block
+
+**Decided:** Three tiers. `required` blocks the import; `recommended` allows it
+but names the consequence and needs an explicit acknowledgement; `optional` is
+silent.
+
+**Why:** Blocking an import because costs are missing would stop an owner
+seeing their revenue at all. Importing silently would let them believe a
+100% margin is real. The middle path shows the number and states plainly that
+profit is overstated — which is also why `dashboard_summary` returns cost
+coverage.
+
+Demonstrated in testing: importing product costs corrected a channel that had
+been showing a 100% margin down to its real 50%.
+
+**Cost to change:** Low.
+
+---
+
+## 2026-09-08 — uuid overridden to clear an exceljs advisory
+
+**Decided:** `exceljs` for XLSX reading, with an npm `overrides` entry forcing
+`uuid` to v11.
+
+**Why:** The npm `xlsx` package is frozen at 0.18.5 — SheetJS moved
+distribution to their own CDN — and that version carries a known prototype
+pollution flaw. `exceljs` is the maintained npm-native alternative, but it pins
+`uuid@^8`, which took the project from zero advisories to two.
+
+Rather than accept them, `uuid` was overridden to v11, restoring a clean audit.
+The override was then FUNCTIONALLY tested: a workbook was written and read back
+to confirm exceljs still works. An override that silently breaks the library
+would be worse than the advisory it fixes.
+
+**Cost to change:** Low.
+
+---
+
+## 2026-09-08 — Import writes live in SQL functions
+
+**Decided:** Each entity has an `import_apply_*` function that takes validated
+rows as jsonb and writes them in one transaction. `business_id` is read from
+the batch row, never from the caller's arguments.
+
+**Why:** Two reasons. A half-applied import is worse than none — the owner sees
+a figure that is neither the old truth nor the new one — and a function body is
+a single transaction. And deriving the business from the RLS-protected batch
+means a caller cannot import into a business they do not belong to even by
+passing its id.
+
+Verified: a batch whose second row fails at the database level leaves the valid
+first row unwritten.
+
+**Cost to change:** Moderate.
+
+---
+
 ## 2026-09-08 — `shadcn` kept as a runtime dependency
 
 **Decided:** Left `shadcn` in `dependencies` where its installer placed it,

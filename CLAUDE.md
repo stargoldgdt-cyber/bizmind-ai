@@ -274,8 +274,8 @@ Work in phases. Do not jump ahead, and do not expand scope mid-phase.
 2  Auth + multi-tenancy     ✅ complete, isolation verified live
 3  Database + RLS          ✅ complete, isolation verified live
 4  Core dashboard          ✅ complete, arithmetic verified
-5  Universal data model
-6  CSV / Excel import
+5  Universal data model    ✅ complete (CSV/Excel import connector)
+6  CSV / Excel import      ✅ delivered with phase 5
 7  Analytics engine
 8  AI business analyst
 9  Shopify integration

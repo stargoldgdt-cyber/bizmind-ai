@@ -74,6 +74,15 @@ export type ReturnStatus =
   | "REFUNDED"
   | "REJECTED"
 
+export type ImportEntity = "ORDERS" | "PRODUCTS" | "EXPENSES"
+
+export type ImportStatus =
+  | "DRAFT"
+  | "READY"
+  | "COMPLETED"
+  | "FAILED"
+  | "CANCELLED"
+
 export type InventoryMovementType =
   | "PURCHASE"
   | "SALE"
@@ -659,6 +668,103 @@ export type Database = {
         Relationships: []
       }
 
+      /* ---- Import pipeline (migration 0004) ---------------------------- */
+
+      import_batches: {
+        Row: Tenanted & {
+          created_by: string | null
+          entity: ImportEntity
+          status: ImportStatus
+          source: ChannelType | null
+          channel_id: string | null
+          file_name: string
+          file_type: "csv" | "xlsx"
+          file_size_bytes: number
+          /** Detected column headings. */
+          columns: Json
+          /** The parsed file, kept so mapping can be re-run and audited. */
+          raw_rows: Json
+          row_count: number
+          mapping: Json | null
+          options: Json | null
+          rows_valid: number | null
+          rows_failed: number | null
+          created_count: number | null
+          updated_count: number | null
+          error: string | null
+          updated_at: string
+          committed_at: string | null
+        }
+        Insert: {
+          business_id: string
+          created_by?: string | null
+          entity: ImportEntity
+          status?: ImportStatus
+          source?: ChannelType | null
+          channel_id?: string | null
+          file_name: string
+          file_type: "csv" | "xlsx"
+          file_size_bytes: number
+          columns?: Json
+          raw_rows?: Json
+          row_count?: number
+          mapping?: Json | null
+          options?: Json | null
+        }
+        Update: {
+          status?: ImportStatus
+          source?: ChannelType | null
+          channel_id?: string | null
+          mapping?: Json | null
+          options?: Json | null
+          rows_valid?: number | null
+          rows_failed?: number | null
+          created_count?: number | null
+          updated_count?: number | null
+          error?: string | null
+          committed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_batches_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+
+      import_issues: {
+        Row: Tenanted & {
+          batch_id: string
+          row_number: number
+          severity: "ERROR" | "WARNING"
+          field: string | null
+          message: string
+          raw_value: string | null
+        }
+        Insert: {
+          business_id: string
+          batch_id: string
+          row_number: number
+          severity: "ERROR" | "WARNING"
+          field?: string | null
+          message: string
+          raw_value?: string | null
+        }
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: "import_issues_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "import_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+
       audit_logs: {
         Row: Tenanted & {
           actor_id: string | null
@@ -749,6 +855,24 @@ export type Database = {
         }[]
       }
 
+      /* ---- Import pipeline (migration 0004) ----------------------------
+       * Each applies a whole file in ONE transaction. business_id is read
+       * from the batch row, never from arguments, so a caller cannot import
+       * into a business they do not belong to. */
+
+      import_apply_orders: {
+        Args: { p_batch_id: string; p_rows: Json }
+        Returns: Json
+      }
+      import_apply_products: {
+        Args: { p_batch_id: string; p_rows: Json }
+        Returns: Json
+      }
+      import_apply_expenses: {
+        Args: { p_batch_id: string; p_rows: Json }
+        Returns: Json
+      }
+
       channel_performance: {
         Args: { p_business_id: string; p_from: string; p_to: string }
         Returns: {
@@ -772,6 +896,8 @@ export type Database = {
       payment_status: PaymentStatus
       return_status: ReturnStatus
       inventory_movement_type: InventoryMovementType
+      import_entity: ImportEntity
+      import_status: ImportStatus
     }
 
     CompositeTypes: Record<never, never>
@@ -797,6 +923,8 @@ export type Payment = T["payments"]["Row"]
 export type ReturnRecord = T["returns"]["Row"]
 export type Expense = T["expenses"]["Row"]
 export type AuditLog = T["audit_logs"]["Row"]
+export type ImportBatch = T["import_batches"]["Row"]
+export type ImportIssue = T["import_issues"]["Row"]
 
 /** A business plus the calling user's role in it. */
 export type BusinessWithRole = Business & { role: BusinessRole }

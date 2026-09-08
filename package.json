@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:import": "tsx scripts/verify-import-pipeline.ts",
+    "verify": "npm run typecheck && npm run lint && npm run test:import && npm run test:parse && npm run build",
+    "test:parse": "node --import tsx --conditions react-server scripts/verify-file-parsing.mts"
   },
   "engines": {
     "node": ">=24.0.0"
@@ -17,8 +20,10 @@
     "@supabase/supabase-js": "^2.116.0",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.2.6",
+    "exceljs": "^4.4.0",
     "lucide-react": "^1.42.0",
     "next": "16.3.4",
+    "papaparse": "^5.7.0",
     "radix-ui": "^1.6.7",
     "react": "19.2.8",
     "react-dom": "19.2.8",
@@ -30,11 +35,16 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/papaparse": "^5.5.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
     "tailwindcss": "^4",
+    "tsx": "^4.23.13",
     "typescript": "^5"
+  },
+  "overrides": {
+    "uuid": "^11.1.0"
   }
 }

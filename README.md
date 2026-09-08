@@ -18,13 +18,14 @@ CONNECT → UNDERSTAND → ANALYZE → ALERT → RECOMMEND → AUTOMATE
 
 ## Status
 
-**Phase 4 of 15 — core dashboard.**
+**Phase 5 of 15 — data import.**
 
 Foundation, design system, Supabase Auth, the multi-tenant security model, the
-universal data model and a working dashboard are in place. Every business
-figure is computed in SQL and was checked against hand arithmetic; tenant
-isolation was verified by attack, not assumption. There is deliberately no AI or
-integration yet; each arrives in its own phase. See `CLAUDE.md` § 10.
+universal data model, a working dashboard and CSV/Excel import are in place.
+Every business figure is computed in SQL and checked against hand arithmetic;
+tenant isolation was verified by attack, not assumption. Import is built as the
+first connector, so Shopify and WooCommerce reuse the same pipeline. AI arrives
+in its own phase. See `CLAUDE.md` § 10.
 
 ---
 
@@ -50,6 +51,7 @@ Full instructions, including how secrets are handled, are in
 | `npm run build` | Production build — must pass before committing |
 | `npm run start` | Serve the production build |
 | `npm run lint` | Code quality checks — must pass before committing |
+| `npm run verify` | Typecheck, lint, both test suites and build, in one go |
 
 ---
 
@@ -69,10 +71,11 @@ Supabase (PostgreSQL, Auth, RLS) · OpenAI · Vercel
 | [DESIGN.md](./DESIGN.md) | Colour, typography, spacing, chart rules |
 | [SETUP.md](./SETUP.md) | Getting it running, and how secrets work |
 | [DATABASE.md](./DATABASE.md) | Schema, tenant isolation, migrations |
+| [INTEGRATIONS.md](./INTEGRATIONS.md) | Import pipeline and the connector contract |
 | [DECISIONS.md](./DECISIONS.md) | Why each major choice was made |
 | [AGENTS.md](./AGENTS.md) | Next.js 16 framework rules (auto-generated) |
 
-`API.md`, `AI.md` and `INTEGRATIONS.md` are written as their phases land.
+`API.md` and `AI.md` are written as their phases land.
 
 ---
 

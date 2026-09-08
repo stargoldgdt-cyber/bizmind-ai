@@ -41,7 +41,10 @@ export function ChannelTable({
     index < 6 ? getSeriesColor(index) : "var(--muted-foreground)"
 
   return (
-    <div className="overflow-x-auto">
+    // Full-bleed horizontal scroll so a wide table can be swiped on mobile,
+    // with the outer cells padded back to the card's own inset so nothing sits
+    // flush against the border.
+    <div className="overflow-x-auto [&_td:first-child]:pl-4 [&_td:last-child]:pr-4 [&_th:first-child]:pl-4 [&_th:last-child]:pr-4">
       <Table>
         <TableHeader>
           <TableRow>

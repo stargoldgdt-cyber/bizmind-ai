@@ -271,7 +271,7 @@ Work in phases. Do not jump ahead, and do not expand scope mid-phase.
 ```
 0  Environment            ✅ complete
 1  Project foundation     ✅ complete
-2  Auth + multi-tenancy     ◐ code complete, pending live verification
+2  Auth + multi-tenancy     ✅ complete, isolation verified live
 3  Database + RLS
 4  Core dashboard
 5  Universal data model

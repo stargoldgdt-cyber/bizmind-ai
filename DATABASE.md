@@ -204,6 +204,36 @@ The real test is behavioural: sign in as two users in two different businesses
 and confirm neither can see the other's rows. Add that check whenever a new
 business-owned table is introduced.
 
+### Isolation results — 2026-09-08, migration 0001
+
+Two accounts in two separate businesses. Every request below was made with a
+genuine signed-in user token, not a crafted one.
+
+| Attempt (user A against business B) | Result |
+| --- | --- |
+| List all businesses | Saw only its own |
+| Read B's business by exact id | 0 rows |
+| Read B's `business_members` | 0 rows |
+| Update B's business name | 0 rows changed; B's data confirmed intact afterwards |
+| Delete B's business | 0 rows deleted; B's business still present |
+| Insert self into B as OWNER | Refused — `42501 new row violates row-level security policy` |
+| List all profiles | Saw only its own |
+| Reverse direction (B against A) | Saw only its own |
+
+Last-owner protection, verified separately:
+
+| Attempt | Result |
+| --- | --- |
+| Owner demotes self to VIEWER | Refused — `P0001 A business must always have at least one owner.` |
+| Owner deletes own membership row | Refused — same |
+
+Note the difference between the read and write failures. Reads return **empty
+results**, not errors: RLS filters rows rather than announcing that something
+was hidden, so an attacker cannot use error messages to confirm a record
+exists. Writes are refused outright.
+
+Re-run these whenever policies change.
+
 ---
 
 ## 8. Regenerating types

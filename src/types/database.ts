@@ -723,6 +723,46 @@ export type Database = {
         }
         Returns: string
       }
+
+      /* ---- Metrics (migration 0003) ------------------------------------
+       * SECURITY INVOKER, so RLS applies inside them. Every money field
+       * comes back as a string, for the reasons in the header note. */
+
+      dashboard_summary: {
+        Args: { p_business_id: string; p_from: string; p_to: string }
+        Returns: {
+          revenue: Numeric
+          order_count: number
+          units_sold: Numeric
+          cogs: Numeric
+          fees: Numeric
+          gross_profit: Numeric
+          gross_margin: Numeric | null
+          expenses: Numeric
+          net_profit: Numeric
+          net_margin: Numeric | null
+          avg_order_value: Numeric | null
+          customer_count: number
+          refunds: Numeric
+          items_total: number
+          items_with_cost: number
+        }[]
+      }
+
+      channel_performance: {
+        Args: { p_business_id: string; p_from: string; p_to: string }
+        Returns: {
+          channel_id: string | null
+          channel_name: string
+          channel_type: ChannelType
+          revenue: Numeric
+          order_count: number
+          cogs: Numeric
+          fees: Numeric
+          gross_profit: Numeric
+          gross_margin: Numeric | null
+        }[]
+      }
     }
 
     Enums: {

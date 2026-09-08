@@ -28,6 +28,62 @@
     --font-heading: var(--font-jakarta);
     --font-mono: var(--font-jetbrains);
 
+    /* Display tracking. Large headlines need negative tracking to stop them
+     * looking loose; the bigger the type, the tighter it goes. */
+    --tracking-tight: -0.02em;
+    --tracking-tighter: -0.035em;
+
+    /* ---- Section rhythm --------------------------------------------------
+     * Vertical padding for full-bleed bands. Section rhythm is the product's
+     * primary premium signal, so it comes from a scale, not from taste.
+     * Usage: py-section-md
+     *
+     * These scale down on small screens automatically (see the media query
+     * below the theme), so a section does not need responsive variants at
+     * every call site. Desktop spaciousness on a phone is just wasted screen.
+     */
+    --spacing-section-sm: var(--section-sm);
+    --spacing-section-md: var(--section-md);
+    --spacing-section-lg: var(--section-lg);
+
+    /* ---- Containers ------------------------------------------------------
+     * Marketing pages run wide; running text does not. A paragraph wider than
+     * roughly 75 characters is measurably harder to read.
+     * Usage: max-w-marketing / max-w-prose-comfortable
+     */
+    --container-marketing: 80rem;
+    --container-prose-comfortable: 42rem;
+
+    /* ---- Surfaces --------------------------------------------------------
+     * Four band levels. A page gets its rhythm by alternating whole sections
+     * between these, NOT by decorating inside them.
+     *
+     * Every level carries its own foreground, muted and border tokens, so a
+     * dark or violet section is built entirely from tokens. If you find
+     * yourself writing text-white inside a section, a token is missing.
+     */
+    --color-surface-1: var(--surface-1);
+    --color-surface-1-foreground: var(--surface-1-foreground);
+    --color-surface-1-muted: var(--surface-1-muted);
+    --color-surface-1-border: var(--surface-1-border);
+
+    --color-surface-2: var(--surface-2);
+    --color-surface-2-foreground: var(--surface-2-foreground);
+    --color-surface-2-muted: var(--surface-2-muted);
+    --color-surface-2-border: var(--surface-2-border);
+
+    --color-surface-3: var(--surface-3);
+    --color-surface-3-foreground: var(--surface-3-foreground);
+    --color-surface-3-muted: var(--surface-3-muted);
+    --color-surface-3-border: var(--surface-3-border);
+    --color-surface-3-raised: var(--surface-3-raised);
+
+    --color-surface-brand: var(--surface-brand);
+    --color-surface-brand-foreground: var(--surface-brand-foreground);
+    --color-surface-brand-muted: var(--surface-brand-muted);
+    --color-surface-brand-border: var(--surface-brand-border);
+    --color-surface-brand-raised: var(--surface-brand-raised);
+
     /* ---- Brand ramp (violet) --------------------------------------------- */
     --color-brand-50: var(--brand-50);
     --color-brand-100: var(--brand-100);
@@ -113,13 +169,18 @@
     --radius-3xl: calc(var(--radius) * 2.2);
     --radius-4xl: calc(var(--radius) * 2.6);
 
-    /* ---- Elevation ------------------------------------------------------- */
+    /* ---- Elevation -------------------------------------------------------
+     * Most cards carry NO shadow. Separation comes from surface contrast and
+     * a hairline border. Elevation is reserved for things that genuinely
+     * float: dialogs, popovers, dropdowns, and layered product screenshots.
+     *
+     * There is deliberately no glow token. See DECISIONS.md.
+     */
     --shadow-xs: var(--elevation-xs);
     --shadow-sm: var(--elevation-sm);
     --shadow-md: var(--elevation-md);
     --shadow-lg: var(--elevation-lg);
     --shadow-xl: var(--elevation-xl);
-    --shadow-glow: var(--elevation-glow);
 }
 
 /*
@@ -129,6 +190,11 @@
  */
 :root {
     --radius: 0.75rem;
+
+    /* Section rhythm, desktop. Overridden for small screens further down. */
+    --section-sm: 4rem;
+    --section-md: 6rem;
+    --section-lg: 8rem;
 
     /* Brand ramp - violet */
     --brand-50: #f5f2ff;
@@ -157,6 +223,34 @@
     --card-foreground: #171426;
     --popover: #ffffff;
     --popover-foreground: #171426;
+
+    /* Band surfaces — alternate whole sections between these.
+     * 1: white, dense content and card grids
+     * 2: tinted, the alternating band
+     * 3: near-black, used for gravity (the problem, trust, security)
+     * brand: saturated violet, used for the promise and the close
+     * Levels 3 and brand are rare on purpose — roughly one section in five. */
+    --surface-1: #ffffff;
+    --surface-1-foreground: #171426;
+    --surface-1-muted: #6b6880;
+    --surface-1-border: #e7e4f2;
+
+    --surface-2: #f5f3fb;
+    --surface-2-foreground: #171426;
+    --surface-2-muted: #63607a;
+    --surface-2-border: #e3dff1;
+
+    --surface-3: #0d0b15;
+    --surface-3-foreground: #f6f5fa;
+    --surface-3-muted: #a6a2b8;
+    --surface-3-border: #ffffff1f;
+    --surface-3-raised: #1a1724;
+
+    --surface-brand: #5b21b6;
+    --surface-brand-foreground: #ffffff;
+    --surface-brand-muted: #dccdf7;
+    --surface-brand-border: #ffffff2e;
+    --surface-brand-raised: #6d28d9;
 
     /* Interactive */
     --primary: #6d28d9;
@@ -214,7 +308,6 @@
     --elevation-md: 0 4px 12px -2px rgb(23 20 38 / 0.07), 0 2px 4px -2px rgb(23 20 38 / 0.05);
     --elevation-lg: 0 12px 28px -6px rgb(23 20 38 / 0.10), 0 4px 8px -4px rgb(23 20 38 / 0.05);
     --elevation-xl: 0 24px 48px -12px rgb(23 20 38 / 0.14);
-    --elevation-glow: 0 0 0 1px rgb(109 40 217 / 0.10), 0 8px 32px -8px rgb(109 40 217 / 0.28);
 }
 
 /*
@@ -230,6 +323,31 @@
     --card-foreground: #f3f1f8;
     --popover: #1f1b2b;
     --popover-foreground: #f3f1f8;
+
+    /* Band surfaces, restepped for dark. Levels 1 and 2 stay close together
+     * so the alternation reads as a quiet shift, not a stripe. Level 3 goes
+     * darker than the page so the "gravity" band still separates. */
+    --surface-1: #0d0b15;
+    --surface-1-foreground: #f3f1f8;
+    --surface-1-muted: #a29fb5;
+    --surface-1-border: #ffffff1a;
+
+    --surface-2: #14111f;
+    --surface-2-foreground: #f3f1f8;
+    --surface-2-muted: #a8a4bb;
+    --surface-2-border: #ffffff1f;
+
+    --surface-3: #07050d;
+    --surface-3-foreground: #f6f5fa;
+    --surface-3-muted: #a6a2b8;
+    --surface-3-border: #ffffff1a;
+    --surface-3-raised: #16131f;
+
+    --surface-brand: #4a1d96;
+    --surface-brand-foreground: #ffffff;
+    --surface-brand-muted: #d3c2f4;
+    --surface-brand-border: #ffffff26;
+    --surface-brand-raised: #5b21b6;
 
     /* Interactive */
     --primary: #a78bfa;
@@ -287,7 +405,6 @@
     --elevation-md: 0 4px 12px -2px rgb(0 0 0 / 0.45), 0 2px 4px -2px rgb(0 0 0 / 0.30);
     --elevation-lg: 0 12px 28px -6px rgb(0 0 0 / 0.55), 0 4px 8px -4px rgb(0 0 0 / 0.35);
     --elevation-xl: 0 24px 48px -12px rgb(0 0 0 / 0.65);
-    --elevation-glow: 0 0 0 1px rgb(167 139 250 / 0.16), 0 8px 32px -8px rgb(167 139 250 / 0.32);
 }
 
 @layer base {
@@ -340,6 +457,19 @@
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent;
+    }
+}
+
+/*
+ * Section rhythm on small screens. Desktop section padding on a phone wastes
+ * screen rather than reading as generous. Changing it here changes every
+ * section at once — call sites stay clean.
+ */
+@media (width < 40rem) {
+    :root {
+        --section-sm: 2.5rem;
+        --section-md: 3.5rem;
+        --section-lg: 4.5rem;
     }
 }
 

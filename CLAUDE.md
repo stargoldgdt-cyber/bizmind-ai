@@ -171,25 +171,44 @@ Rules:
 `src/app/globals.css` is the **single source of truth** for colour, radius and
 elevation. Read `DESIGN.md` before touching visual code.
 
+The guiding idea is **calm surface, sharp signal**. The chrome stays quiet;
+colour and weight are spent on the numbers, the changes and the
+recommendations. Premium comes from restraint, not from added effects.
+
 - **Never hard-code a colour in a component.** Use the semantic tokens
-  (`bg-card`, `text-muted-foreground`, `border-border`, `bg-brand-600`).
-- Brand is violet; deep navy carries contrast sections; light surfaces are
-  white on very light lavender.
+  (`bg-card`, `text-muted-foreground`, `border-border`, `bg-brand-600`). If you
+  are about to write `text-white` inside a section, a token is missing — add it
+  to `globals.css` instead.
+- **Four surface levels** carry page rhythm: `surface-1` (white), `surface-2`
+  (tinted), `surface-3` (near-black), `surface-brand` (violet). Each has its own
+  `-foreground`, `-muted` and `-border`. Sections are full-bleed flat colour
+  fields; levels 3 and brand are rare, roughly one section in five.
+- **Two registers.** Marketing is spacious and banded. The product is compact,
+  sits on one calm surface, and uses violet only for actions and active state.
+  Never apply marketing spaciousness to a dashboard.
+- **Colour hierarchy inside the product:** status → violet → chart series →
+  neutral ink. Most of the screen is neutral, so a single amber chip actually
+  means something. A colourful dashboard cannot alert.
 - Fonts are declared only in `src/config/fonts.ts`. Plus Jakarta Sans for
-  headings, Inter for body and UI, JetBrains Mono for figures.
+  headings, Inter for body and UI, JetBrains Mono for figures. Two weights do
+  almost all the work; headlines run 4–9 words.
 - Any number a user compares gets `tabular-nums` so digits align.
 - Status colours (success/warning/danger/info) carry meaning and are reserved.
   Never reuse them as chart series colours, and never signal state with colour
   alone — pair it with an icon or a label.
 - Chart series colours are validated for colour-blind separation. Do not change
   them casually; see `DESIGN.md`.
-
-The product should feel premium, modern, intelligent and trustworthy. Avoid
-excessive gradients, heavy glassmorphism, busy animation, and the generic
-AI-startup look.
+- **Most cards carry no shadow**; borders and surface contrast do the work.
+  **There is no glow token and buttons never glow.**
+- Uniform grids by default, not bento mosaics. Headings left-aligned.
+- Show real product UI. **No abstract AI imagery** — no orbs, blobs, neural
+  motifs or glowing brains.
 
 Every screen must work on mobile. Dashboards get a real mobile layout, not a
 shrunken desktop one.
+
+**Do not let visual polish outrun correctness.** A beautiful card showing a
+wrong profit figure is worse than a plain one showing the right figure.
 
 ---
 

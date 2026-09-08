@@ -140,6 +140,83 @@ reality. The documented plan communicates intent without the pretence.
 
 ---
 
+## 2026-09-08 — Four-level surface system as the primary rhythm device
+
+**Decided:** Added `surface-1` (white), `surface-2` (tinted), `surface-3`
+(near-black) and `surface-brand` (violet), each with its own foreground, muted
+and border tokens. Page rhythm comes from alternating full-bleed section bands.
+
+**Why:** Analysis of the supplied visual reference identified section-level
+colour zoning as the single mechanism doing most of the work in making that
+design feel premium — not gradients, effects or decoration. The previous system
+had no equivalent, and had no way to build a dark or violet section without
+hard-coding colours, which violated our own no-hard-coded-colour rule.
+
+Every level carries its own foreground set specifically so that
+`text-white` never needs to be written inside a section.
+
+**Verified:** all thirteen text/background pairings across both themes were
+measured for WCAG contrast. Lowest is 5.36:1 against a 4.5:1 requirement.
+
+**Rejected:** one background with decorated sections (weaker rhythm); per-section
+one-off colours (unmaintainable).
+
+**Cost to change:** Low now, high after Phase 4. This is why it was done before
+the dashboard exists.
+
+---
+
+## 2026-09-08 — Removed the glow token
+
+**Decided:** Deleted `--shadow-glow` / `--elevation-glow` entirely, and removed
+it from the hero CTA.
+
+**Why:** It conflicted directly with the product's own anti-generic brief, which
+lists "excessive glowing effects" as something to avoid. The visual reference
+uses no glow anywhere; its CTAs are flat violet pills. Keeping an unused-but-
+available glow token invites it back in later.
+
+Elevation is now reserved for things that genuinely float — dialogs, popovers,
+dropdowns, layered product screenshots.
+
+**Cost to change:** Trivial to re-add if ever wanted.
+
+---
+
+## 2026-09-08 — Uniform grids instead of bento
+
+**Decided:** `DESIGN.md` now specifies uniform 3- and 4-across grids as the
+default, with bento mosaics reserved for content that genuinely varies in
+importance (a dashboard overview, not a feature list).
+
+**Why:** The reference deliberately avoids bento. Uniform grids read calmer and
+more enterprise, and they collapse 4→2→1 responsively without special cases.
+"Bento" as a default invites mosaics that are hard to keep tidy and hard to make
+responsive.
+
+**Cost to change:** None — it is guidance, not a token.
+
+---
+
+## 2026-09-08 — Two visual registers, marketing and product
+
+**Decided:** Documented marketing and product as separate registers with
+different density, spacing, container and violet usage, drawing on the same
+tokens.
+
+**Why:** The visual reference is a marketing page and contains almost nothing
+about dashboard design. The biggest risk it introduced was applying marketing
+spaciousness to a dashboard — producing a product that demos well and works
+badly, with three numbers visible per screen.
+
+Recorded alongside it: a strict colour hierarchy for the product (status →
+violet → chart series → neutral ink). If a dashboard is mostly neutral, a single
+amber chip becomes genuinely informative. A colourful dashboard cannot alert.
+
+**Cost to change:** Low today; it is documentation ahead of Phase 4.
+
+---
+
 ## 2026-09-08 — `shadcn` kept as a runtime dependency
 
 **Decided:** Left `shadcn` in `dependencies` where its installer placed it,

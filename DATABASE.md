@@ -28,8 +28,16 @@ Practical consequences:
 
 ## 2. Current schema
 
-Migration `0001_identity_and_tenancy.sql` — identity and tenancy only. The
-business data model (orders, products, expenses…) arrives in Phase 5.
+Two migrations, 15 tables.
+
+| Migration | Adds |
+| --- | --- |
+| `0001_identity_and_tenancy.sql` | profiles, businesses, business_members |
+| `0002_universal_data_model.sql` | channels, customers, products, product_variants, inventory, inventory_movements, orders, order_items, payments, returns, expenses, audit_logs |
+
+**Not yet built, by design:** integration and sync tables (Phases 9-12), AI
+tables (Phase 8), automation tables (Phase 13). Each is designed when its
+phase arrives, informed by real requirements rather than guessed at now.
 
 ```
 auth.users                      managed by Supabase, we never write to it
@@ -86,6 +94,89 @@ product resolves through it.
 
 ---
 
+## 2b. The universal data model
+
+The vendor-neutral shape every integration normalises into. Shopify,
+WooCommerce, a CSV and a manual entry all land here, so analytics and AI never
+learn what "Shopify" is.
+
+```
+channels ──┐
+           ├──► orders ──► order_items ──► product_variants ──► products
+customers ─┘      │                              │
+                  ├──► payments                  └──► inventory
+                  └──► returns                          │
+                                              inventory_movements
+expenses          (standalone)
+audit_logs        (cross-cutting, append-only)
+```
+
+### Money and quantities
+
+Every money and quantity column is **`numeric(20,4)`**. Never `float` or
+`double`: binary floating point cannot represent `0.10` exactly, and the error
+compounds across aggregation. `numeric` is exact decimal arithmetic.
+
+PostgREST returns numerics as **JSON strings** to preserve that precision, and
+`src/types/database.ts` types them as `string` deliberately. Parsing one into a
+JavaScript number reintroduces the very problem `numeric` avoids. **All
+financial arithmetic happens in SQL** — the same rule that keeps the AI away
+from calculations.
+
+Quantities are numeric rather than integer because goods sell by weight and
+volume as well as by the piece.
+
+### Decisions worth knowing
+
+**`order_items.unit_cost` is the cost AT THE TIME OF SALE.** Using today's cost
+to compute a past month's profit produces a wrong number that looks entirely
+plausible — the most dangerous kind of error in this product. The same applies
+to `sku` and `name`, copied onto the line so a renamed or deleted product does
+not corrupt order history.
+
+**`orders.fee_total` is a first-class column**, not lumped into expenses.
+Marketplace commission is usually the whole answer to "why does Amazon revenue
+convert to so much less profit than the website?", which is the product's
+central question.
+
+**`inventory.quantity_on_hand` may go negative.** Overselling is a real event
+the owner needs to see, not something to hide behind a constraint.
+
+**Idempotent sync.** Rows that originate externally carry `source` and
+`external_id`, with a unique index on `(business_id, source, external_id)`, so
+re-importing an order updates it rather than duplicating it. Each such table
+also has a `..._external_needs_source` check constraint requiring `source`
+whenever `external_id` is set — in a unique index NULL never equals NULL, so
+without it two rows with a null source would not collide and the guarantee
+would silently vanish.
+
+**`audit_logs` is append-only.** There is no INSERT, UPDATE or DELETE policy at
+all. Entries are written by `write_audit_log()`, which stamps the actor from
+the session so it cannot be forged. Verified: not even an OWNER can edit or
+delete an entry.
+
+### Policy generation
+
+The eleven operational tables get their policies from a loop in section 12 of
+migration 0002 rather than forty hand-written statements. This is deliberate:
+near-identical hand-written policies invite a typo that silently leaves one
+table unprotected. Uniformity matters more than verbosity for a security
+boundary, and section 13 then verifies the result and rolls the whole migration
+back if anything is missing.
+
+Each of the eleven gets exactly four policies:
+
+| Command | Allowed to |
+| --- | --- |
+| SELECT | any member of the business |
+| INSERT | OWNER, ADMIN, STAFF |
+| UPDATE | OWNER, ADMIN, STAFF |
+| DELETE | OWNER, ADMIN |
+
+`audit_logs` gets one SELECT policy, restricted to OWNER and ADMIN.
+
+---
+
 ## 3. Indexes
 
 | Index | Why |
@@ -94,6 +185,16 @@ product resolves through it.
 | `business_members(business_id)` | Member lists, role checks |
 | `businesses(created_by)` | Ownership lookups |
 | `businesses(slug)` | Created automatically by the UNIQUE constraint |
+| `orders(business_id, placed_at desc)` | The workhorse. Nearly every analytics query is "this business, this date range, newest first" |
+| `orders(business_id, channel_id, placed_at desc)` | Channel profitability |
+| `order_items(order_id)` | Expanding an order into its lines |
+| `expenses(business_id, incurred_at desc)` | Expense trends and anomaly detection |
+| `inventory_movements(variant_id, occurred_at desc)` | Reconstructing stock history |
+| `customers(business_id, lower(email))` | Deduplicating buyers across channels |
+| `audit_logs(business_id, created_at desc)` | Reading the trail |
+
+Every synced table also carries a partial unique index on
+`(business_id, source, external_id)` that makes re-imports idempotent.
 
 ---
 
@@ -231,6 +332,56 @@ Note the difference between the read and write failures. Reads return **empty
 results**, not errors: RLS filters rows rather than announcing that something
 was hidden, so an attacker cannot use error messages to confirm a record
 exists. Writes are refused outright.
+
+### Isolation results — 2026-09-08, migration 0002 (all 12 new tables)
+
+Business A was loaded with real commerce data — a customer, a product and
+variant with costs, stock, an Amazon order with line items, a payment and an
+expense — then attacked from Business B.
+
+| Attempt | Result |
+| --- | --- |
+| Read each of the 12 tables unfiltered | 0 rows on every one |
+| Read A's order, order line, variant cost, customer PII, payment, expense and stock **by exact id** | 0 rows on every one |
+| Update A's order total / variant cost / stock level | **0 rows affected** |
+| Delete A's order / expense / customer | **0 rows affected** |
+| Insert a row into A's expenses or orders | Refused — `42501 new row violates row-level security policy` |
+| Insert directly into `audit_logs` | Refused — no INSERT privilege exists |
+
+Verified afterwards **from A's own session** that the order, variant cost,
+stock level and customer were all unchanged. A "204 No Content" response to a
+cross-tenant UPDATE is not proof of failure on its own; re-running with
+`Prefer: return=representation` confirmed **0 rows** were touched.
+
+Control test: B could freely insert and update within its own business, so the
+policies are not simply blocking everything.
+
+### Role model — verified
+
+B was added to Business A as a VIEWER, then removed.
+
+| Attempt as VIEWER | Result |
+| --- | --- |
+| Read A's orders | Allowed — 1 order visible |
+| Insert an expense into A | Refused — `42501` |
+| Update A's order | 0 rows affected |
+| Promote self to OWNER | 0 rows affected |
+| After removal, read A's orders | 0 rows — access revoked immediately |
+
+Note the difference between an INSERT and an UPDATE failure. An INSERT is
+refused with an error because it violates the `WITH CHECK` clause; an UPDATE
+simply matches no rows, because `USING` filters them out first. Both are
+correct, and both leave the data untouched.
+
+### Audit log — verified append-only
+
+| Attempt as OWNER | Result |
+| --- | --- |
+| Write via `write_audit_log()` | Succeeded, actor stamped from the session |
+| UPDATE the entry | Refused — no UPDATE privilege |
+| DELETE the entry | Refused — no DELETE privilege |
+
+**Even a business owner cannot alter the audit trail.** That is the point.
 
 Re-run these whenever policies change.
 

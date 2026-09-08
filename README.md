@@ -18,12 +18,12 @@ CONNECT → UNDERSTAND → ANALYZE → ALERT → RECOMMEND → AUTOMATE
 
 ## Status
 
-**Phase 2 of 15 — authentication and multi-tenancy.**
+**Phase 3 of 15 — database and row-level security.**
 
-Project foundation, design system, Supabase Auth and the multi-tenant security
-model are in place. There is deliberately no business data model, AI or
-integration yet; each arrives in its own phase. See `CLAUDE.md` § 10 for the
-plan.
+Project foundation, design system, Supabase Auth, the multi-tenant security
+model and the universal data model are in place — 15 tables, all with row-level
+security verified by attack, not assumption. There is deliberately no dashboard,
+AI or integration yet; each arrives in its own phase. See `CLAUDE.md` § 10.
 
 ---
 

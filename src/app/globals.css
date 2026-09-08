@@ -1,0 +1,356 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/*
+ * ============================================================================
+ * BIZMIND AI - DESIGN SYSTEM
+ * ============================================================================
+ * This file is the SINGLE SOURCE OF TRUTH for every colour, radius and shadow
+ * in the product. Components must never hard-code a brand colour.
+ *
+ * To re-brand BizMind, change the values in :root and .dark below. Nothing
+ * else in the codebase needs to be touched.
+ *
+ * Colour format: hex. Chosen for exactness and readability. Tailwind v4 and
+ * the color-mix() calls inside shadcn components accept hex directly.
+ *
+ * Chart colours were validated for colour-blind separation and contrast in
+ * both themes. See DESIGN.md before changing them.
+ * ============================================================================
+ */
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    /* ---- Typography ------------------------------------------------------ */
+    --font-sans: var(--font-inter);
+    --font-heading: var(--font-jakarta);
+    --font-mono: var(--font-jetbrains);
+
+    /* ---- Brand ramp (violet) --------------------------------------------- */
+    --color-brand-50: var(--brand-50);
+    --color-brand-100: var(--brand-100);
+    --color-brand-200: var(--brand-200);
+    --color-brand-300: var(--brand-300);
+    --color-brand-400: var(--brand-400);
+    --color-brand-500: var(--brand-500);
+    --color-brand-600: var(--brand-600);
+    --color-brand-700: var(--brand-700);
+    --color-brand-800: var(--brand-800);
+    --color-brand-900: var(--brand-900);
+
+    /* ---- Navy ramp (deep contrast surfaces) ------------------------------ */
+    --color-navy-500: var(--navy-500);
+    --color-navy-600: var(--navy-600);
+    --color-navy-700: var(--navy-700);
+    --color-navy-800: var(--navy-800);
+    --color-navy-900: var(--navy-900);
+    --color-navy-950: var(--navy-950);
+
+    /* ---- Core semantic surfaces ------------------------------------------ */
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+
+    /* ---- Status (reserved - never reuse for chart series) ---------------- */
+    --color-success: var(--success);
+    --color-success-foreground: var(--success-foreground);
+    --color-success-subtle: var(--success-subtle);
+    --color-success-strong: var(--success-strong);
+    --color-warning: var(--warning);
+    --color-warning-foreground: var(--warning-foreground);
+    --color-warning-subtle: var(--warning-subtle);
+    --color-warning-strong: var(--warning-strong);
+    --color-danger: var(--danger);
+    --color-danger-foreground: var(--danger-foreground);
+    --color-danger-subtle: var(--danger-subtle);
+    --color-danger-strong: var(--danger-strong);
+    --color-info: var(--info);
+    --color-info-foreground: var(--info-foreground);
+    --color-info-subtle: var(--info-subtle);
+    --color-info-strong: var(--info-strong);
+
+    /* ---- Chart series (validated - see DESIGN.md) ------------------------ */
+    --color-chart-1: var(--chart-1);
+    --color-chart-2: var(--chart-2);
+    --color-chart-3: var(--chart-3);
+    --color-chart-4: var(--chart-4);
+    --color-chart-5: var(--chart-5);
+    --color-chart-6: var(--chart-6);
+
+    /* ---- Sidebar (dashboard shell, used from Phase 4) -------------------- */
+    --color-sidebar: var(--sidebar);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-ring: var(--sidebar-ring);
+
+    /* ---- Radius ---------------------------------------------------------- */
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+
+    /* ---- Elevation ------------------------------------------------------- */
+    --shadow-xs: var(--elevation-xs);
+    --shadow-sm: var(--elevation-sm);
+    --shadow-md: var(--elevation-md);
+    --shadow-lg: var(--elevation-lg);
+    --shadow-xl: var(--elevation-xl);
+    --shadow-glow: var(--elevation-glow);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * LIGHT THEME
+ * ---------------------------------------------------------------------------
+ */
+:root {
+    --radius: 0.75rem;
+
+    /* Brand ramp - violet */
+    --brand-50: #f5f2ff;
+    --brand-100: #ede7fe;
+    --brand-200: #ddd2fd;
+    --brand-300: #c4b0fb;
+    --brand-400: #a684f7;
+    --brand-500: #8b5cf6;
+    --brand-600: #6d28d9;
+    --brand-700: #5b21b6;
+    --brand-800: #4a1d96;
+    --brand-900: #2e1065;
+
+    /* Navy ramp - deep contrast sections */
+    --navy-500: #3d3757;
+    --navy-600: #2e2947;
+    --navy-700: #241f3a;
+    --navy-800: #1a1724;
+    --navy-900: #12101c;
+    --navy-950: #0d0b15;
+
+    /* Surfaces */
+    --background: #fbfaff;
+    --foreground: #171426;
+    --card: #ffffff;
+    --card-foreground: #171426;
+    --popover: #ffffff;
+    --popover-foreground: #171426;
+
+    /* Interactive */
+    --primary: #6d28d9;
+    --primary-foreground: #ffffff;
+    --secondary: #f4f2fd;
+    --secondary-foreground: #2e2547;
+    --muted: #f5f4fa;
+    --muted-foreground: #6b6880;
+    --accent: #efeafe;
+    --accent-foreground: #4a1d96;
+    --destructive: #dc2626;
+    --border: #e7e4f2;
+    --input: #e7e4f2;
+    --ring: #6d28d9;
+
+    /* Status */
+    --success: #16a34a;
+    --success-foreground: #ffffff;
+    --success-subtle: #ecfdf3;
+    --success-strong: #15803d;
+    --warning: #d97706;
+    --warning-foreground: #ffffff;
+    --warning-subtle: #fff7ed;
+    --warning-strong: #b45309;
+    --danger: #dc2626;
+    --danger-foreground: #ffffff;
+    --danger-subtle: #fef2f2;
+    --danger-strong: #b91c1c;
+    --info: #2a78d6;
+    --info-foreground: #ffffff;
+    --info-subtle: #eff6ff;
+    --info-strong: #1d4ed8;
+
+    /* Chart series - validated light steps (surface #ffffff) */
+    --chart-1: #7c3aed;
+    --chart-2: #1baf7a;
+    --chart-3: #eb6834;
+    --chart-4: #2a78d6;
+    --chart-5: #e87ba4;
+    --chart-6: #eda100;
+
+    /* Sidebar */
+    --sidebar: #ffffff;
+    --sidebar-foreground: #171426;
+    --sidebar-primary: #6d28d9;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #f4f2fd;
+    --sidebar-accent-foreground: #4a1d96;
+    --sidebar-border: #e7e4f2;
+    --sidebar-ring: #6d28d9;
+
+    /* Elevation - violet-tinted so shadows sit in the brand family */
+    --elevation-xs: 0 1px 2px 0 rgb(23 20 38 / 0.04);
+    --elevation-sm: 0 1px 3px 0 rgb(23 20 38 / 0.06), 0 1px 2px -1px rgb(23 20 38 / 0.05);
+    --elevation-md: 0 4px 12px -2px rgb(23 20 38 / 0.07), 0 2px 4px -2px rgb(23 20 38 / 0.05);
+    --elevation-lg: 0 12px 28px -6px rgb(23 20 38 / 0.10), 0 4px 8px -4px rgb(23 20 38 / 0.05);
+    --elevation-xl: 0 24px 48px -12px rgb(23 20 38 / 0.14);
+    --elevation-glow: 0 0 0 1px rgb(109 40 217 / 0.10), 0 8px 32px -8px rgb(109 40 217 / 0.28);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * DARK THEME
+ * ---------------------------------------------------------------------------
+ */
+.dark {
+    /* Surfaces */
+    --background: #0d0b15;
+    --foreground: #f3f1f8;
+    --card: #1a1724;
+    --card-foreground: #f3f1f8;
+    --popover: #1f1b2b;
+    --popover-foreground: #f3f1f8;
+
+    /* Interactive */
+    --primary: #a78bfa;
+    --primary-foreground: #1b1030;
+    --secondary: #241f33;
+    --secondary-foreground: #ede9fe;
+    --muted: #221e2e;
+    --muted-foreground: #a29fb5;
+    --accent: #2a2340;
+    --accent-foreground: #e9d5ff;
+    --destructive: #ef4444;
+    --border: #ffffff1a;
+    --input: #ffffff26;
+    --ring: #8b5cf6;
+
+    /* Status */
+    --success: #22c55e;
+    --success-foreground: #052e1a;
+    --success-subtle: #0a2e1c;
+    --success-strong: #4ade80;
+    --warning: #f59e0b;
+    --warning-foreground: #2e1d05;
+    --warning-subtle: #2e2205;
+    --warning-strong: #fbbf24;
+    --danger: #ef4444;
+    --danger-foreground: #2e0a0a;
+    --danger-subtle: #2e1013;
+    --danger-strong: #f87171;
+    --info: #4a90e8;
+    --info-foreground: #06203e;
+    --info-subtle: #0a2036;
+    --info-strong: #7cb3f0;
+
+    /* Chart series - validated dark steps (surface #1a1a24) */
+    --chart-1: #8b72e6;
+    --chart-2: #1fa878;
+    --chart-3: #e2703a;
+    --chart-4: #4a90e8;
+    --chart-5: #d55c8b;
+    --chart-6: #bc8200;
+
+    /* Sidebar */
+    --sidebar: #12101c;
+    --sidebar-foreground: #f3f1f8;
+    --sidebar-primary: #a78bfa;
+    --sidebar-primary-foreground: #1b1030;
+    --sidebar-accent: #241f33;
+    --sidebar-accent-foreground: #e9d5ff;
+    --sidebar-border: #ffffff1a;
+    --sidebar-ring: #8b5cf6;
+
+    /* Elevation - deeper and softer on dark surfaces */
+    --elevation-xs: 0 1px 2px 0 rgb(0 0 0 / 0.30);
+    --elevation-sm: 0 1px 3px 0 rgb(0 0 0 / 0.40), 0 1px 2px -1px rgb(0 0 0 / 0.30);
+    --elevation-md: 0 4px 12px -2px rgb(0 0 0 / 0.45), 0 2px 4px -2px rgb(0 0 0 / 0.30);
+    --elevation-lg: 0 12px 28px -6px rgb(0 0 0 / 0.55), 0 4px 8px -4px rgb(0 0 0 / 0.35);
+    --elevation-xl: 0 24px 48px -12px rgb(0 0 0 / 0.65);
+    --elevation-glow: 0 0 0 1px rgb(167 139 250 / 0.16), 0 8px 32px -8px rgb(167 139 250 / 0.32);
+}
+
+@layer base {
+    * {
+        @apply border-border outline-ring/50;
+    }
+
+    html {
+        @apply font-sans;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
+    }
+
+    body {
+        @apply bg-background text-foreground;
+    }
+
+    /* Headings use the display face across the product. */
+    h1,
+    h2,
+    h3,
+    h4 {
+        @apply font-heading tracking-tight;
+    }
+}
+
+@layer utilities {
+    /*
+     * Financial figures must align vertically in tables and metric cards.
+     * Apply to any element rendering a number the user will compare.
+     */
+    .tabular-nums {
+        font-variant-numeric: tabular-nums;
+        font-feature-settings: "tnum";
+    }
+
+    /* Brand gradient - use sparingly, on hero text and key surfaces only. */
+    .bg-brand-gradient {
+        background-image: linear-gradient(
+            135deg,
+            var(--brand-600) 0%,
+            var(--brand-500) 50%,
+            var(--brand-400) 100%
+        );
+    }
+
+    .text-brand-gradient {
+        background-image: linear-gradient(135deg, var(--brand-600) 0%, var(--brand-400) 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+    }
+}
+
+/* Respect users who ask their operating system to reduce motion. */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}

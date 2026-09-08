@@ -217,6 +217,98 @@ amber chip becomes genuinely informative. A colourful dashboard cannot alert.
 
 ---
 
+## 2026-09-08 — Tenancy helpers are SECURITY DEFINER functions
+
+**Decided:** RLS policies resolve tenant access through
+`current_user_business_ids()` and `current_user_has_role()`, both
+`SECURITY DEFINER` with `search_path = ''`.
+
+**Why:** An RLS policy on `business_members` that itself queries
+`business_members` causes infinite recursion — Postgres cannot evaluate the
+policy without first evaluating the policy. This is the single most common way
+multi-tenant Supabase schemas break. Doing the lookup inside a definer function
+breaks the cycle.
+
+Safe because each function only reveals facts about the *calling* user's own
+memberships; none accepts a user id to impersonate. `search_path = ''` stops a
+malicious schema shadowing the referenced tables, which is why every object
+inside them is fully qualified.
+
+**Rejected:** inlining membership subqueries in every policy (recursion, and
+duplicated logic across every future table); JWT custom claims (stale after a
+role change until the token refreshes).
+
+**Cost to change:** High — every future table's policies build on these.
+
+---
+
+## 2026-09-08 — Businesses are created only through a function
+
+**Decided:** `businesses` has **no INSERT policy**. `create_business()` inserts
+the business and the OWNER membership together, and is the only supported path.
+
+**Why:** The two writes must be atomic. As separate statements, a failure
+between them leaves a business with no owner — unadministrable and invisible to
+everyone, including the person who just created it. A function body is one
+transaction, so it cannot half-succeed.
+
+Paired with a `prevent_last_owner_removal()` trigger, so an owner cannot later
+delete or demote themselves out of their own workspace.
+
+**Cost to change:** Low.
+
+---
+
+## 2026-09-08 — The active business is a hint, never an authority
+
+**Decided:** The current business is stored in a cookie, but every read
+re-checks it against the user's actual memberships and falls back to their first
+business if it does not match.
+
+**Why:** A cookie is client-controlled. Trusting it would be the classic
+multi-tenant flaw: RLS would still block the *data*, but the interface would
+claim to be showing a company the user has no access to — confusing at best,
+and a plausible-looking security incident at worst. The rule generalises: verify
+every client-supplied identifier server-side.
+
+**Cost to change:** Low.
+
+---
+
+## 2026-09-08 — Password rule is length, not composition
+
+**Decided:** Minimum 12 characters. No required symbols, digits or mixed case.
+
+**Why:** Length is what actually resists guessing. Composition rules push people
+toward predictable patterns like `Password1!` and toward reusing passwords
+across sites, which makes accounts less safe rather than more. This matches
+current NIST guidance.
+
+**Cost to change:** Trivial — one schema.
+
+---
+
+## 2026-09-08 — Environment variables validated at startup
+
+**Decided:** `src/lib/env.ts` validates public configuration with Zod and throws
+a readable message if anything is missing or malformed.
+
+**Why:** The product owner is non-technical. A missing variable would otherwise
+surface as an obscure runtime error deep inside a request; instead it fails
+immediately saying exactly which value is missing and what to do about it.
+
+Deliberately covers **public values only**. Server-only secrets are read where
+they are used, so there is no chance of one being pulled into a browser bundle
+through this module.
+
+**Trade-off accepted:** the app will not start at all until Supabase is
+configured. That is the correct behaviour — a misconfigured app should not
+pretend to work.
+
+**Cost to change:** Trivial.
+
+---
+
 ## 2026-09-08 — `shadcn` kept as a runtime dependency
 
 **Decided:** Left `shadcn` in `dependencies` where its installer placed it,

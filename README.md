@@ -18,11 +18,12 @@ CONNECT → UNDERSTAND → ANALYZE → ALERT → RECOMMEND → AUTOMATE
 
 ## Status
 
-**Phase 1 of 15 — foundation complete.**
+**Phase 2 of 15 — authentication and multi-tenancy.**
 
-The project skeleton, design system and component library are in place. There is
-deliberately no database, authentication, AI or integration yet; each arrives in
-its own phase. See `CLAUDE.md` § 10 for the plan.
+Project foundation, design system, Supabase Auth and the multi-tenant security
+model are in place. There is deliberately no business data model, AI or
+integration yet; each arrives in its own phase. See `CLAUDE.md` § 10 for the
+plan.
 
 ---
 
@@ -66,11 +67,11 @@ Supabase (PostgreSQL, Auth, RLS) · OpenAI · Vercel
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | How the system fits together |
 | [DESIGN.md](./DESIGN.md) | Colour, typography, spacing, chart rules |
 | [SETUP.md](./SETUP.md) | Getting it running, and how secrets work |
+| [DATABASE.md](./DATABASE.md) | Schema, tenant isolation, migrations |
 | [DECISIONS.md](./DECISIONS.md) | Why each major choice was made |
 | [AGENTS.md](./AGENTS.md) | Next.js 16 framework rules (auto-generated) |
 
-`DATABASE.md`, `API.md`, `AI.md` and `INTEGRATIONS.md` are written as their
-phases land.
+`API.md`, `AI.md` and `INTEGRATIONS.md` are written as their phases land.
 
 ---
 

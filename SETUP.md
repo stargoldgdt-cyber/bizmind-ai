@@ -90,8 +90,74 @@ Rules that protect you:
 - If a secret is ever exposed, rotate it (generate a new one) rather than
   hoping nobody saw it.
 
-**Phase 1 needs no secrets at all.** Supabase values arrive in Phase 2, and the
-OpenAI key in Phase 8.
+The **OpenAI** key arrives in Phase 8. Supabase is set up below.
+
+---
+
+## 4a. Connecting Supabase (needed from Phase 2 onward)
+
+Supabase provides the database and the login system. The free tier is enough
+for development; no card is required.
+
+### Create the project
+
+1. Go to <https://supabase.com> and click **Start your project**
+2. Sign in with GitHub, or with an email and password
+3. Click **New project**
+4. Fill in:
+   - **Name:** `bizmind-ai`
+   - **Database Password:** click **Generate a password**, then
+     **save it in your password manager**. You will not be shown it again.
+     It is not needed for day-to-day work, but it cannot be recovered.
+   - **Region:** the one closest to you or your customers
+5. Click **Create new project** and wait — it takes a minute or two
+
+### Copy the connection values
+
+1. In the left sidebar click **Project Settings** (the gear icon)
+2. Click **API Keys**
+3. Copy these two values:
+
+| On the Supabase page | Into `.env.local` as |
+| --- | --- |
+| **Project URL** | `NEXT_PUBLIC_SUPABASE_URL` |
+| **anon** / **publishable** key | `NEXT_PUBLIC_SUPABASE_ANON_KEY` |
+
+**Ignore the `service_role` key for now.** It bypasses every security rule in
+the database. It is not needed yet, and it must never appear in the browser or
+in a screenshot.
+
+The anon key is *meant* to be public — it identifies the project, it does not
+grant access. Row Level Security is what actually protects the data.
+
+### Create the database tables
+
+1. In the left sidebar click **SQL Editor**
+2. Click **New query**
+3. Open `supabase/migrations/0001_identity_and_tenancy.sql` in this project
+4. Copy the whole file and paste it into the editor
+5. Click **Run**
+
+Expected result: **Success. No rows returned**
+
+### Point confirmation emails at your app
+
+1. Left sidebar → **Authentication** → **URL Configuration**
+2. Set **Site URL** to `http://localhost:3000`
+3. Under **Redirect URLs**, add `http://localhost:3000/**`
+4. Click **Save**
+
+Without this, the link in the confirmation email points at the wrong place and
+signing up appears to hang.
+
+### Restart
+
+```bash
+npm run dev
+```
+
+Environment variables are only read at startup, so a restart is required after
+editing `.env.local`.
 
 ---
 

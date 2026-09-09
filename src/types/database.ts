@@ -505,8 +505,17 @@ export type Database = {
           name: string | null
           quantity: Numeric
           unit_price: Numeric
-          /** Cost AT THE TIME OF SALE, not today's cost. Drives true COGS. */
+          /**
+           * Historical cost snapshot: what one unit cost AT THE TIME OF THIS
+           * SALE. Never populated from the current product catalogue — see
+           * migration 0005. Null means the cost is genuinely unknown.
+           */
           unit_cost: Numeric | null
+          /**
+           * True when this line has no recorded cost, so any margin including
+           * it is overstated. Generated from unit_cost; cannot be set.
+           */
+          cost_missing: boolean
           discount: Numeric
           tax: Numeric
           line_total: Numeric

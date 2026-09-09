@@ -34,6 +34,9 @@ Two migrations, 15 tables.
 | --- | --- |
 | `0001_identity_and_tenancy.sql` | profiles, businesses, business_members |
 | `0002_universal_data_model.sql` | channels, customers, products, product_variants, inventory, inventory_movements, orders, order_items, payments, returns, expenses, audit_logs |
+| `0003_dashboard_metrics.sql` | `dashboard_summary()`, `channel_performance()` |
+| `0004_import_pipeline.sql` | import_batches, import_issues, `import_apply_*()` |
+| `0005_historical_cost_stability.sql` | Removes the catalogue-cost backfill; adds `order_items.cost_missing` |
 
 **Not yet built, by design:** integration and sync tables (Phases 9-12), AI
 tables (Phase 8), automation tables (Phase 13). Each is designed when its
@@ -133,6 +136,18 @@ to compute a past month's profit produces a wrong number that looks entirely
 plausible — the most dangerous kind of error in this product. The same applies
 to `sku` and `name`, copied onto the line so a renamed or deleted product does
 not corrupt order history.
+
+**Nothing ever copies a catalogue cost into an order line.** Migration 0004
+originally did, and migration 0005 removed it: a supplier re-pricing a product
+would silently rewrite last year's profit, and two people running the same
+report months apart would get different answers. A line with no cost keeps
+`unit_cost` null and is marked `cost_missing`, so the dashboard reports the gap
+instead of filling it with a number that was never true. Migration 0005
+verifies its own work and refuses to commit if the backfill reappears.
+
+Any future "backfill historical costs" feature must be explicit: confirmed by
+the user, previewing how many lines change and the financial impact, written to
+`audit_logs`, and never automatic.
 
 **`orders.fee_total` is a first-class column**, not lumped into expenses.
 Marketplace commission is usually the whole answer to "why does Amazon revenue

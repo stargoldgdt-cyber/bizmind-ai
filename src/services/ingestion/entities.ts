@@ -9,12 +9,17 @@ import type { EntityDef, EntityKey } from "./contracts"
  *
  * `importance` is set from what each field actually unlocks:
  *   revenue          needs total
- *   COGS             needs unit_cost (per line, or from the product catalogue)
+ *   COGS             needs unit_cost ON THE ORDER LINE, and nowhere else
  *   channel fees     needs fee_total
  *   gross profit     needs all three
  *   net profit       needs expenses as well
  *   inventory        needs sku and stock
  *   customers        needs customer_email
+ *
+ * Note the COGS rule. A cost is a snapshot of what an item cost at the moment
+ * it was sold; the product catalogue holds today's price, which is a different
+ * fact. Nothing ever copies one into the other, so re-pricing a product cannot
+ * move a past month's profit. See migration 0005.
  */
 
 const ORDERS: EntityDef = {
@@ -82,7 +87,9 @@ const ORDERS: EntityDef = {
       scope: "line",
       help: "What one unit cost you to buy or make, at the time of this sale.",
       consequence:
-        "Without cost, profit and margin will be OVERSTATED. It can also come from a product import instead.",
+        "Without cost, profit and margin for these orders will be OVERSTATED. " +
+        "This is the ONLY way to record it: BizMind will not take a cost from " +
+        "your product list, because that is today's price and this is a past sale.",
       aliases: ["unit cost", "cost", "cost price", "cogs", "buy price", "purchase price", "item cost", "cost per unit"],
     },
     {
@@ -93,7 +100,8 @@ const ORDERS: EntityDef = {
       scope: "line",
       help: "Product code for this line.",
       consequence:
-        "Without a SKU, order lines cannot be matched to your product catalogue, so costs cannot be filled in from there.",
+        "Without a SKU, these sales cannot be grouped by product, so " +
+        "best-sellers and per-product analysis will not work.",
       aliases: ["sku", "product sku", "item sku", "product code", "item code", "variant sku", "barcode"],
     },
     {
@@ -204,8 +212,8 @@ const ORDERS: EntityDef = {
 const PRODUCTS: EntityDef = {
   key: "PRODUCTS",
   label: "Products",
-  description: "One row per product. This is where cost prices come from.",
-  unlocks: ["Cost of goods", "Gross margin", "Inventory levels"],
+  description: "One row per product. Your catalogue and current cost prices.",
+  unlocks: ["Stock valuation", "Reorder decisions", "Product grouping"],
   fields: [
     {
       key: "sku",
@@ -227,9 +235,11 @@ const PRODUCTS: EntityDef = {
       label: "Unit cost",
       importance: "recommended",
       type: "money",
-      help: "What one unit costs you.",
+      help: "What one unit costs you today.",
       consequence:
-        "This is the field that fixes the 'profit is overstated' warning on your dashboard. Without it, margin cannot be calculated.",
+        "Needed for stock valuation and reorder decisions. Note this does NOT " +
+        "fill in costs on past orders — those keep the cost recorded at the " +
+        "time of sale, so re-pricing a product never changes last month's profit.",
       aliases: ["cost", "unit cost", "cost price", "buy price", "purchase price", "cogs", "wholesale price"],
     },
     {

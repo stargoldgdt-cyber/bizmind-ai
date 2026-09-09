@@ -87,18 +87,18 @@ acknowledged, `optional` is silent.
 | Order total | required | Revenue |
 | **Channel fees** | recommended | Without it profit is **overstated** — usually the biggest reason marketplace revenue is worth less than it looks |
 | **Quantity** | recommended | No quantity, no cost of goods |
-| **Unit cost** | recommended | Without it profit is **overstated**. May instead come from a product import |
-| **SKU** | recommended | Links lines to the catalogue so costs can be filled in |
+| **Unit cost** | recommended | Without it profit is **overstated**. The ONLY way to record a sale's cost — never taken from the catalogue |
+| **SKU** | recommended | Groups sales by product. Links to the catalogue for identity only, never for cost |
 | Order number, status, customer email/name, currency, subtotal, discount, tax, shipping, product name, unit price, line total | optional | |
 
 One row per order line. Order-level values repeat across the lines of an order.
 
-### Products — cost of goods and inventory
+### Products — catalogue, stock valuation and reorder points
 
 | Field | Importance |
 | --- | --- |
 | SKU, Product name | required |
-| **Unit cost** | recommended — this is the field that clears the "profit is overstated" warning |
+| **Unit cost** | recommended — for stock valuation. Does **not** fill in costs on past orders |
 | Selling price, category, brand, barcode, stock on hand, reorder point | optional |
 
 ### Expenses — net profit
@@ -154,6 +154,33 @@ Re-importing the same file **updates** rather than duplicates, via
   the same file is the supported path.
 - **Expenses with no reference cannot be recognised** on a second import. The
   interface warns before committing.
+
+---
+
+## 6b. Historical costs are never invented
+
+An order line's cost is a snapshot of what the item cost **at the moment it was
+sold**. The current catalogue price is a different fact about a different point
+in time.
+
+| Situation | Behaviour |
+| --- | --- |
+| File contains a unit cost | Stored on the line as the historical snapshot |
+| File contains no unit cost | Line keeps a null cost and is marked `cost_missing`. **Nothing is copied from the catalogue** |
+| Catalogue has a cost, the order does not | The order stays costless. The dashboard reports the gap |
+| A product is re-priced | Past order profit does not move, at all |
+
+Profit uses the order-line cost only. This was a real bug in the first version
+of the import pipeline, fixed in migration 0005 — see `DECISIONS.md`.
+
+Imports still LINK a line to its catalogue product by SKU. That sets identity
+(`variant_id`, `product_id`) and touches no money column, so it cannot move a
+figure.
+
+**A future "backfill historical costs" tool** may fill these gaps, but only if
+it: requires explicit confirmation, shows how many orders and lines would
+change, shows the financial impact before applying, writes an audit entry, and
+never runs automatically.
 
 ---
 

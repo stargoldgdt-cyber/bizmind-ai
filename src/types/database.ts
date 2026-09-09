@@ -882,6 +882,138 @@ export type Database = {
         Returns: Json
       }
 
+      /* ---- Analytics engine (migration 0007) ---------------------------
+       * The authoritative calculation layer. Every money field comes back as
+       * a string; every ratio is nullable because a zero denominator yields
+       * NULL rather than 0 or infinity. */
+
+      analytics_financials: {
+        Args: { p_business_id: string; p_from: string; p_to: string }
+        Returns: {
+          revenue: Numeric
+          cogs: Numeric
+          fees: Numeric
+          gross_profit: Numeric
+          gross_margin: Numeric | null
+          expenses: Numeric
+          net_profit: Numeric
+          net_margin: Numeric | null
+          orders_count: number
+          units_sold: Numeric
+          avg_order_value: Numeric | null
+          customers_count: number
+          refunds: Numeric
+          returns_count: number
+          cancelled_orders: number
+          items_total: number
+          items_with_cost: number
+          cost_coverage: Numeric | null
+          orders_zero_fees: number
+          orders_without_channel: number
+          line_revenue: Numeric
+        }[]
+      }
+
+      analytics_compare: {
+        Args: {
+          p_business_id: string
+          p_from: string
+          p_to: string
+          p_prev_from: string
+          p_prev_to: string
+        }
+        Returns: {
+          metric: string
+          current_value: Numeric | null
+          previous_value: Numeric | null
+          absolute_change: Numeric | null
+          percent_change: Numeric | null
+          direction: "up" | "down" | "flat" | "unknown"
+        }[]
+      }
+
+      analytics_channels: {
+        Args: { p_business_id: string; p_from: string; p_to: string }
+        Returns: {
+          channel_id: string | null
+          channel_name: string
+          channel_type: ChannelType
+          revenue: Numeric
+          cogs: Numeric
+          fees: Numeric
+          gross_profit: Numeric
+          gross_margin: Numeric | null
+          orders_count: number
+          units_sold: Numeric
+          avg_order_value: Numeric | null
+          items_total: number
+          items_with_cost: number
+          cost_coverage: Numeric | null
+        }[]
+      }
+
+      analytics_products: {
+        Args: { p_business_id: string; p_from: string; p_to: string; p_limit?: number }
+        Returns: {
+          sku: string
+          product_name: string
+          revenue: Numeric
+          units_sold: Numeric
+          cogs: Numeric
+          fees_allocated: Numeric
+          gross_profit: Numeric
+          gross_margin: Numeric | null
+          orders_count: number
+          items_total: number
+          items_with_cost: number
+          cost_coverage: Numeric | null
+        }[]
+      }
+
+      analytics_reconciliation: {
+        Args: { p_business_id: string; p_from: string; p_to: string }
+        Returns: {
+          order_revenue: Numeric
+          channel_revenue: Numeric
+          channel_difference: Numeric
+          line_revenue: Numeric
+          order_line_gap: Numeric
+          orders_without_lines: number
+        }[]
+      }
+
+      analytics_health_inputs: {
+        Args: {
+          p_business_id: string
+          p_from: string
+          p_to: string
+          p_prev_from: string
+          p_prev_to: string
+        }
+        Returns: {
+          revenue: Numeric
+          revenue_previous: Numeric
+          revenue_growth_pct: Numeric | null
+          gross_margin: Numeric | null
+          net_margin: Numeric | null
+          cost_coverage: Numeric | null
+          refund_rate: Numeric | null
+          expense_ratio: Numeric | null
+          orders_count: number
+          customers_count: number
+          repeat_customer_rate: Numeric | null
+          cancelled_rate: Numeric | null
+          orders_without_channel: number
+          orders_zero_fees: number
+          variants_tracked: number
+          variants_out_of_stock: number
+          variants_below_reorder: number
+          paid_order_value: Numeric
+          unpaid_order_value: Numeric
+          payment_capture_rate: Numeric | null
+        }[]
+      }
+
       channel_performance: {
         Args: { p_business_id: string; p_from: string; p_to: string }
         Returns: {

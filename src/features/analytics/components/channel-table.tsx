@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/table"
 import { formatMoney, formatNumber, formatPercent } from "@/lib/format"
 import { getSeriesColor } from "@/config/design-tokens"
-import type { ChannelPerformance } from "@/features/analytics/types"
+import type { ChannelPerformance } from "@/services/analytics"
 
 /**
  * Revenue and margin per sales channel.
@@ -72,7 +72,7 @@ export function ChannelTable({
                 </span>
               </TableCell>
               <TableCell className="text-right font-mono text-xs tabular-nums">
-                {formatNumber(channel.order_count)}
+                {formatNumber(channel.orders_count)}
               </TableCell>
               <TableCell className="text-right font-mono text-xs tabular-nums">
                 {formatMoney(channel.revenue, currency)}

@@ -18,7 +18,7 @@ CONNECT → UNDERSTAND → ANALYZE → ALERT → RECOMMEND → AUTOMATE
 
 ## Status
 
-**Phase 5 of 15 — data import.**
+**Phase 7 of 15 — analytics engine.**
 
 Foundation, design system, Supabase Auth, the multi-tenant security model, the
 universal data model, a working dashboard and CSV/Excel import are in place.

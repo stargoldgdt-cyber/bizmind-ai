@@ -9,9 +9,11 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test:import": "tsx scripts/verify-import-pipeline.ts",
-    "verify": "npm run typecheck && npm run lint && npm run test:import && npm run test:parse && npm run build",
+    "verify": "npm run typecheck && npm run lint && npm run test:import && npm run test:parse && npm run test:analytics && npm run build",
     "test:parse": "node --import tsx --conditions react-server scripts/verify-file-parsing.mts",
-    "test:costs": "node --import tsx scripts/verify-cost-stability.mts"
+    "test:costs": "node --import tsx scripts/verify-cost-stability.mts",
+    "test:analytics": "tsx scripts/verify-analytics-logic.ts",
+    "test:analytics-data": "node --import tsx scripts/verify-analytics-data.mts"
   },
   "engines": {
     "node": ">=24.0.0"

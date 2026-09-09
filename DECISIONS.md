@@ -450,6 +450,112 @@ about whether the operation it governs actually works.
 
 ---
 
+## 2026-09-09 — Period deltas are computed in SQL, not TypeScript
+
+**Decided:** `analytics_compare()` returns current value, previous value,
+absolute change, percentage change and direction. TypeScript performs no
+arithmetic on money at all.
+
+**Why:** "Never do financial arithmetic in JavaScript" fails the moment someone
+writes `Number(a) - Number(b)` for a delta and thinks it does not count. Moving
+subtraction into SQL removes the temptation and the exception. The rule is now
+absolute, which is the only kind of rule that survives.
+
+What TypeScript still does is compare already-computed RATIOS against
+documented thresholds — judgement, not calculation.
+
+**Cost to change:** Low, but it should not change.
+
+---
+
+## 2026-09-09 — A zero denominator yields NULL, never zero or infinity
+
+**Decided:** Every ratio returns NULL when it cannot be calculated. A margin
+with no revenue, an average with no orders, a percentage change from a previous
+period of zero.
+
+**Why:** Zero and "unknown" are different facts, and collapsing them
+manufactures information. A margin of 0% says the business broke even; a margin
+of NULL says there were no sales. Rendering `+100%` or an infinity symbol for a
+rise from nothing invents a figure that will be quoted back later as though it
+meant something.
+
+The distinction is preserved all the way to the screen, where it appears as
+"no prior data" rather than a number.
+
+**Cost to change:** Low.
+
+---
+
+## 2026-09-09 — Health thresholds are published first drafts, not science
+
+**Decided:** Six dimensions, each scored by plain stated bands written in
+`health.ts`. No weighting model, no derived formula.
+
+**Why:** You asked for transparent deterministic rules rather than invented
+sophistication, and that is the right instinct. BizMind has no customer data to
+calibrate against, so any elaborate model would be false rigour dressed as
+insight. The bands are readable, arguable and replaceable.
+
+Two rules matter more than the numbers:
+
+- **An unmeasurable dimension scores NULL and is excluded from the average.**
+  Defaulting it to 50 would silently move the headline score, which is the
+  figure people remember.
+- **A dimension built on unreliable inputs is marked low-confidence and says
+  why.** A 60% margin on 40% cost coverage is not scored at all.
+
+**Cost to change:** Trivial, and expected once real data exists.
+
+---
+
+## 2026-09-09 — Insights are rules, and they refuse to speak from data gaps
+
+**Decided:** A deterministic rule engine over verified figures. No model. Every
+insight carries its supporting metrics so the reasoning can be checked.
+
+**Why:** An insight is a claim about someone's business. It must be true
+because the arithmetic says so, not because a sentence was plausible. Later the
+AI will EXPLAIN these outputs; it will not generate them.
+
+**Two flaws found by running it against real data, both fixed:**
+
+1. It recommended shifting effort to a channel showing a 100% margin — a margin
+   that was 100% only because that channel's costs were missing. Advice
+   manufactured from a data gap is worse than no advice. Channel rules now
+   require complete cost coverage on both sides of any comparison.
+
+2. It then recommended the "Unattributed" channel, which is not a channel at
+   all but the bucket for orders with no channel recorded. Recommendations now
+   exclude it, because there is no action behind them.
+
+Both have regression tests. The pattern generalises: **before an insight
+recommends anything, check that the number driving it is real.**
+
+**Cost to change:** Low.
+
+---
+
+## 2026-09-09 — Products do not reconcile to total revenue, and that is stated
+
+**Decided:** Product revenue is order-LINE revenue. It does not include
+shipping or order-level discounts, so it does not sum to total revenue.
+`analytics_reconciliation()` reports the gap explicitly.
+
+**Why:** Shipping belongs to an order, not to a product, and apportioning it
+would be an invention. The alternative — quietly letting two revenue figures
+differ — produces the moment where someone loses trust in the whole dashboard.
+Naming the gap is cheaper than defending it later.
+
+Per-product fees ARE apportioned, by line revenue, and the column is called
+`fees_allocated` so it cannot be read as a charge actually paid per product.
+
+**Channels, by contrast, reconcile exactly**, and a test asserts it.
+
+**Cost to change:** Low.
+
+---
+
 ## 2026-09-08 — `shadcn` kept as a runtime dependency
 
 **Decided:** Left `shadcn` in `dependencies` where its installer placed it,

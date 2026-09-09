@@ -6,24 +6,39 @@ import { AppShell } from "@/components/layout/app-shell"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ONBOARDING_ROUTE } from "@/config/routes"
 import { ChannelTable } from "@/features/analytics/components/channel-table"
+import { HealthCard } from "@/features/analytics/components/health-card"
+import { InsightList } from "@/features/analytics/components/insight-list"
 import { MetricCard } from "@/features/analytics/components/metric-card"
+import { ProductTable } from "@/features/analytics/components/product-table"
 import { RangeSelector } from "@/features/analytics/components/range-selector"
-import { getDashboardData } from "@/features/analytics/queries"
-import { resolveRange, type RangeValue } from "@/features/analytics/types"
 import { getActiveBusiness, getUserBusinesses } from "@/features/businesses/queries"
-import { formatMoney, formatNumber, formatPercent, percentChange } from "@/lib/format"
+import { formatMoney, formatNumber, formatPercent } from "@/lib/format"
+import {
+  DEFAULT_PERIOD,
+  findComparison,
+  getAnalytics,
+  isPeriodKey,
+  METRICS,
+  resolvePeriod,
+  type MetricComparison,
+} from "@/services/analytics"
 import { createClient, getCurrentUser } from "@/lib/supabase/server"
 
 export const metadata: Metadata = {
   title: "Dashboard",
 }
 
+/**
+ * The dashboard.
+ *
+ * Performs NO calculations. Every figure, including every period-over-period
+ * change, arrives already computed from the analytics service. This page
+ * chooses what to show and how to phrase it — nothing more.
+ */
 export default async function DashboardPage(props: PageProps<"/dashboard">) {
   const searchParams = await props.searchParams
-  const rangeParam = Array.isArray(searchParams.range)
-    ? searchParams.range[0]
-    : searchParams.range
-  const range = resolveRange(rangeParam)
+  const rangeParam = Array.isArray(searchParams.range) ? searchParams.range[0] : searchParams.range
+  const period = resolvePeriod(isPeriodKey(rangeParam) ? rangeParam : DEFAULT_PERIOD)
 
   const [user, businesses, activeBusiness] = await Promise.all([
     getCurrentUser(),
@@ -31,9 +46,7 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
     getActiveBusiness(),
   ])
 
-  if (!activeBusiness) {
-    redirect(ONBOARDING_ROUTE)
-  }
+  if (!activeBusiness) redirect(ONBOARDING_ROUTE)
 
   const supabase = await createClient()
   const { data: profile } = await supabase
@@ -42,25 +55,27 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
     .eq("id", user!.id)
     .maybeSingle()
 
-  const data = await getDashboardData(activeBusiness.id, range.days)
-  const { current, previous, channels } = data
+  // The business comes from the session, never from the request.
+  const analytics = await getAnalytics(activeBusiness.id, period, activeBusiness.currency)
+  const { current, comparisons, channels, products, health, insights, reconciliation } = analytics
   const currency = activeBusiness.currency
 
-  const hasSales = current.order_count > 0
-
-  // How much of the margin is actually backed by recorded costs. Lines with no
-  // cost contribute nothing to COGS, which inflates profit — so if any are
-  // missing, every margin figure below carries a warning rather than being
-  // presented as fact.
-  const costCoverage =
-    current.items_total > 0
-      ? Math.round((current.items_with_cost / current.items_total) * 100)
-      : 100
-  const costGap = current.items_total - current.items_with_cost
+  const hasSales = current.orders_count > 0
+  const coverage = current.cost_coverage === null ? null : Number(current.cost_coverage)
+  const missingCostLines = current.items_total - current.items_with_cost
   const marginWarning =
-    costGap > 0
-      ? `${costGap} of ${current.items_total} items have no cost recorded, so profit is overstated.`
+    missingCostLines > 0
+      ? `${missingCostLines} of ${current.items_total} order lines have no recorded cost, so this is overstated.`
       : undefined
+
+  /** Pulls a precomputed comparison. The page never derives one. */
+  const change = (metric: string): MetricComparison | undefined =>
+    findComparison(comparisons, metric)
+
+  const pct = (metric: string): number | null => {
+    const value = change(metric)?.percent_change
+    return value === null || value === undefined ? null : Number(value)
+  }
 
   return (
     <AppShell
@@ -74,17 +89,20 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">{activeBusiness.name}</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              {range.label.toLowerCase().replace("last ", "The last ")} · all figures in{" "}
-              {currency}
+              {period.label} · {period.comparisonLabel} · all figures in {currency}
             </p>
           </div>
-          <RangeSelector active={range.value as RangeValue} />
+          <RangeSelector active={period.key} />
         </div>
 
-        {/* A failed calculation must never be shown as zero. An owner acting on
-            a fabricated zero is worse off than one who knows a figure is
-            unavailable. */}
-        {data.error && (
+        {period.incomplete && hasSales && (
+          <p className="mt-3 text-xs text-muted-foreground">
+            This period is still in progress, so it is being compared against a
+            complete one. Expect the comparison to look weaker than it is.
+          </p>
+        )}
+
+        {analytics.error && (
           <div
             role="alert"
             className="mt-6 flex items-start gap-2.5 rounded-xl border border-danger/25 bg-danger-subtle px-4 py-3 text-sm text-danger-strong"
@@ -93,13 +111,13 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
             <div>
               <p className="font-medium">These figures could not be calculated.</p>
               <p className="mt-0.5 text-xs opacity-90">
-                Nothing below is reliable. Technical detail: {data.error}
+                Nothing below is reliable. Technical detail: {analytics.error}
               </p>
             </div>
           </div>
         )}
 
-        {!data.error && !hasSales ? (
+        {!analytics.error && !hasSales ? (
           <Card className="mt-6 shadow-none">
             <CardContent className="flex flex-col items-center gap-3 px-6 py-16 text-center">
               <span className="flex size-11 items-center justify-center rounded-md bg-accent text-accent-foreground">
@@ -107,9 +125,8 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
               </span>
               <p className="font-heading text-lg font-semibold">No sales in this period</p>
               <p className="max-w-md text-sm text-muted-foreground">
-                Once orders exist, this page will show revenue, true margin after
-                fees, and which channel actually earns you the most. Connecting a
-                sales channel or importing a spreadsheet comes in a later phase.
+                Import a sales export to see revenue, true margin after fees, and
+                which channel actually earns you the most.
               </p>
             </CardContent>
           </Card>
@@ -119,66 +136,74 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <MetricCard
                   emphasis
-                  label="Revenue"
+                  label={METRICS.revenue.label}
                   value={formatMoney(current.revenue, currency)}
-                  change={percentChange(current.revenue, previous.revenue)}
-                  explanation="Total of all orders placed in this period, excluding cancelled orders."
+                  change={pct("revenue")}
+                  explanation={METRICS.revenue.definition}
                 />
                 <MetricCard
                   emphasis
-                  label="Gross profit"
+                  label={METRICS.gross_profit.label}
                   value={formatMoney(current.gross_profit, currency)}
-                  change={percentChange(current.gross_profit, previous.gross_profit)}
-                  explanation="Revenue minus the cost of the goods sold and minus channel fees."
+                  change={pct("gross_profit")}
+                  explanation={METRICS.gross_profit.definition}
                   warning={marginWarning}
                 />
                 <MetricCard
-                  label="Gross margin"
+                  label={METRICS.gross_margin.label}
                   value={formatPercent(current.gross_margin)}
-                  change={percentChange(current.gross_margin, previous.gross_margin)}
-                  explanation="Gross profit as a share of revenue."
+                  change={pct("gross_margin")}
+                  explanation={METRICS.gross_margin.definition}
                   warning={marginWarning}
                 />
                 <MetricCard
-                  label="Net profit"
+                  label={METRICS.net_profit.label}
                   value={formatMoney(current.net_profit, currency)}
-                  change={percentChange(current.net_profit, previous.net_profit)}
-                  explanation="Gross profit minus operating expenses recorded in this period."
+                  change={pct("net_profit")}
+                  explanation={METRICS.net_profit.definition}
                   warning={marginWarning}
                 />
               </div>
 
               <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <MetricCard
-                  label="Orders"
-                  value={formatNumber(current.order_count)}
-                  change={percentChange(current.order_count, previous.order_count)}
-                  explanation="Orders placed in this period, excluding cancelled ones."
+                  label={METRICS.orders_count.label}
+                  value={formatNumber(current.orders_count)}
+                  change={pct("orders_count")}
+                  explanation={METRICS.orders_count.definition}
                 />
                 <MetricCard
-                  label="Average order value"
+                  label={METRICS.avg_order_value.label}
                   value={formatMoney(current.avg_order_value, currency)}
-                  change={percentChange(current.avg_order_value, previous.avg_order_value)}
-                  explanation="Revenue divided by the number of orders."
+                  change={pct("avg_order_value")}
+                  explanation={METRICS.avg_order_value.definition}
                 />
                 <MetricCard
-                  label="Channel fees"
+                  label={METRICS.fees.label}
                   value={formatMoney(current.fees, currency)}
-                  change={percentChange(current.fees, previous.fees)}
-                  higherIsBetter={false}
-                  explanation="Marketplace commission, payment processing and fulfilment charged on these orders."
+                  change={pct("fees")}
+                  higherIsBetter={METRICS.fees.higherIsBetter}
+                  explanation={METRICS.fees.definition}
                 />
                 <MetricCard
-                  label="Expenses"
+                  label={METRICS.expenses.label}
                   value={formatMoney(current.expenses, currency)}
-                  change={percentChange(current.expenses, previous.expenses)}
-                  higherIsBetter={false}
-                  explanation="Operating costs recorded against this period."
+                  change={pct("expenses")}
+                  higherIsBetter={METRICS.expenses.higherIsBetter}
+                  explanation={METRICS.expenses.definition}
                 />
               </div>
             </section>
 
-            <section className="mt-8" aria-label="Channel performance">
+            <section className="mt-8" aria-label="What this means">
+              <InsightList insights={insights} currency={currency} />
+            </section>
+
+            <section className="mt-4" aria-label="Business health">
+              <HealthCard health={health} currency={currency} />
+            </section>
+
+            <section className="mt-4" aria-label="Channel performance">
               <Card className="shadow-none">
                 <CardHeader>
                   <CardTitle>Channel performance</CardTitle>
@@ -193,34 +218,67 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
               </Card>
             </section>
 
+            <section className="mt-4" aria-label="Product performance">
+              <Card className="shadow-none">
+                <CardHeader>
+                  <CardTitle>Product performance</CardTitle>
+                  <CardDescription>
+                    Revenue here is order-line revenue, so it excludes shipping and
+                    order-level discounts. Fees are shared across lines in
+                    proportion to their value — an allocation, not a charge you
+                    actually paid per product.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="px-0">
+                  <ProductTable products={products} currency={currency} />
+                </CardContent>
+              </Card>
+            </section>
+
             <section className="mt-4 grid gap-4 sm:grid-cols-3" aria-label="Secondary figures">
               <MetricCard
-                label="Units sold"
+                label={METRICS.units_sold.label}
                 value={formatNumber(current.units_sold, 2)}
-                change={percentChange(current.units_sold, previous.units_sold)}
-                explanation="Total quantity across all order lines in this period."
+                change={pct("units_sold")}
+                explanation={METRICS.units_sold.definition}
               />
               <MetricCard
-                label="Customers who ordered"
-                value={formatNumber(current.customer_count)}
-                change={percentChange(current.customer_count, previous.customer_count)}
-                explanation="Distinct customers with at least one order. Orders with no customer attached are not counted."
+                label={METRICS.customers_count.label}
+                value={formatNumber(current.customers_count)}
+                change={pct("customers_count")}
+                explanation={METRICS.customers_count.definition}
               />
               <MetricCard
-                label="Refunds"
+                label={METRICS.refunds.label}
                 value={formatMoney(current.refunds, currency)}
-                change={percentChange(current.refunds, previous.refunds)}
-                higherIsBetter={false}
-                explanation="Value of returns approved, received or refunded in this period."
+                change={pct("refunds")}
+                higherIsBetter={METRICS.refunds.higherIsBetter}
+                explanation={METRICS.refunds.definition}
               />
             </section>
 
-            <p className="mt-6 text-xs text-muted-foreground">
-              Every figure here is calculated in the database from your own
-              records. Nothing is estimated or generated.
-              {costCoverage < 100 &&
-                ` Cost data covers ${costCoverage}% of order lines in this period.`}
-            </p>
+            <div className="mt-6 space-y-1 text-xs text-muted-foreground">
+              <p>
+                Every figure here is calculated in the database from your own
+                records. Nothing is estimated or generated.
+                {coverage !== null && coverage < 100 &&
+                  ` Cost data covers ${coverage}% of order lines in this period.`}
+              </p>
+              {Number(reconciliation.channel_difference) !== 0 && (
+                <p className="text-danger-strong">
+                  Channel revenue does not reconcile with total revenue — a
+                  difference of {formatMoney(reconciliation.channel_difference, currency)}.
+                  Please report this.
+                </p>
+              )}
+              {Number(reconciliation.order_line_gap) !== 0 && (
+                <p>
+                  Order revenue exceeds product-line revenue by{" "}
+                  {formatMoney(reconciliation.order_line_gap, currency)} — shipping,
+                  order-level discounts, and any orders with no product lines.
+                </p>
+              )}
+            </div>
           </>
         )}
       </div>

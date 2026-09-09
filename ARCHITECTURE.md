@@ -144,6 +144,103 @@ Rules:
 
 ---
 
+## 4b. The analytics engine
+
+The layer everything later depends on. Alerts, recommendations and the AI will
+all consume its output, so it has one job: produce figures that are correct and
+say so when they are not.
+
+```
+DATA        universal data model
+   |
+ANALYTICS   SQL functions -- every figure, including every period delta
+   |
+INSIGHT     deterministic rules over verified figures
+   |
+AI          Phase 8 -- explains these outputs, never computes them
+   |
+ACTIONS     Phase 13 -- rule-based, logged, never autonomous
+```
+
+### Where calculations live, and why
+
+**Every business figure is computed in SQL.** Not some of them, and not the
+easy ones. Two reasons:
+
+1. `numeric` is exact decimal arithmetic. A value parsed into a JavaScript
+   number becomes binary floating point, where 0.10 has no exact representation
+   and the error compounds across aggregation.
+
+2. It is the boundary that keeps the AI honest. If the application is not
+   permitted to calculate, neither is anything built on top of it.
+
+This extends further than it first appears: **period-over-period changes are
+computed in SQL too**, by `analytics_compare()`. Leaving a subtraction to the
+caller would be the first crack in the rule.
+
+TypeScript in `src/services/analytics/` does exactly two things: it decides
+which figures to ask for, and it compares already-computed RATIOS against
+documented thresholds. That is judgement, not arithmetic.
+
+| Module | Responsibility |
+| --- | --- |
+| `types.ts` | The metric registry -- every published number, defined once |
+| `periods.ts` | Comparison windows, half-open so nothing is double-counted |
+| `health.ts` | Business Health Score. Every threshold stated in the file |
+| `insights.ts` | Deterministic rules. No model involved |
+| `index.ts` | The single facade. Nothing above it calculates |
+
+### SQL functions
+
+| Function | Returns |
+| --- | --- |
+| `analytics_counted_orders` | The definition of "counted revenue", in one place |
+| `analytics_financials` | Headline figures plus data-quality counts |
+| `analytics_compare` | One row per metric: current, previous, change, direction |
+| `analytics_channels` | Per-channel performance. Reconciles exactly to the total |
+| `analytics_products` | Per-product performance from order lines |
+| `analytics_reconciliation` | Makes the order-vs-line revenue gap visible |
+| `analytics_health_inputs` | Measured ratios for the health score |
+
+All are `SECURITY INVOKER`, so Row Level Security applies inside them. A caller
+asking about another tenant receives zeros and empty sets -- not an error,
+which would confirm the business exists.
+
+### Two reconciliation facts, stated rather than hidden
+
+**Channels reconcile exactly.** Every counted order belongs to one channel or
+to none, and orders with none are grouped as "Unattributed" rather than
+dropped. Channel revenue therefore always sums to total revenue, and a test
+asserts it.
+
+**Products do NOT reconcile to total revenue, by construction.** Product
+revenue is order-LINE revenue; order totals also contain shipping and
+order-level discounts, which belong to an order rather than to any product.
+`analytics_reconciliation()` reports the gap so it is a known quantity instead
+of a discrepancy someone discovers later.
+
+Per-product fees are an **allocation**, split by line revenue, and the column
+is named `fees_allocated` so it can never be read as a charge someone actually
+paid per product.
+
+### Data quality is a first-class output
+
+The engine reports what it does not know:
+
+| Signal | Meaning |
+| --- | --- |
+| `cost_coverage` | Share of order lines with a recorded cost. Below 100 means profit is OVERSTATED |
+| `orders_without_channel` | Channel comparisons are incomplete |
+| `orders_zero_fees` | BizMind cannot distinguish a genuine zero fee from one never recorded |
+| `cancelled_orders` | Counted separately; excluded from every figure |
+| `order_line_gap` | Shipping and order-level adjustments |
+
+A ratio with a zero denominator returns **NULL, never 0 and never infinity**.
+Null means "cannot be calculated", which is a different fact from zero and
+stays distinguishable all the way to the screen.
+
+---
+
 ## 5. Rendering model
 
 - Server Components are the default. Data fetching happens on the server, close

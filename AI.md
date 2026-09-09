@@ -182,7 +182,7 @@ than this codebase will, which is why `ai:check` verifies rather than assumes.
 npm run test:ai
 ```
 
-63 assertions, no network and no key — the key is deleted from the environment
+68 assertions, no network and no key — the key is deleted from the environment
 before anything is imported, so a test that accidentally reached OpenAI would
 fail rather than quietly spend money.
 

@@ -807,3 +807,67 @@ number it was not given, that is evidence of a missing figure, not of a
 disobedient model. Compute it.
 
 **Cost to change:** Low.
+
+---
+
+## 2026-09-09 — gpt-5.6-terra, and proving which model answered
+
+**Decided:** `DEFAULT_MODEL` is `gpt-5.6-terra`, set in one place and
+overridable with `OPENAI_MODEL`. `ai:check` reads the model name from OpenAI's
+**response** and fails if it does not match what was requested.
+
+**Why the response and not the request:** a key that works proves nothing about
+which model replied. A provider is free to serve a different or dated build
+than an alias implies, and every explanation would then be written by a model
+nobody chose — invisibly, because the prose would look the same.
+
+**No temperature is sent.** The first attempt at this change failed outright:
+`gpt-5.6-terra` accepts only its own default temperature and rejects any other
+value. Sending a parameter BizMind does not need had tied the product to one
+generation of model. The determinism that mattered never came from temperature
+anyway — it came from computing the figures the explanation needs, so there is
+nothing left to be creative about.
+
+Measured: **6 of 6** narrations passed the number guard, every one answered by
+`gpt-5.6-terra`.
+
+**Cost to change:** Very low. One constant.
+
+---
+
+## 2026-09-09 — Corrected: PostgREST returns numbers, not strings
+
+**Corrected, not decided.** This codebase asserted in three places that
+PostgREST serialises `numeric` as a JSON **string**, and that typing money as
+`string` therefore made accidental arithmetic in JavaScript impossible.
+
+Both halves were wrong. Probing the live deployment:
+
+```
+{"revenue":0.1000,"cogs":0.30000000,"cost_gap":50.00}
+```
+
+Unquoted JSON numbers, carrying full scale. The **wire format is exact** — JSON
+numbers are arbitrary precision by specification. `JSON.parse` is what narrows
+them to IEEE-754 doubles, so by the time a figure reaches JavaScript it is a
+`number`.
+
+**What this is not:** a live defect. Nothing in this codebase does arithmetic on
+money, every figure is rounded for display, and a double carries far more
+precision than any realistic amount needs.
+
+**What it is:** a safety net that was described as stronger than it is.
+`revenue + cogs` is ordinary addition at runtime, not string concatenation. The
+rule that all financial arithmetic happens in SQL still holds — it is enforced
+by review and by tests, not by the type.
+
+`Money` remains declared as `string`, which does not match the runtime value.
+That mismatch is **recorded rather than quietly fixed**: correcting it touches
+every consumer of every figure and deserves its own change, with its own tests,
+rather than being folded into a task about something else.
+
+**Found by:** writing a live contract test for migration 0010 that asserted the
+documented type instead of assuming it. The assertion failed, which is exactly
+what it was for.
+
+**Cost to change:** Medium, and worth scheduling.

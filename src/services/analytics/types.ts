@@ -3,9 +3,18 @@
  *
  * THE RULE THIS LAYER EXISTS TO ENFORCE
  * -------------------------------------
- * Every money figure below arrives from PostgreSQL as a `numeric`, which
- * PostgREST serialises as a STRING to preserve precision. They are typed as
- * strings here on purpose.
+ * Every money figure below arrives from PostgreSQL as a `numeric`.
+ *
+ * CORRECTION (2026-09-09), after probing the live deployment: PostgREST emits
+ * these as unquoted JSON numbers with full scale -- {"revenue":0.1000} -- so
+ * the wire format is exact, but `JSON.parse` narrows them to doubles. At
+ * runtime these values are NUMBERS, not strings.
+ *
+ * They are still declared as strings here. That is now a known mismatch rather
+ * than a design: correcting it touches every consumer, so it is recorded in
+ * DATABASE.md and left for a change of its own. What has NOT changed is the
+ * rule -- no arithmetic on money in TypeScript. It is simply enforced by
+ * review and tests rather than by the type system, which is worth knowing.
  *
  * TypeScript in this service performs NO arithmetic on money. Not sums, not
  * differences, not percentages — period-over-period deltas come from SQL for

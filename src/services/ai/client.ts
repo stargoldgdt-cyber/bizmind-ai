@@ -42,9 +42,11 @@ export type AiResult =
  *
  * Overridable with `OPENAI_MODEL` because model names change faster than this
  * codebase will. `npm run ai:check` verifies that whatever is configured
- * actually exists on the account before anyone depends on it.
+ * actually exists on the account, AND that it is the model which actually
+ * answered -- asking for one model and being served another is a real failure
+ * mode, and a key that merely works proves nothing about which model replied.
  */
-const DEFAULT_MODEL = "gpt-4o-mini"
+const DEFAULT_MODEL = "gpt-5.6-terra"
 
 const ENDPOINT = "https://api.openai.com/v1/chat/completions"
 
@@ -66,8 +68,13 @@ export type CompletionRequest = {
   /** Hard cap. These are short explanations, not essays. */
   maxOutputTokens?: number
   /**
-   * Zero by default. This is explanation, not invention: variety buys nothing
-   * here, and a model feeling creative is a model deriving a percentage.
+   * Omitted unless set. Newer models accept only their default temperature and
+   * reject anything else outright, so sending a value BizMind does not need
+   * would tie the product to one generation of model.
+   *
+   * The determinism that matters here did not come from temperature anyway. It
+   * came from computing the figures the explanation needs, so there is nothing
+   * left for a model to be creative about. See migration 0010.
    */
   temperature?: number
 }
@@ -104,8 +111,10 @@ export async function complete(request: CompletionRequest): Promise<AiResult> {
       },
       body: JSON.stringify({
         model,
-        temperature: request.temperature ?? 0,
         max_completion_tokens: request.maxOutputTokens ?? 700,
+        ...(request.temperature === undefined
+          ? {}
+          : { temperature: request.temperature }),
         messages: [
           { role: "system", content: request.system },
           { role: "user", content: request.user },
@@ -154,7 +163,10 @@ export async function complete(request: CompletionRequest): Promise<AiResult> {
       return { ok: false, reason: "failed", detail: "OpenAI returned no text." }
     }
 
-    return { ok: true, text: text.trim(), model }
+    // The model named in the RESPONSE, not the one in the request. A provider
+    // is free to serve a different or dated build than the alias asked for,
+    // and "the key works" says nothing about which model actually answered.
+    return { ok: true, text: text.trim(), model: respondingModel(json) ?? model }
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       return {
@@ -169,6 +181,13 @@ export async function complete(request: CompletionRequest): Promise<AiResult> {
   } finally {
     clearTimeout(timer)
   }
+}
+
+/** The model OpenAI says produced this reply. Null if it did not say. */
+function respondingModel(json: unknown): string | null {
+  if (typeof json !== "object" || json === null) return null
+  const model = (json as { model?: unknown }).model
+  return typeof model === "string" && model !== "" ? model : null
 }
 
 /**

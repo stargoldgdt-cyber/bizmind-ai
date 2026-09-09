@@ -18,6 +18,7 @@
     "test:costs": "node --import tsx scripts/verify-cost-stability.mts",
     "test:source-truth": "node --import tsx scripts/verify-source-truth.mts",
     "test:mapping-data": "node --import tsx scripts/verify-mapping-profiles.mts",
+    "test:migration-0010": "node --import tsx --conditions react-server scripts/verify-migration-0010.mts",
     "ai:check": "node --import tsx --conditions react-server scripts/check-openai.mts"
   },
   "engines": {

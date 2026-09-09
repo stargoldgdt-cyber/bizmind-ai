@@ -192,8 +192,19 @@ Verifies the key, confirms the configured model exists on the account (and
 lists ones that do if it does not), then writes a real explanation of a sample
 month and puts it through the guard. It costs a fraction of a penny.
 
-`OPENAI_MODEL` overrides the default in `.env.local`. Model names change faster
-than this codebase will, which is why `ai:check` verifies rather than assumes.
+BizMind's default model is **`gpt-5.6-terra`**, set in one place —
+`DEFAULT_MODEL` in `src/services/ai/client.ts`. `OPENAI_MODEL` overrides it in
+`.env.local` without a code change.
+
+`ai:check` proves **which model answered**, not merely that the key works. The
+model name is read from OpenAI's response body, not echoed back from the
+request, and a mismatch is treated as a failure: a provider serving a different
+build than the alias asked for would mean every explanation was written by a
+model nobody chose.
+
+No temperature is sent. Newer models accept only their own default and reject
+anything else outright, and the determinism that matters here came from
+computing the figures the explanation needs — not from turning the dial down.
 
 ---
 
@@ -203,7 +214,7 @@ than this codebase will, which is why `ai:check` verifies rather than assumes.
 npm run test:ai
 ```
 
-71 assertions, no network and no key — the key is deleted from the environment
+78 assertions, no network and no key — the key is deleted from the environment
 before anything is imported, so a test that accidentally reached OpenAI would
 fail rather than quietly spend money.
 

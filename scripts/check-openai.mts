@@ -263,7 +263,27 @@ if (!narration.ok) {
   process.exit(1)
 }
 
-line(`  Written in ${seconds}s by ${narration.model}:`)
+// Point 4 of the acceptance criteria, and the one that actually matters: a
+// working key proves nothing about which model replied. `narration.model` is
+// read from the RESPONSE body, not echoed from the request.
+const configuredBase = configured.replace(/-\d{4}-\d{2}-\d{2}$/, "")
+const answeredBase = narration.model.replace(/-\d{4}-\d{2}-\d{2}$/, "")
+const sameModel = answeredBase === configuredBase
+
+line(`  Requested model:  ${configured}`)
+line(`  ANSWERED BY:      ${narration.model}   (reported by OpenAI, not assumed)`)
+
+if (!sameModel) {
+  line()
+  line("  MISMATCH. BizMind asked for one model and a different one replied.")
+  line("  Every explanation would be written by a model nobody chose, so this")
+  line("  is treated as a failure rather than a curiosity.")
+  process.exit(1)
+}
+
+line(`  Match: yes. ${configured} wrote this.`)
+line()
+line(`  Written in ${seconds}s:`)
 line()
 for (const paragraph of narration.text.split(/\n{2,}/)) {
   line(`    ${paragraph.trim().replace(/\n/g, "\n    ")}`)

@@ -63,6 +63,7 @@ Nobody else can reach it. Press `Ctrl + C` in the terminal to stop it.
 | `npm run test:source-truth` | Proves blank is never turned into zero |
 | `npm run test:mapping` | Proves BizMind never guesses what a column means |
 | `npm run test:mapping-data` | The same, against the real database |
+| `npm run test:migration-0010` | Checks the newest database change really holds |
 | `npm run test:ai` | Proves the AI can never show you an invented number |
 | `npm run ai:check` | Checks your OpenAI key and writes one real explanation |
 

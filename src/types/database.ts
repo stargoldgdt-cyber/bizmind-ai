@@ -19,12 +19,16 @@
  * Every money and quantity column is `numeric(20,4)` in PostgreSQL and is
  * typed here as `string`. That is deliberate, not an oversight.
  *
- * PostgREST returns numerics as JSON strings to preserve precision. Parsing
- * one into a JavaScript number silently converts it to binary floating point,
- * where 0.10 cannot be represented exactly and the error compounds across
- * aggregation. Keeping them as strings makes it impossible to do financial
- * arithmetic in JavaScript by accident — which is the rule anyway: the
- * database computes every figure, the application only displays it.
+ * CORRECTION (2026-09-09): PostgREST returns numerics as unquoted JSON
+ * NUMBERS carrying full scale, not as strings. The wire format is exact;
+ * `JSON.parse` is what converts them to binary floating point, where 0.10
+ * cannot be represented exactly.
+ *
+ * So declaring them `string` here does NOT make accidental arithmetic
+ * impossible — at runtime they are numbers and `a + b` simply works. The rule
+ * still holds and is enforced by review and tests: the database computes every
+ * figure, the application only displays it. The declaration is left as-is
+ * deliberately; see DATABASE.md for why changing it is its own task.
  */
 
 /* ---- Enumerations -------------------------------------------------------- */

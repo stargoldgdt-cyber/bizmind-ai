@@ -490,6 +490,53 @@ check(
 )
 
 /* -------------------------------------------------------------------------- */
+section("6b. THE MODEL IS CHOSEN IN ONE PLACE, AND WE CHECK WHO ANSWERED")
+
+const clientText = readFileSync("src/services/ai/client.ts", "utf8")
+
+check(
+  "the default model is gpt-5.6-terra",
+  clientText.includes('const DEFAULT_MODEL = "gpt-5.6-terra"'),
+)
+check(
+  "and gpt-4o-mini is no longer referenced anywhere",
+  !readdirSync("src/services/ai")
+    .map((f) => readFileSync(join("src/services/ai", f), "utf8"))
+    .some((contents) => contents.includes("gpt-4o-mini"))
+)
+check(
+  "the model is selected in exactly one expression",
+  (clientText.match(/DEFAULT_MODEL/g) ?? []).length === 2,
+  String((clientText.match(/DEFAULT_MODEL/g) ?? []).length)
+)
+check(
+  "an operator can still override it without a code change",
+  clientText.includes("process.env.OPENAI_MODEL")
+)
+
+// A working key proves nothing about which model replied. A provider may serve
+// a different or dated build than the alias asked for, and every explanation
+// would then be written by a model nobody chose.
+check(
+  "the model reported back is read from the RESPONSE, not echoed from the request",
+  clientText.includes("respondingModel(json)") &&
+    /function respondingModel/.test(clientText)
+)
+
+// Newer models accept only their own default temperature and reject anything
+// else outright. Sending a value BizMind does not need would tie the product
+// to one generation of model -- which is exactly what happened on the first
+// attempt at this change.
+check(
+  "temperature is omitted unless a caller explicitly asks for one",
+  clientText.includes("request.temperature === undefined")
+)
+check(
+  "so no fixed temperature is hard-coded into the request",
+  !/temperature:\s*(0|0\.\d+)/.test(clientText)
+)
+
+/* -------------------------------------------------------------------------- */
 section("7. THE PROMPT SAYS THE SAME THING THE CODE ENFORCES")
 
 // The prompt is hard-wrapped for reading, so a sentence can span lines.

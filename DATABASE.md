@@ -121,11 +121,37 @@ Every money and quantity column is **`numeric(20,4)`**. Never `float` or
 `double`: binary floating point cannot represent `0.10` exactly, and the error
 compounds across aggregation. `numeric` is exact decimal arithmetic.
 
-PostgREST returns numerics as **JSON strings** to preserve that precision, and
-`src/types/database.ts` types them as `string` deliberately. Parsing one into a
-JavaScript number reintroduces the very problem `numeric` avoids. **All
-financial arithmetic happens in SQL** — the same rule that keeps the AI away
-from calculations.
+### How a numeric actually reaches the application
+
+This was **stated incorrectly here until 2026-09-09** and corrected after
+probing the live deployment. The truth, measured rather than assumed:
+
+PostgREST emits a numeric as an **unquoted JSON number carrying its full
+scale** — `{"revenue":0.1000,"cogs":0.30000000}`. JSON numbers are arbitrary
+precision by specification, so **the wire format is exact**.
+
+`JSON.parse()` is what narrows them, to IEEE-754 doubles: `0.30000000` becomes
+`0.3`. So by the time a figure reaches JavaScript it is a `number`, not a
+`string`.
+
+Two consequences, and it is worth being precise about which is which:
+
+- **Not a live defect.** Nothing in this codebase does arithmetic on a money
+  value, and every figure is rounded for display. A double holds about
+  15–17 significant digits, far more than any realistic amount needs.
+- **The safety net is weaker than it was described.** The claim used to be that
+  string-typed money made accidental arithmetic impossible. It does not:
+  `revenue + cogs` is ordinary addition at runtime. The rule that all financial
+  arithmetic happens in SQL is enforced by review and by tests, not by the type.
+
+`Money` is still declared as `string` in TypeScript, which does not match the
+runtime value. That mismatch is recorded rather than quietly fixed, because
+correcting it touches every consumer of every figure and deserves its own
+change. **All financial arithmetic happens in SQL** — the rule stands; only the
+explanation of why it is safe has been corrected.
+
+`scripts/verify-migration-0010.mts` asserts the real wire format, so this
+cannot drift back into folklore.
 
 Quantities are numeric rather than integer because goods sell by weight and
 volume as well as by the piece.

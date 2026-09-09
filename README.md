@@ -57,6 +57,7 @@ Full instructions, including how secrets are handled, are in
 | `npm run test:source-truth` | Blank-is-not-zero and the semantics gate, live |
 | `npm run test:mapping` | Canonical vocabulary and the suggestion engine |
 | `npm run test:mapping-data` | Mapping gates, profiles and isolation, live |
+| `npm run test:migration-0010` | Live contract test for the coverage-gap columns |
 | `npm run test:ai` | The number guard and safe degradation, no key needed |
 | `npm run ai:check` | Verifies the OpenAI key, model and one real explanation |
 

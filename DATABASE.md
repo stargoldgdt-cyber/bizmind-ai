@@ -37,6 +37,7 @@ Two migrations, 15 tables.
 | `0003_dashboard_metrics.sql` | `dashboard_summary()`, `channel_performance()` |
 | `0004_import_pipeline.sql` | import_batches, import_issues, `import_apply_*()` |
 | `0005_historical_cost_stability.sql` | Removes the catalogue-cost backfill; adds `order_items.cost_missing` |
+| `0006_allow_business_deletion.sql` | Lets a business actually be deleted; the last-owner guard was blocking its own cascade |
 
 **Not yet built, by design:** integration and sync tables (Phases 9-12), AI
 tables (Phase 8), automation tables (Phase 13). Each is designed when its
@@ -268,6 +269,13 @@ table-owner connection silently bypasses its own policies.
 `prevent_last_owner_removal()` blocks deleting or demoting the final OWNER of a
 business. Without it an owner could lock everyone out of their own workspace,
 including themselves.
+
+It ignores cascades from a business being deleted. A cascade removes the parent
+row before its members, so the business's absence is what distinguishes
+"someone is leaving" from "the whole workspace is going". Without that check the
+trigger blocked its own cascade and no business could ever be deleted, even
+though the DELETE policy allowed it — fixed in migration 0006. The lesson: a
+policy existing is not evidence that the operation works. Test the behaviour.
 
 ### Privileges
 

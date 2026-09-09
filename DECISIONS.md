@@ -402,6 +402,54 @@ first row unwritten.
 
 ---
 
+## 2026-09-09 — Historical costs are never taken from the catalogue
+
+**Decided:** An order line's `unit_cost` comes from the imported file and from
+nowhere else. Nothing copies a product's current cost into a past order.
+
+**Why:** The first import implementation did exactly that, and it was wrong in
+the most dangerous way this product can be wrong — it produced a plausible
+number nobody would question. A supplier re-pricing an item would silently
+rewrite last year's profit, and two people running the same report months apart
+would get different answers. Seen in testing: an order imported with no cost was
+given 1500.00 from the catalogue, turning an honest "cost unknown" into a
+confident, invented margin.
+
+A cost is a snapshot of one moment. The catalogue is a fact about a different
+moment. They are not interchangeable.
+
+**Consequence accepted:** importing product costs no longer clears the "profit
+is overstated" warning. The only way to get accurate margins is to include cost
+in the sales export. That is a real constraint on the product, and the interface
+now says so plainly rather than implying a shortcut that would produce fiction.
+
+**Cost to change:** Low, but it must not change. Migration 0005 fails if the
+backfill reappears.
+
+---
+
+## 2026-09-09 — A policy existing is not evidence that it works
+
+**Decided:** `prevent_last_owner_removal()` now ignores cascades from a business
+being deleted.
+
+**Why:** Deleting a business cascaded to `business_members`, where the
+last-owner guard refused to remove the final OWNER — without knowing the
+business it belonged to was itself being deleted. No business could ever be
+deleted, even though the DELETE policy allowed it.
+
+**How it was missed:** the Phase 2 tests verified that the delete POLICY
+existed. They never verified that a delete SUCCEEDED. It surfaced only when a
+regression test tried to clean up after itself.
+
+**The lesson, recorded because it generalises:** test the behaviour, not the
+configuration. A policy, a constraint or a setting being present says nothing
+about whether the operation it governs actually works.
+
+**Cost to change:** Low.
+
+---
+
 ## 2026-09-08 — `shadcn` kept as a runtime dependency
 
 **Decided:** Left `shadcn` in `dependencies` where its installer placed it,

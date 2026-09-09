@@ -184,6 +184,30 @@ never runs automatically.
 
 ---
 
+## 6c. Source fields are not metrics
+
+`src/services/ingestion/source-fields.ts` records what is known about every
+column a source produces — and, deliberately, what is *not* known.
+
+Each field carries a `status` and a `mapsTo`. `mapsTo: null` means the field is
+preserved and shown under the source's own column name and feeds no BizMind
+figure. **Editing that file cannot change it.** Authorisation to map a field
+lives in the `source_field_semantics` table, where two check constraints refuse
+any mapping that is not confirmed, and refuse any confirmation that does not
+carry a name and a timestamp. See DATABASE.md § 7b.
+
+The Amazon.ae settlement profile is the worked example. Every one of its 17
+fields is currently `UNVERIFIED`, including the ones whose meaning looks
+obvious. The full reasoning for the "product Wholesale Price" column — and why
+the settlement identity proves Amazon never produced it — is in that file and
+in DECISIONS.md.
+
+Reconciliations declared on a profile are run at import and **recorded**, pass
+or fail, in `source_records.checks`. A row that does not balance is stored with
+the failure attached. It is never silently corrected.
+
+---
+
 ## 7. Safety
 
 - **All-or-nothing.** Each import runs in one transaction. A failure on row 900

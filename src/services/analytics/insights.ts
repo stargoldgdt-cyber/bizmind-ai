@@ -133,6 +133,37 @@ function incompleteCostData(ctx: Context): Insight | null {
 }
 
 /**
+ * Fees the source never recorded. Structurally the same problem as a missing
+ * cost: profit is overstated by an unknown amount, and the difference between
+ * "no fee was charged" and "no fee column was in the file" is invisible in the
+ * arithmetic but decisive for whether the number can be trusted.
+ */
+function incompleteFeeData(ctx: Context): Insight | null {
+  const coverage = num(ctx.current.fee_coverage)
+  if (coverage === null || coverage >= 100) return null
+  if (ctx.current.orders_fees_unknown === 0) return null
+
+  return {
+    type: "fee_coverage_incomplete",
+    severity: coverage < 50 ? "critical" : "warning",
+    title: `Channel fees are missing on ${ctx.current.orders_fees_unknown} orders`,
+    summary:
+      `${ctx.current.orders_fees_unknown} of ${ctx.current.orders_count} orders have ` +
+      `no recorded channel fee. BizMind treats those as unknown rather than zero, ` +
+      `so profit and margin are higher than reality by an unknown amount.`,
+    supportingMetrics: [
+      { label: "Fee coverage", value: ctx.current.fee_coverage ?? "—", format: "percent" },
+      { label: "Orders with unknown fees", value: String(ctx.current.orders_fees_unknown), format: "count" },
+      { label: "Fees counted", value: ctx.current.fees, format: "money" },
+    ],
+    businessImpact:
+      "Marketplace fees are usually the largest single reason a channel earns less than its revenue suggests. Missing them flatters exactly the comparison you most need to get right.",
+    recommendedNextStep:
+      "Map a fee or commission column when importing. If your export genuinely has no fee column, the figures will stay incomplete rather than be guessed.",
+  }
+}
+
+/**
  * A channel that brings in less but keeps more. This is the comparison the
  * product exists to make obvious.
  */
@@ -150,7 +181,9 @@ function betterMarginSmallerChannel(ctx: Context): Insight | null {
         c.channel_id !== null &&
         num(c.gross_margin) !== null &&
         Number(c.revenue) > 0 &&
-        num(c.cost_coverage) === 100
+        num(c.cost_coverage) === 100 &&
+        // Unrecorded fees inflate a channel's margin just as missing costs do.
+        num(c.fee_coverage) === 100
     )
     .sort((a, b) => Number(b.revenue) - Number(a.revenue))
 
@@ -431,6 +464,7 @@ export function generateInsights(ctx: Context): Insight[] {
   const single = [
     revenueUpProfitDown,
     incompleteCostData,
+    incompleteFeeData,
     expenseGrowthOutpacingRevenue,
     lowMarginProducts,
     productsMissingCost,

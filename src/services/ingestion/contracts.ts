@@ -91,18 +91,27 @@ export type RowIssue = {
   rawValue?: string
 }
 
-/** A validated, normalised order ready for the atomic write. */
+/**
+ * A validated, normalised order ready for the atomic write.
+ *
+ * Optional money fields are `string | null`, and null means THE SOURCE DID NOT
+ * RECORD IT. That is not the same fact as zero: "no marketplace fee" and "the
+ * file had no fee column" produce identical profit arithmetic but very
+ * different confidence, and only one of them should be stated as fact.
+ *
+ * Nothing in this pipeline may substitute 0 for a missing value.
+ */
 export type NormalizedOrder = {
   external_id: string
   order_number?: string | null
   placed_at: string
   status?: string | null
   currency: string
-  subtotal?: string
-  discount_total?: string
-  tax_total?: string
-  shipping_total?: string
-  fee_total?: string
+  subtotal: string | null
+  discount_total: string | null
+  tax_total: string | null
+  shipping_total: string | null
+  fee_total: string | null
   total: string
   customer_email?: string | null
   customer_name?: string | null
@@ -113,11 +122,11 @@ export type NormalizedOrderItem = {
   sku?: string | null
   name?: string | null
   quantity: string
-  unit_price?: string
-  unit_cost?: string | null
-  discount?: string
-  tax?: string
-  line_total?: string
+  unit_price: string | null
+  unit_cost: string | null
+  discount: string | null
+  tax: string | null
+  line_total: string | null
 }
 
 export type NormalizedProduct = {

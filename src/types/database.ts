@@ -83,6 +83,8 @@ export type ImportStatus =
   | "FAILED"
   | "CANCELLED"
 
+export type SemanticsStatus = "UNVERIFIED" | "CONFIRMED" | "REJECTED"
+
 export type InventoryMovementType =
   | "PURCHASE"
   | "SALE"
@@ -436,12 +438,17 @@ export type Database = {
             order_number: string | null
             status: OrderStatus
             currency: string
-            subtotal: Numeric
-            discount_total: Numeric
-            tax_total: Numeric
-            shipping_total: Numeric
-            /** Marketplace commission, processing, fulfilment. */
-            fee_total: Numeric
+            /** NULL means the source did not record it. Zero means recorded as zero. */
+            subtotal: Numeric | null
+            discount_total: Numeric | null
+            tax_total: Numeric | null
+            shipping_total: Numeric | null
+            /**
+             * Marketplace commission, processing, fulfilment. NULL means NOT
+             * RECORDED, which is a different fact from a fee of zero -- profit
+             * that ignores unrecorded fees is overstated.
+             */
+            fee_total: Numeric | null
             total: Numeric
             placed_at: string
             cancelled_at: string | null
@@ -504,7 +511,8 @@ export type Database = {
           sku: string | null
           name: string | null
           quantity: Numeric
-          unit_price: Numeric
+          /** NULL means not recorded by the source. */
+          unit_price: Numeric | null
           /**
            * Historical cost snapshot: what one unit cost AT THE TIME OF THIS
            * SALE. Never populated from the current product catalogue — see
@@ -516,9 +524,9 @@ export type Database = {
            * it is overstated. Generated from unit_cost; cannot be set.
            */
           cost_missing: boolean
-          discount: Numeric
-          tax: Numeric
-          line_total: Numeric
+          discount: Numeric | null
+          tax: Numeric | null
+          line_total: Numeric | null
         }
         Insert: {
           business_id: string
@@ -911,6 +919,10 @@ export type Database = {
           orders_zero_fees: number
           orders_without_channel: number
           line_revenue: Numeric
+          /** Orders whose fees the source never recorded. */
+          orders_fees_unknown: number
+          /** Share of orders with a known fee. Below 100 means profit is overstated. */
+          fee_coverage: Numeric | null
         }[]
       }
 
@@ -949,6 +961,8 @@ export type Database = {
           items_total: number
           items_with_cost: number
           cost_coverage: Numeric | null
+          orders_fees_unknown: number
+          fee_coverage: Numeric | null
         }[]
       }
 

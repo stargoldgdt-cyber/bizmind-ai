@@ -51,7 +51,10 @@ Full instructions, including how secrets are handled, are in
 | `npm run build` | Production build — must pass before committing |
 | `npm run start` | Serve the production build |
 | `npm run lint` | Code quality checks — must pass before committing |
-| `npm run verify` | Typecheck, lint, both test suites and build, in one go |
+| `npm run verify` | Typecheck, lint, the offline test suites and build, in one go |
+| `npm run test:analytics-data` | Analytics against the live database |
+| `npm run test:costs` | Historical cost stability against the live database |
+| `npm run test:source-truth` | Blank-is-not-zero and the semantics gate, live |
 
 ---
 

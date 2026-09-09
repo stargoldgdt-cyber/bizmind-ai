@@ -57,6 +57,10 @@ Nobody else can reach it. Press `Ctrl + C` in the terminal to stop it.
 | `npm run build` | Builds the production version. **Must pass before committing** |
 | `npm run start` | Runs the built production version locally |
 | `npm run lint` | Checks code quality. **Must pass before committing** |
+| `npm run verify` | All of the above plus the offline test suites, in one go |
+| `npm run test:analytics-data` | Tests the numbers against the real database |
+| `npm run test:costs` | Proves a past order's profit cannot move |
+| `npm run test:source-truth` | Proves blank is never turned into zero |
 
 Before any commit:
 
@@ -91,6 +95,25 @@ Rules that protect you:
   hoping nobody saw it.
 
 The **OpenAI** key arrives in Phase 8. Supabase is set up below.
+
+### Credentials for the test suites
+
+Three of the test commands sign in to the real database, so they need a
+throwaway account to sign in as. Those live in `.env.test.local`, which Git
+ignores exactly like `.env.local`:
+
+```
+BIZMIND_TEST_EMAIL=...
+BIZMIND_TEST_PASSWORD=...
+BIZMIND_OTHER_EMAIL=...
+BIZMIND_OTHER_PASSWORD=...
+```
+
+The second pair exists so the tests can prove one business genuinely cannot
+read another's data — that needs two different people signed in at once.
+
+These are disposable QA accounts in your own Supabase project. **Never put a
+real customer's password here**, and delete the QA users before launch.
 
 ---
 

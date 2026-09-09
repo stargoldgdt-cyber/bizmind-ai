@@ -410,6 +410,63 @@ Re-run these whenever policies change.
 
 ---
 
+## 7b. Source truth (migration 0008)
+
+Two tables exist so BizMind can hold a supplier's or marketplace's own figures
+**without claiming to understand them**.
+
+### source_records
+
+One row per record as the source stated it: the raw figures in a `jsonb`
+column, plus two columns that carry what would otherwise be lost.
+
+| Column | Why it exists |
+| --- | --- |
+| `figures` | Every value the file gave, verbatim, as exact decimal text |
+| `blank_fields` | Which columns were **blank**, so blank stays distinguishable from a recorded zero |
+| `checks` | The reconciliations that were run and whether each passed |
+
+A row that fails its own reconciliation is **stored with the failure recorded**.
+It is never corrected. If a marketplace's totals do not add up, the owner needs
+to know that, not to be shown a tidied version.
+
+### source_field_semantics
+
+A column in someone else's report is not a BizMind metric. This table is the
+gate between the two, and it is enforced by database constraints rather than
+application code:
+
+```sql
+constraint semantics_mapping_requires_confirmation
+  check (maps_to is null or status = 'CONFIRMED'),
+constraint semantics_confirmation_requires_attribution
+  check (status <> 'CONFIRMED' or (confirmed_by is not null and confirmed_at is not null))
+```
+
+In plain terms: **a field nobody has confirmed cannot feed a BizMind figure,
+and a confirmation must carry a name and a timestamp.** No code path can skip
+this, because it is not a code path.
+
+Confirming goes through `confirm_source_field_semantics()`, which is restricted
+to OWNER and ADMIN and writes an audit entry naming the field, the metric, and
+the person.
+
+### Blank is not zero
+
+Migration 0008 made these columns nullable, having previously defaulted them
+to `0`: `orders.{subtotal, discount_total, tax_total, shipping_total,
+fee_total}` and `order_items.{unit_price, discount, tax, line_total}`.
+
+A default of zero was a quiet lie. "This order had no marketplace fee" and
+"the file did not say what the fee was" are different facts, and only the first
+one is safe to subtract from profit. Analytics now reports
+`orders_fees_unknown` and `fee_coverage` so the gap is visible on the
+dashboard instead of being silently absorbed into a better-looking margin.
+
+`npm run test:source-truth` proves both properties against the live database.
+
+---
+
 ## 8. Regenerating types
 
 `src/types/database.ts` is currently hand-written to match the migrations. Keep

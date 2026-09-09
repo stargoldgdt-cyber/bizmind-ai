@@ -13,7 +13,7 @@
  *   BIZMIND_TEST_EMAIL, BIZMIND_TEST_PASSWORD
  */
 
-import { readFileSync } from "node:fs"
+import { requireConfig } from "./test-env.mjs"
 
 let passed = 0
 let failed = 0
@@ -39,33 +39,14 @@ function section(title: string) {
 
 /* ---- Configuration ------------------------------------------------------- */
 
-function readEnvFile(path: string): Record<string, string> {
-  try {
-    const out: Record<string, string> = {}
-    for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
-      const match = line.match(/^([A-Z0-9_]+)=(.*)$/)
-      if (match) out[match[1]] = match[2].trim()
-    }
-    return out
-  } catch {
-    return {}
-  }
-}
-
-const fileEnv = readEnvFile(".env.local")
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? fileEnv.NEXT_PUBLIC_SUPABASE_URL
-const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? fileEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY
-const EMAIL = process.env.BIZMIND_TEST_EMAIL
-const PASSWORD = process.env.BIZMIND_TEST_PASSWORD
-const OTHER_EMAIL = process.env.BIZMIND_OTHER_EMAIL
-const OTHER_PASSWORD = process.env.BIZMIND_OTHER_PASSWORD
-
-if (!SUPABASE_URL || !ANON_KEY || !EMAIL || !PASSWORD) {
-  console.error(
-    "Set BIZMIND_TEST_EMAIL and BIZMIND_TEST_PASSWORD (and .env.local) to run these tests."
-  )
-  process.exit(1)
-}
+const {
+  url: SUPABASE_URL,
+  anonKey: ANON_KEY,
+  email: EMAIL,
+  password: PASSWORD,
+  otherEmail: OTHER_EMAIL,
+  otherPassword: OTHER_PASSWORD,
+} = requireConfig()
 
 /* ---- REST helper --------------------------------------------------------- */
 

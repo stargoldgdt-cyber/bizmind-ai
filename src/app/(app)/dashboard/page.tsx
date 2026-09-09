@@ -63,10 +63,20 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
   const hasSales = current.orders_count > 0
   const coverage = current.cost_coverage === null ? null : Number(current.cost_coverage)
   const missingCostLines = current.items_total - current.items_with_cost
+  const feeCoverage = current.fee_coverage === null ? null : Number(current.fee_coverage)
+
+  // Two independent gaps can overstate profit: unrecorded costs and
+  // unrecorded fees. Both are named, because "some data is missing" tells an
+  // owner nothing about what to fix.
+  const gaps: string[] = []
+  if (missingCostLines > 0) {
+    gaps.push(`${missingCostLines} of ${current.items_total} order lines have no recorded cost`)
+  }
+  if (current.orders_fees_unknown > 0) {
+    gaps.push(`${current.orders_fees_unknown} of ${current.orders_count} orders have no recorded fee`)
+  }
   const marginWarning =
-    missingCostLines > 0
-      ? `${missingCostLines} of ${current.items_total} order lines have no recorded cost, so this is overstated.`
-      : undefined
+    gaps.length > 0 ? `${gaps.join("; ")} — so this is overstated.` : undefined
 
   /** Pulls a precomputed comparison. The page never derives one. */
   const change = (metric: string): MetricComparison | undefined =>
@@ -184,6 +194,11 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
                   change={pct("fees")}
                   higherIsBetter={METRICS.fees.higherIsBetter}
                   explanation={METRICS.fees.definition}
+                  warning={
+                    current.orders_fees_unknown > 0
+                      ? `${current.orders_fees_unknown} orders have no fee recorded — treated as unknown, not zero.`
+                      : undefined
+                  }
                 />
                 <MetricCard
                   label={METRICS.expenses.label}
@@ -262,7 +277,9 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
                 Every figure here is calculated in the database from your own
                 records. Nothing is estimated or generated.
                 {coverage !== null && coverage < 100 &&
-                  ` Cost data covers ${coverage}% of order lines in this period.`}
+                  ` Cost data covers ${coverage}% of order lines.`}
+                {feeCoverage !== null && feeCoverage < 100 &&
+                  ` Fee data covers ${feeCoverage}% of orders.`}
               </p>
               {Number(reconciliation.channel_difference) !== 0 && (
                 <p className="text-danger-strong">

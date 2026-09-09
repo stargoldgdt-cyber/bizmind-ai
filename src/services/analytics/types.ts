@@ -48,6 +48,10 @@ export type Financials = {
   orders_zero_fees: number
   orders_without_channel: number
   line_revenue: Money
+  /** Orders whose fees the source never recorded -- not the same as zero fees. */
+  orders_fees_unknown: number
+  /** Share of orders with a known fee. Below 100 means profit is overstated. */
+  fee_coverage: Ratio
 }
 
 export type MetricDirection = "up" | "down" | "flat" | "unknown"
@@ -77,6 +81,8 @@ export type ChannelPerformance = {
   items_total: number
   items_with_cost: number
   cost_coverage: Ratio
+  orders_fees_unknown: number
+  fee_coverage: Ratio
 }
 
 export type ProductPerformance = {
@@ -181,7 +187,7 @@ export const METRICS: Record<string, MetricDefinition> = {
       "Marketplace commission, payment processing and fulfilment charges recorded against orders in the period.",
     higherIsBetter: false,
     caveat:
-      "BizMind cannot tell a genuine zero from a fee that was never recorded.",
+      "A fee the source never recorded is stored as unknown, not zero. Check fee coverage.",
   },
   gross_profit: {
     key: "gross_profit",
@@ -258,6 +264,14 @@ export const METRICS: Record<string, MetricDefinition> = {
     definition:
       "Value of returns approved, received or refunded in the period.",
     higherIsBetter: false,
+  },
+  fee_coverage: {
+    key: "fee_coverage",
+    label: "Fee coverage",
+    format: "percent",
+    definition:
+      "The share of orders that have a recorded channel fee. Below 100% means some orders had no fee recorded, so profit and margin are overstated by an unknown amount.",
+    higherIsBetter: true,
   },
   cost_coverage: {
     key: "cost_coverage",

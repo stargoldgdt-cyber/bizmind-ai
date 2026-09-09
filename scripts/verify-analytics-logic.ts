@@ -237,6 +237,8 @@ function financials(overrides: Partial<Financials> = {}): Financials {
     orders_zero_fees: 0,
     orders_without_channel: 0,
     line_revenue: "0",
+    orders_fees_unknown: 0,
+    fee_coverage: null,
     ...overrides,
   }
 }
@@ -319,12 +321,14 @@ const channels: ChannelPerformance[] = [
     revenue: "3700", cogs: "1500", fees: "370", gross_profit: "1830", gross_margin: "49.46",
     orders_count: 2, units_sold: "3", avg_order_value: "1850",
     items_total: 2, items_with_cost: 2, cost_coverage: "100",
+    orders_fees_unknown: 0, fee_coverage: "100",
   },
   {
     channel_id: "b", channel_name: "Website", channel_type: "WEBSITE",
     revenue: "2800", cogs: "900", fees: "0", gross_profit: "1900", gross_margin: "67.86",
     orders_count: 2, units_sold: "5", avg_order_value: "1400",
     items_total: 3, items_with_cost: 3, cost_coverage: "100",
+    orders_fees_unknown: 0, fee_coverage: "100",
   },
 ]
 

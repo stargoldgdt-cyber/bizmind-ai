@@ -566,3 +566,66 @@ at build time, not only by the CLI. Moving it risks a broken production build
 for a tidiness gain. Revisit if the CSS import is ever removed.
 
 **Cost to change:** Low.
+
+---
+
+## 2026-09-09 — A source column is not a metric until someone says what it means
+
+**Decided:** Data from an outside system is preserved under the source's own
+name and feeds **no** BizMind figure until a named person confirms what the
+field means. The rule is enforced by two check constraints on
+`source_field_semantics`, not by application code.
+
+**Why:** The trigger was a real Amazon.ae export containing a column called
+"product Wholesale Price". The name suggests cost of goods. It might be:
+
+- (A) the cost of the units actually sold in the period,
+- (B) procurement spend during the period, or
+- (C) something specific to how this seller keeps their books.
+
+Those produce materially different profit figures, and the column name cannot
+distinguish them. Worse, the settlement identity
+`Total Sales − Total Expense = Payment` closes **exactly** without it — so
+Amazon did not produce that column at all. It is seller-supplied, which means
+no Amazon documentation can ever define it. Only the seller can.
+
+It is recorded verbatim as *"Source-defined product wholesale cost — COGS
+attribution unverified."*
+
+The source's own `Profit/Loss` is `Payment − product Wholesale Price` (verified
+on the sampled rows and on the totals: 49,648.59 − 53,510.20 = −3,861.61). It
+is kept under that name and is **not** mapped to BizMind's net profit, because
+it inherits whatever the wholesale field means.
+
+**Rejected:** Inferring meaning from column names. It is right often enough to
+be trusted and wrong often enough to be dangerous — which is the worst
+combination a financial product can have.
+
+**Cost to change:** Low to loosen, high to reverse. The constraints are the
+enforcement; removing them removes the guarantee.
+
+---
+
+## 2026-09-09 — Blank is stored as unknown, never as zero
+
+**Decided:** A numeric field the source left blank is stored as `NULL`. Money
+columns that previously defaulted to `0` are now nullable. A recorded zero
+stays `0`.
+
+**Why:** "There was no advertising cost" and "the file did not say what the
+advertising cost was" are different facts. Storing both as `0` destroys the
+difference permanently, and the resulting profit figure looks *better* than the
+truth — the failure direction that loses a customer money.
+
+The Amazon sample had four columns blank across every row: Cost of Advertising,
+Inventory Reimbursements, Storage Fee, and Other. Nothing in the export states
+that blank means zero.
+
+**Consequence, accepted deliberately:** BizMind can no longer always give a
+single confident profit number. `analytics_financials()` now returns
+`orders_fees_unknown` and `fee_coverage`, and the dashboard names the gap —
+"3 of 8 orders have no recorded fee — so this is overstated." A less
+confident number that is true beats a confident one that is not.
+
+**Cost to change:** Medium. The nullable columns are the hard part; the
+reporting is additive.

@@ -220,15 +220,17 @@ function validateOrders(ctx: Ctx, rows: RawRecord[]) {
           }
         }
 
+        // Absent values stay null. Substituting 0 would turn "we do not know
+        // what this line sold for" into "it sold for nothing".
         item = {
           sku,
           name: productName,
           quantity: qty.value,
-          unit_price: lineMoney.unit_price ?? "0",
-          unit_cost: lineMoney.unit_cost ?? null,
-          line_total: lineMoney.line_total ?? "0",
-          discount: "0",
-          tax: "0",
+          unit_price: lineMoney.unit_price,
+          unit_cost: lineMoney.unit_cost,
+          line_total: lineMoney.line_total,
+          discount: null,
+          tax: null,
         }
       }
     }
@@ -248,11 +250,13 @@ function validateOrders(ctx: Ctx, rows: RawRecord[]) {
         placed_at: placed.value,
         status: status.value,
         currency: currency.value,
-        subtotal: money.subtotal ?? "0",
-        discount_total: money.discount_total ?? "0",
-        tax_total: money.tax_total ?? "0",
-        shipping_total: money.shipping_total ?? "0",
-        fee_total: money.fee_total ?? "0",
+        // `?? null`, never `?? "0"`. A column the file did not contain is
+        // unknown, and the database now stores that distinction.
+        subtotal: money.subtotal ?? null,
+        discount_total: money.discount_total ?? null,
+        tax_total: money.tax_total ?? null,
+        shipping_total: money.shipping_total ?? null,
+        fee_total: money.fee_total ?? null,
         total: total.value,
         customer_email: normalizeText(cell(row, ctx.mapping, "customer_email")),
         customer_name: normalizeText(cell(row, ctx.mapping, "customer_name")),
@@ -279,7 +283,11 @@ function validateOrders(ctx: Ctx, rows: RawRecord[]) {
       return
     }
 
-    if (money.fee_total !== undefined && existing.fee_total !== money.fee_total) {
+    if (
+      money.fee_total !== undefined &&
+      existing.fee_total !== null &&
+      existing.fee_total !== money.fee_total
+    ) {
       addIssue(ctx, {
         rowNumber,
         severity: "ERROR",

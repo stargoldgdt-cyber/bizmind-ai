@@ -1,0 +1,171 @@
+import "server-only"
+
+/**
+ * The ONLY place in BizMind that talks to OpenAI.
+ *
+ * Nothing else in the codebase calls a language model, directly or indirectly.
+ * That is not a style preference: it means the rules below cannot be bypassed
+ * by adding a feature somewhere else, because there is only one door.
+ *
+ * NO SDK, DELIBERATELY
+ * --------------------
+ * This is one HTTP POST. A dependency would add a supply-chain surface and a
+ * second thing to keep current, in exchange for retries we want to control
+ * ourselves. See DECISIONS.md.
+ *
+ * THE KEY
+ * -------
+ * `OPENAI_API_KEY` is read here, on the server, and nowhere else. It is not in
+ * `src/lib/env.ts` with the public values, so there is no path by which it can
+ * be pulled into a browser bundle. A missing key is not an error: it means the
+ * AI layer is unavailable, and every feature that uses it must already work
+ * without it.
+ */
+
+/** Why a request could not be made or could not be trusted. */
+export type AiUnavailableReason =
+  | "not_configured"
+  | "rate_limited"
+  | "timed_out"
+  | "refused"
+  | "failed"
+
+export type AiResult =
+  | { ok: true; text: string; model: string }
+  | { ok: false; reason: AiUnavailableReason; detail: string }
+
+/**
+ * Default model.
+ *
+ * Overridable with `OPENAI_MODEL` because model names change faster than this
+ * codebase will. `npm run ai:check` verifies that whatever is configured
+ * actually exists on the account before anyone depends on it.
+ */
+const DEFAULT_MODEL = "gpt-4o-mini"
+
+const ENDPOINT = "https://api.openai.com/v1/chat/completions"
+
+/** An owner waiting on a dashboard will not wait longer than this. */
+const TIMEOUT_MS = 20_000
+
+export function aiModel(): string {
+  return process.env.OPENAI_MODEL?.trim() || DEFAULT_MODEL
+}
+
+/** Whether the AI layer is configured at all. Never throws. */
+export function isAiConfigured(): boolean {
+  return (process.env.OPENAI_API_KEY?.trim().length ?? 0) > 20
+}
+
+export type CompletionRequest = {
+  system: string
+  user: string
+  /** Hard cap. These are short explanations, not essays. */
+  maxOutputTokens?: number
+  /** Low by default: this is explanation, not invention. */
+  temperature?: number
+}
+
+/**
+ * Sends one request and returns text, or a reason it could not.
+ *
+ * NEVER THROWS. Every caller is rendering something an owner is waiting for,
+ * and a language model being slow or down must degrade to the plain figures,
+ * not to an error page.
+ */
+export async function complete(request: CompletionRequest): Promise<AiResult> {
+  const key = process.env.OPENAI_API_KEY?.trim()
+
+  if (!key || key.length <= 20) {
+    return {
+      ok: false,
+      reason: "not_configured",
+      detail: "No OpenAI key is configured, so explanations are turned off.",
+    }
+  }
+
+  const model = aiModel()
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+
+  try {
+    const response = await fetch(ENDPOINT, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        temperature: request.temperature ?? 0.2,
+        max_completion_tokens: request.maxOutputTokens ?? 700,
+        messages: [
+          { role: "system", content: request.system },
+          { role: "user", content: request.user },
+        ],
+      }),
+    })
+
+    if (response.status === 429) {
+      return {
+        ok: false,
+        reason: "rate_limited",
+        detail: "OpenAI is rate limiting this account.",
+      }
+    }
+
+    if (!response.ok) {
+      // The body can contain the request payload back. It is logged for an
+      // operator, never returned to the browser.
+      const body = await response.text()
+      console.error(`[ai] ${response.status} from OpenAI: ${body.slice(0, 400)}`)
+      return {
+        ok: false,
+        reason: "failed",
+        detail: `OpenAI returned ${response.status}.`,
+      }
+    }
+
+    const json: unknown = await response.json()
+    const text = extractText(json)
+
+    if (text === null || text.trim() === "") {
+      return { ok: false, reason: "failed", detail: "OpenAI returned no text." }
+    }
+
+    return { ok: true, text: text.trim(), model }
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      return {
+        ok: false,
+        reason: "timed_out",
+        detail: `No response within ${TIMEOUT_MS / 1000} seconds.`,
+      }
+    }
+
+    console.error("[ai] request failed", error)
+    return { ok: false, reason: "failed", detail: "The request could not be completed." }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * Pulls the message text out of a response.
+ *
+ * Written defensively and without `any`: this is the boundary with someone
+ * else's API, and a shape change should degrade rather than throw.
+ */
+function extractText(json: unknown): string | null {
+  if (typeof json !== "object" || json === null) return null
+
+  const choices = (json as { choices?: unknown }).choices
+  if (!Array.isArray(choices) || choices.length === 0) return null
+
+  const message = (choices[0] as { message?: unknown }).message
+  if (typeof message !== "object" || message === null) return null
+
+  const content = (message as { content?: unknown }).content
+  return typeof content === "string" ? content : null
+}

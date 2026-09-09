@@ -279,7 +279,7 @@ Work in phases. Do not jump ahead, and do not expand scope mid-phase.
 7  Analytics engine        ✅ complete, figures hand-verified
 7.1 Source truth           ✅ complete, blank never becomes zero
 7.2 Canonical mapping      ✅ complete, no name becomes a fact
-8  AI business analyst
+8  AI business analyst      ✅ complete, AI cannot state a figure
 9  Shopify integration
 10 WooCommerce integration
 11 Generic REST API

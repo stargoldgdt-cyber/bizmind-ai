@@ -9,6 +9,7 @@ import { ChannelTable } from "@/features/analytics/components/channel-table"
 import { HealthCard } from "@/features/analytics/components/health-card"
 import { InsightList } from "@/features/analytics/components/insight-list"
 import { MetricCard } from "@/features/analytics/components/metric-card"
+import { PeriodNarrative } from "@/features/analytics/components/period-narrative"
 import { ProductTable } from "@/features/analytics/components/product-table"
 import { RangeSelector } from "@/features/analytics/components/range-selector"
 import { getActiveBusiness, getUserBusinesses } from "@/features/businesses/queries"
@@ -211,6 +212,10 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
             </section>
 
             <section className="mt-8" aria-label="What this means">
+              <PeriodNarrative key={period.key} range={period.key} />
+            </section>
+
+            <section className="mt-4" aria-label="Findings">
               <InsightList insights={insights} currency={currency} />
             </section>
 

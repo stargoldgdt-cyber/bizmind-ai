@@ -690,3 +690,80 @@ more questions than a system that guessed would. A saved profile means it is
 asked once, and a file that gains a column is asked about again.
 
 **Cost to change:** Low to loosen, and it should not be loosened.
+
+---
+
+## 2026-09-09 — The AI is checked, not trusted
+
+**Decided:** Every reply from a language model is machine-checked before an
+owner sees it. Each number in the reply is compared against the fact sheet the
+model was given; a number that was not in that sheet means the whole reply is
+**discarded**, not edited.
+
+**Why:** A prompt saying "do not invent figures" is a request. This is the
+enforcement, and the difference matters more here than anywhere else in the
+product. If BizMind states a profit of 4,102.88 when it is 4,898.46, the owner
+prices, buys and hires against a number that does not exist — and the mistake
+is invisible, because the sentence around it reads perfectly well. A model is
+extremely good at producing that sentence.
+
+Discarding rather than repairing is deliberate. The invented figure is usually
+load-bearing for the sentence containing it, and an owner reading a confident
+paragraph has no way to tell which half to believe.
+
+**The model is also given nothing to calculate with.** It never sees an order
+or a line item — only figures already computed in SQL. Arithmetic is not merely
+forbidden; there are no operands.
+
+**Known limit, stated rather than hidden:** the allowlist is built from every
+number in the fact sheet, so a small integer appearing anywhere in it is
+allowed anywhere in the reply. That admits a stray count. It does not admit a
+money figure or a percentage, which do not collide by accident — and those are
+the ones that cost money. A test asserts this limit explicitly.
+
+**Rejected:** Asking the model to return structured JSON with the figures
+filled in. It reads safer and is not: the model would still be choosing which
+value goes in which field, and a swapped pair of correct numbers is harder to
+notice than an invented one.
+
+**Cost to change:** Low to loosen, and it must not be loosened.
+
+---
+
+## 2026-09-09 — No OpenAI SDK
+
+**Decided:** The AI layer calls the OpenAI REST API with `fetch`. The `openai`
+package is not a dependency.
+
+**Why:** This is one HTTP POST. A package would add supply-chain surface and a
+second thing to keep current, in exchange for retry and streaming behaviour we
+want to control ourselves — the timeout here exists because an owner is waiting
+on a dashboard, not because a library chose a default.
+
+It also makes the "one door" rule trivially checkable: a test greps the whole
+source tree for `api.openai.com` and asserts exactly one file matches.
+
+**Rejected:** The official SDK. Reasonable, and worth revisiting if BizMind
+starts using streaming, tool calls or the assistants API — none of which V1
+does, because V1 ships no autonomous AI actions.
+
+**Cost to change:** Low. One file.
+
+---
+
+## 2026-09-09 — Explanations load after the page, never with it
+
+**Decided:** The dashboard renders every figure server-side and complete. The
+written explanation is fetched afterwards by a client component.
+
+**Why:** An owner needs their revenue figure. They would like a paragraph about
+it. Making the first wait on the second — and on a third party's availability —
+gets the priority backwards.
+
+It also makes degradation the normal path rather than an error path. No key, a
+timeout, a rate limit, or a guard rejection all produce the same thing: the
+dashboard, complete, with one line explaining why there is no paragraph. Every
+one of those lines ends "Your figures above are unaffected", because silence
+would invite the reading that something is wrong with the numbers.
+
+**Cost to change:** Low.

@@ -42,6 +42,15 @@ export const OTHER_EMAIL = read("BIZMIND_OTHER_EMAIL")
 export const OTHER_PASSWORD = read("BIZMIND_OTHER_PASSWORD")
 
 /**
+ * The OpenAI key, for `npm run ai:check` only.
+ *
+ * Read here so a setup script can find it in .env.local the same way the app
+ * does. It is never sent anywhere except OpenAI, and never printed.
+ */
+export const OPENAI_API_KEY = read("OPENAI_API_KEY")
+export const OPENAI_MODEL = read("OPENAI_MODEL")
+
+/**
  * Exits with a readable message rather than a stack trace, because these
  * suites are usually run by hand.
  */

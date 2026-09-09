@@ -63,6 +63,8 @@ Nobody else can reach it. Press `Ctrl + C` in the terminal to stop it.
 | `npm run test:source-truth` | Proves blank is never turned into zero |
 | `npm run test:mapping` | Proves BizMind never guesses what a column means |
 | `npm run test:mapping-data` | The same, against the real database |
+| `npm run test:ai` | Proves the AI can never show you an invented number |
+| `npm run ai:check` | Checks your OpenAI key and writes one real explanation |
 
 Before any commit:
 
@@ -96,7 +98,24 @@ Rules that protect you:
 - If a secret is ever exposed, rotate it (generate a new one) rather than
   hoping nobody saw it.
 
-The **OpenAI** key arrives in Phase 8. Supabase is set up below.
+### The OpenAI key (optional)
+
+BizMind works completely without it. Every figure, chart and import is
+unaffected; the dashboard simply says written explanations are switched off.
+
+If you want the plain-language explanations:
+
+1. Go to https://platform.openai.com/api-keys and create a key.
+2. Add it to `.env.local` as `OPENAI_API_KEY=sk-...`
+3. Run `npm run ai:check`. It checks the key, checks the model, and writes one
+   real explanation so you can see it working before a customer does.
+
+The key is read in exactly one file on the server and is never sent to the
+browser. **The AI never produces a number** -- it only explains figures the
+database already calculated, and any explanation containing a figure that is
+not in your records is thrown away rather than shown. See [AI.md](AI.md).
+
+Supabase is set up below.
 
 ### Credentials for the test suites
 

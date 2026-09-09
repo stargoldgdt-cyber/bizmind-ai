@@ -153,7 +153,7 @@ src/
 │   ├── metrics/             The canonical vocabulary — the authority
 │   ├── analytics/           Verified metric computation
 │   ├── ingestion/           Parsing, mapping, validation, normalisation
-│   ├── ai/                  The only place OpenAI is called
+│   ├── ai/                  Explains figures. Never produces one
 │   └── integrations/        One module per connector
 ├── types/                   Shared TypeScript types              [Phase 3+]
 └── hooks/                   Shared React hooks                   [Phase 4+]

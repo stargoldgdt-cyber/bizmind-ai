@@ -8,15 +8,17 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "verify": "npm run typecheck && npm run lint && npm run test:import && npm run test:parse && npm run test:analytics && npm run test:mapping && npm run build",
+    "verify": "npm run typecheck && npm run lint && npm run test:import && npm run test:parse && npm run test:analytics && npm run test:mapping && npm run test:ai && npm run build",
     "test:import": "tsx scripts/verify-import-pipeline.ts",
     "test:parse": "node --import tsx --conditions react-server scripts/verify-file-parsing.mts",
     "test:analytics": "tsx scripts/verify-analytics-logic.ts",
     "test:mapping": "tsx scripts/verify-canonical-mapping.ts",
+    "test:ai": "node --import tsx --conditions react-server scripts/verify-ai-analyst.mts",
     "test:analytics-data": "node --import tsx scripts/verify-analytics-data.mts",
     "test:costs": "node --import tsx scripts/verify-cost-stability.mts",
     "test:source-truth": "node --import tsx scripts/verify-source-truth.mts",
-    "test:mapping-data": "node --import tsx scripts/verify-mapping-profiles.mts"
+    "test:mapping-data": "node --import tsx scripts/verify-mapping-profiles.mts",
+    "ai:check": "node --import tsx --conditions react-server scripts/check-openai.mts"
   },
   "engines": {
     "node": ">=24.0.0"

@@ -421,6 +421,42 @@ check(
 const noKeyMetric = await explainMetric("Gross margin", INPUT)
 check("the same holds for explaining one figure", !noKeyMetric.ok)
 
+// A 429 from OpenAI means two opposite things, and the advice that follows is
+// opposite too: "wait" clears one and never clears the other. Getting this
+// wrong sends an owner off to wait for something that will not happen.
+const clientSource = readFileSync("src/services/ai/client.ts", "utf8")
+check(
+  "an out-of-credit 429 is told apart from a real rate limit",
+  clientSource.includes("insufficient_quota") && clientSource.includes('"no_credit"')
+)
+
+const analystSource = readFileSync("src/services/ai/analyst.ts", "utf8")
+check(
+  "and running out of credit says so, rather than 'try again shortly'",
+  /no_credit:[\s\S]{0,200}run out of credit/.test(analystSource)
+)
+check(
+  "while a real rate limit is the one that says to try again",
+  /rate_limited:[\s\S]{0,200}Try again shortly/.test(analystSource)
+)
+
+// Every reason must have a message, or a suppressed explanation would render
+// as the word "undefined" on the dashboard.
+const reasons = [
+  "not_configured", "no_credit", "rate_limited", "timed_out", "refused",
+  "failed", "invented_figures", "claimed_to_calculate", "out_of_scope",
+]
+check(
+  "every possible reason has an owner-facing message",
+  reasons.every((reason) => analystSource.includes(`  ${reason}:`)),
+  reasons.filter((reason) => !analystSource.includes(`  ${reason}:`)).join(", ")
+)
+check(
+  "and every one of them reassures the owner about the figures",
+  (analystSource.match(/figures above are unaffected/g) ?? []).length === reasons.length,
+  String((analystSource.match(/figures above are unaffected/g) ?? []).length)
+)
+
 /* -------------------------------------------------------------------------- */
 section("7. THE PROMPT SAYS THE SAME THING THE CODE ENFORCES")
 

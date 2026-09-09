@@ -25,6 +25,9 @@ import "server-only"
 /** Why a request could not be made or could not be trusted. */
 export type AiUnavailableReason =
   | "not_configured"
+  /** The account has no credit. Waiting will never fix this. */
+  | "no_credit"
+  /** Genuinely too many requests too quickly. Waiting WILL fix this. */
   | "rate_limited"
   | "timed_out"
   | "refused"
@@ -107,11 +110,25 @@ export async function complete(request: CompletionRequest): Promise<AiResult> {
       }),
     })
 
+    // OpenAI returns 429 for two completely different situations, and the
+    // right response to each is the opposite of the other: one clears by
+    // waiting, the other never does. Telling an owner to "try again shortly"
+    // when their account is out of credit wastes their afternoon.
     if (response.status === 429) {
+      const body = await response.text()
+
+      if (/insufficient_quota|credit_balance_exhausted|billing/i.test(body)) {
+        return {
+          ok: false,
+          reason: "no_credit",
+          detail: "The OpenAI account has no credit remaining.",
+        }
+      }
+
       return {
         ok: false,
         reason: "rate_limited",
-        detail: "OpenAI is rate limiting this account.",
+        detail: "Too many requests to OpenAI in a short time.",
       }
     }
 

@@ -230,6 +230,26 @@ if (!narration.ok) {
   line(`  ${narration.message}`)
   line()
 
+  if (narration.reason === "no_credit") {
+    line("  YOUR KEY IS FINE. The account simply has no credit on it.")
+    line()
+    line("  OpenAI keys and OpenAI credit are separate things: creating a key")
+    line("  does not add any. A new account starts at zero even with a card on")
+    line("  file, so nothing has gone wrong here.")
+    line()
+    line("  To fix it:")
+    line("    1. Go to https://platform.openai.com/settings/organization/billing")
+    line("    2. Click 'Add to credit balance'")
+    line("    3. The smallest amount is plenty. BizMind uses a fraction of a")
+    line("       penny per explanation.")
+    line("    4. Run  npm run ai:check  again.")
+    line()
+    line("  Until then BizMind works exactly as it does now. Every figure,")
+    line("  chart and import is unaffected; the dashboard just says explanations")
+    line("  are paused.")
+    process.exit(1)
+  }
+
   if (narration.reason === "invented_figures") {
     line("  This is the safety check doing its job: the model wrote a number")
     line("  that was not in the figures it was given, so the whole paragraph was")

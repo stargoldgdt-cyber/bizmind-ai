@@ -50,8 +50,10 @@ export type Narration =
 const MESSAGES: Record<SuppressionReason, string> = {
   not_configured:
     "Written explanations are switched off. Your figures above are unaffected.",
+  no_credit:
+    "Written explanations are paused because the OpenAI account has run out of credit. Adding credit switches them back on. Your figures above are unaffected.",
   rate_limited:
-    "Explanations are temporarily unavailable because of a usage limit. Your figures above are unaffected.",
+    "Explanations are busy at the moment. Try again shortly. Your figures above are unaffected.",
   timed_out:
     "The explanation took too long and was cancelled. Your figures above are unaffected.",
   refused: "No explanation was produced. Your figures above are unaffected.",

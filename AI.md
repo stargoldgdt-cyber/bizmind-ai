@@ -105,9 +105,15 @@ leaving it as folklore.
 The dashboard renders every figure before the AI layer is asked for a single
 word. The explanation loads afterwards, separately.
 
-If there is no API key, if OpenAI is down, slow, rate-limited, or if the guard
-rejects the reply, the owner sees a short line saying what happened — always
-ending with **"Your figures above are unaffected."**
+If there is no API key, if OpenAI is down, slow, out of credit, rate-limited,
+or if the guard rejects the reply, the owner sees a short line saying what
+happened — always ending with **"Your figures above are unaffected."**
+
+**Out of credit is told apart from rate limiting.** OpenAI returns HTTP 429 for
+both, and the right response to each is the opposite of the other: waiting
+clears a rate limit and will never clear an empty balance. Collapsing the two
+would send an owner off to wait for something that is not going to happen. A
+test asserts the distinction and the wording of both messages.
 
 Silence would invite the reading that something is wrong with the numbers. The
 truth is the opposite: the numbers are fine, and the prose about them was not

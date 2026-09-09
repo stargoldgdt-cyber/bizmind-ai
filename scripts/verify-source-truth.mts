@@ -238,11 +238,11 @@ try {
       source: "AMAZON",
       field_key: "product_wholesale_price",
       source_label: "product Wholesale Price",
-      status: "UNVERIFIED",
+      status: "PENDING_CONFIRMATION",
       maps_to: "cogs",
     }),
   })
-  check("an UNVERIFIED field cannot map to a BizMind metric", !mapped.ok, String(mapped.status))
+  check("an unconfirmed field cannot map to a BizMind metric", !mapped.ok, String(mapped.status))
   check(
     "refused by a database constraint, not application code",
     mapped.body.includes("semantics_mapping_requires_confirmation"),
@@ -274,26 +274,32 @@ try {
       source: "AMAZON",
       field_key: "product_wholesale_price",
       source_label: "product Wholesale Price",
-      status: "UNVERIFIED",
+      status: "PENDING_CONFIRMATION",
       maps_to: null,
       note: "Source-defined product wholesale cost - COGS attribution unverified.",
     }),
   })
-  check("but it CAN be preserved as unverified", preserved[0].status === "UNVERIFIED")
+  check(
+    "but it CAN be preserved as awaiting a decision",
+    preserved[0].status === "PENDING_CONFIRMATION"
+  )
   check("with no mapping", preserved[0].maps_to === null)
 
   /* ---------------------------------------------------------------------- */
   section("4. CONFIRMING is attributable and audited")
 
+  // The target is the CANONICAL name, `marketplace_fees`. The dashboard column
+  // is called `fees`, which is a view of it -- and the database refuses the
+  // view's name, because a metric must be named the one way everywhere.
   const confirmed = await rpc("confirm_source_field_semantics", {
     p_business_id: businessId,
     p_source: "AMAZON",
     p_field_key: "amazon_fees",
     p_status: "CONFIRMED",
-    p_maps_to: "fees",
+    p_maps_to: "marketplace_fees",
     p_note: "Confirmed with the seller as marketplace commission only.",
   })
-  check("a confirmation records the mapping", confirmed.maps_to === "fees")
+  check("a confirmation records the mapping", confirmed.maps_to === "marketplace_fees")
   check("and who made it", confirmed.confirmed_by !== null)
   check("and when", confirmed.confirmed_at !== null)
 

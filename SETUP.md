@@ -61,6 +61,8 @@ Nobody else can reach it. Press `Ctrl + C` in the terminal to stop it.
 | `npm run test:analytics-data` | Tests the numbers against the real database |
 | `npm run test:costs` | Proves a past order's profit cannot move |
 | `npm run test:source-truth` | Proves blank is never turned into zero |
+| `npm run test:mapping` | Proves BizMind never guesses what a column means |
+| `npm run test:mapping-data` | The same, against the real database |
 
 Before any commit:
 

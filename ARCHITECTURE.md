@@ -53,8 +53,11 @@ External source          Shopify · WooCommerce · CSV · REST · Webhooks
 Connector                vendor-specific fetch + auth
       │
       ▼
-Mapper                   vendor fields → BizMind fields
+Raw source record        preserved verbatim; blanks stay blank
       │
+      ▼
+Mapper                   source column → canonical metric
+      │                  SUGGESTED by name, CONFIRMED only by a person
       ▼
 Validation               Zod schema; reject or quarantine bad rows
       │
@@ -75,6 +78,26 @@ Consequences of this design:
 - One sync engine serves every connector: initial sync, incremental sync, sync
   status, last-synced time, failure handling, retries and logs.
 - Integration credentials are stored server-side and never reach the browser.
+
+### The mapping step is a gate, not a translation
+
+**Flexible source fields. Standard BizMind meaning.**
+
+No business renames its columns to use BizMind, and BizMind does not guess what
+they mean. A column heading produces a *candidate*; only a person produces a
+mapping, and it is recorded against their name. The permission is stored in a
+different database column from the guess, and constraints — not code — refuse
+any mapping that was never confirmed.
+
+The raw record survives the whole journey. Mapping adds meaning; it never
+renames or discards what the source said, so "where did this number come from?"
+stays answerable months later.
+
+A source can supply a figure. It can never supply a **conclusion**: gross
+profit, net profit, margins and coverage are calculated by the analytics engine
+and are structurally unreachable from any column.
+
+See [MAPPING.md](./MAPPING.md).
 
 ---
 
@@ -127,7 +150,9 @@ src/
 │
 ├── features/                Feature-scoped UI + logic            [Phase 4+]
 ├── services/                Business logic                       [Phase 7+]
+│   ├── metrics/             The canonical vocabulary — the authority
 │   ├── analytics/           Verified metric computation
+│   ├── ingestion/           Parsing, mapping, validation, normalisation
 │   ├── ai/                  The only place OpenAI is called
 │   └── integrations/        One module per connector
 ├── types/                   Shared TypeScript types              [Phase 3+]

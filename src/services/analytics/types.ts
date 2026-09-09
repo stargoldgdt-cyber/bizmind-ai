@@ -16,6 +16,8 @@
  * calculation belongs in `supabase/migrations/0007_analytics_engine.sql`.
  */
 
+import { CANONICAL_METRICS, type MetricKind } from "@/services/metrics/canonical"
+
 /** A `numeric` column. Exact decimal, carried as text. */
 export type Money = string
 
@@ -136,7 +138,7 @@ export type HealthInputs = {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Metric registry — the published definitions                                */
+/* Metric registry — a view of the canonical vocabulary                       */
 /* -------------------------------------------------------------------------- */
 
 export type MetricFormat = "money" | "number" | "percent" | "count"
@@ -151,136 +153,44 @@ export type MetricDefinition = {
   higherIsBetter: boolean
   /** What can make this figure unreliable. */
   caveat?: string
+  /** The canonical metric this is a view of. */
+  canonicalKey: string
+}
+
+const FORMAT_BY_KIND: Record<MetricKind, MetricFormat> = {
+  money: "money",
+  ratio: "percent",
+  count: "count",
+  quantity: "number",
 }
 
 /**
- * Every metric the product publishes, defined once.
+ * Every metric the dashboard publishes, keyed by its analytics column name.
  *
- * This is the contract. A number shown anywhere in BizMind must appear here
- * with a definition an owner could check, because a figure nobody can define
- * is a figure nobody should act on.
+ * These are NOT separate definitions. They are the canonical vocabulary in
+ * `src/services/metrics/canonical.ts`, re-keyed to the column names the SQL
+ * functions return. A metric therefore cannot come to mean one thing on the
+ * dashboard and another in the mapping layer: there is one definition, and
+ * this is a view of it.
  */
-export const METRICS: Record<string, MetricDefinition> = {
-  revenue: {
-    key: "revenue",
-    label: "Revenue",
-    format: "money",
-    definition:
-      "Total of all orders placed in the period, excluding cancelled orders. Includes shipping and tax as charged to the customer.",
-    higherIsBetter: true,
-  },
-  cogs: {
-    key: "cogs",
-    label: "Cost of goods",
-    format: "money",
-    definition:
-      "Quantity multiplied by the cost recorded on each order line at the time of sale, added up. Lines with no recorded cost contribute nothing.",
-    higherIsBetter: false,
-    caveat:
-      "Understated when any order line has no recorded cost. Check cost coverage.",
-  },
-  fees: {
-    key: "fees",
-    label: "Channel fees",
-    format: "money",
-    definition:
-      "Marketplace commission, payment processing and fulfilment charges recorded against orders in the period.",
-    higherIsBetter: false,
-    caveat:
-      "A fee the source never recorded is stored as unknown, not zero. Check fee coverage.",
-  },
-  gross_profit: {
-    key: "gross_profit",
-    label: "Gross profit",
-    format: "money",
-    definition: "Revenue minus cost of goods minus channel fees.",
-    higherIsBetter: true,
-    caveat: "Overstated when cost coverage is below 100%.",
-  },
-  gross_margin: {
-    key: "gross_margin",
-    label: "Gross margin",
-    format: "percent",
-    definition:
-      "Gross profit as a percentage of revenue. Not calculated when there is no revenue.",
-    higherIsBetter: true,
-    caveat: "Overstated when cost coverage is below 100%.",
-  },
-  expenses: {
-    key: "expenses",
-    label: "Expenses",
-    format: "money",
-    definition: "Operating costs recorded against the period.",
-    higherIsBetter: false,
-  },
-  net_profit: {
-    key: "net_profit",
-    label: "Net profit",
-    format: "money",
-    definition: "Gross profit minus operating expenses.",
-    higherIsBetter: true,
-    caveat: "Overstated when cost coverage is below 100%.",
-  },
-  net_margin: {
-    key: "net_margin",
-    label: "Net margin",
-    format: "percent",
-    definition: "Net profit as a percentage of revenue.",
-    higherIsBetter: true,
-  },
-  orders_count: {
-    key: "orders_count",
-    label: "Orders",
-    format: "count",
-    definition: "Orders placed in the period, excluding cancelled ones.",
-    higherIsBetter: true,
-  },
-  units_sold: {
-    key: "units_sold",
-    label: "Units sold",
-    format: "number",
-    definition: "Total quantity across all order lines in the period.",
-    higherIsBetter: true,
-  },
-  avg_order_value: {
-    key: "avg_order_value",
-    label: "Average order value",
-    format: "money",
-    definition: "Revenue divided by the number of orders.",
-    higherIsBetter: true,
-  },
-  customers_count: {
-    key: "customers_count",
-    label: "Customers who ordered",
-    format: "count",
-    definition:
-      "Distinct customers with at least one order. Orders with no customer attached are not counted.",
-    higherIsBetter: true,
-  },
-  refunds: {
-    key: "refunds",
-    label: "Refunds",
-    format: "money",
-    definition:
-      "Value of returns approved, received or refunded in the period.",
-    higherIsBetter: false,
-  },
-  fee_coverage: {
-    key: "fee_coverage",
-    label: "Fee coverage",
-    format: "percent",
-    definition:
-      "The share of orders that have a recorded channel fee. Below 100% means some orders had no fee recorded, so profit and margin are overstated by an unknown amount.",
-    higherIsBetter: true,
-  },
-  cost_coverage: {
-    key: "cost_coverage",
-    label: "Cost coverage",
-    format: "percent",
-    definition:
-      "The share of order lines that have a recorded cost. Below 100% means profit and margin are overstated by an unknown amount.",
-    higherIsBetter: true,
-  },
+export const METRICS: Record<string, MetricDefinition> = buildMetrics()
+
+function buildMetrics(): Record<string, MetricDefinition> {
+  const out: Record<string, MetricDefinition> = {}
+  for (const metric of Object.values(CANONICAL_METRICS)) {
+    const analyticsKey = metric.analyticsKey
+    if (analyticsKey === undefined) continue
+    out[analyticsKey] = {
+      key: analyticsKey,
+      label: metric.label,
+      format: FORMAT_BY_KIND[metric.kind],
+      definition: metric.definition,
+      higherIsBetter: metric.higherIsBetter,
+      caveat: metric.caveat,
+      canonicalKey: metric.key,
+    }
+  }
+  return out
 }
 
 export function getMetric(key: string): MetricDefinition | undefined {

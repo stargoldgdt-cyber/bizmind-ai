@@ -629,3 +629,64 @@ confident number that is true beats a confident one that is not.
 
 **Cost to change:** Medium. The nullable columns are the hard part; the
 reporting is additive.
+
+---
+
+## 2026-09-09 — One canonical vocabulary, and computed metrics are unreachable
+
+**Decided:** Every business metric has one stable internal name, defined once in
+`src/services/metrics/canonical.ts`. The dashboard registry is built from that
+file rather than restating it. Each metric declares an origin: `sourced` (a
+confirmed column may supply it) or `computed` (BizMind calculates it). **No
+source column may ever be mapped to a computed metric**, enforced by a foreign
+key onto a `canonical_metrics` table paired with a pinned `'sourced'` value.
+
+**Why:** Two problems, one answer.
+
+The first is drift. A metric defined in two places eventually means two things,
+and nobody finds out until the two disagree in front of a customer.
+
+The second is more dangerous. A marketplace's own `Profit/Loss` column looks
+exactly like net profit. It is built from whatever that seller put in their cost
+column and excludes every expense the marketplace never saw. If it could occupy
+the `net_profit` slot it would inherit the credibility of a figure BizMind had
+actually checked. Making that structurally impossible is worth more than any
+amount of care in the code that would otherwise have to prevent it.
+
+**Rejected:** Keeping the analytics registry as the vocabulary. It only holds
+what the dashboard publishes, which is not the same set as what a source can
+supply — advertising, storage and payouts have no dashboard tile yet and still
+need canonical names.
+
+**Cost to change:** Medium. The vocabulary is additive; the origin rule is the
+part that would be expensive to loosen, and deliberately so.
+
+---
+
+## 2026-09-09 — A similar name creates a question, never a fact
+
+**Decided:** Name matching produces a *candidate*, stored in its own column and
+never read by analytics. Only a person, recorded by name and timestamp, can set
+the column analytics reads. No input to the suggestion engine produces a
+CONFIRMED status — the return type does not allow it, and the database would
+refuse it regardless.
+
+**Why:** `Wholesale Price` can be the cost of what sold, what was spent
+restocking, the value of stock held, or the price charged to trade buyers. All
+four are ordinary bookkeeping and each gives a different profit. Name matching
+would be right most of the time, which is precisely the problem: right often
+enough to be trusted, wrong often enough to be dangerous.
+
+Keeping the candidate and the permission in **different columns** is what makes
+this hold. A suggestion cannot be promoted by a bug or a careless `UPDATE`,
+because there is no single column whose value changes the outcome.
+
+Names that match *and* routinely mean something else — "Product Cost",
+"Purchase Cost", "Net Sales" — are marked ambiguous and never given high
+confidence, however exact the string match was. The name is the problem.
+
+**Consequence, accepted deliberately:** The first import from a new source asks
+more questions than a system that guessed would. A saved profile means it is
+asked once, and a file that gains a column is asked about again.
+
+**Cost to change:** Low to loosen, and it should not be loosened.

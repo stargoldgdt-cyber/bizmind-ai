@@ -467,6 +467,78 @@ dashboard instead of being silently absorbed into a better-looking margin.
 
 ---
 
+## 7c. Canonical field mapping (migration 0009)
+
+Full explanation in [MAPPING.md](MAPPING.md). What the schema does:
+
+### canonical_metrics
+
+BizMind's own vocabulary, shared by every tenant, so it carries no
+`business_id`. Readable by any signed-in user and writable by none.
+
+Each metric has an `origin`:
+
+- `sourced` — a confirmed source column may supply it
+- `computed` — BizMind calculates it, and **no source may supply it**
+
+The definitions in plain language live in `src/services/metrics/canonical.ts`
+and are deliberately not copied here; prose in two places drifts. This table is
+what a constraint can act on. `npm run test:mapping-data` asserts the two agree.
+
+### Candidate and mapping are different columns
+
+`source_field_semantics` gains `candidate_metric` alongside `maps_to`:
+
+| Column | What it is | Who writes it |
+| --- | --- | --- |
+| `candidate_metric` | What BizMind **suspects** | A name-matching rule |
+| `maps_to` | What BizMind is **permitted to use** | Only a person |
+
+Analytics never reads the first. A suggestion cannot be promoted by accident,
+because it is not stored in the same place as a permission.
+
+Both columns are constrained by a foreign key onto `canonical_metrics` paired
+with a pinned `'sourced'` value, so **a source column can never be mapped to a
+computed metric** — not to gross profit, net profit, a margin, or a coverage
+figure. A marketplace's own "Profit/Loss" column is structurally unable to
+occupy BizMind's net profit.
+
+### Statuses
+
+`mapping_status` replaces migration 0008's `semantics_status`. Existing
+`UNVERIFIED` rows became `PENDING_CONFIRMATION`, which is what they meant.
+
+`SUGGESTED` · `PENDING_CONFIRMATION` · `CONFIRMED` · `REJECTED` · `UNKNOWN`
+
+`UNKNOWN` is a real answer: somebody looked and does not know. It stops the
+same question being asked at every import.
+
+### Profiles
+
+`source_mapping_profiles` recognises a file **shape** by a normalised,
+order-independent signature, so the same export is recognised next month.
+
+`source_mapping_profile_fields` says which fields a profile covers — and stores
+**no metric of its own**. Meaning is reached through `semantics_id`, behind the
+constraints, so a profile cannot carry a mapping the gate would have refused.
+
+A file that has gained a column produces a different signature and is not
+recognised, so the new column gets asked about.
+
+### Functions
+
+| Function | Does |
+| --- | --- |
+| `suggest_source_field_semantics()` | Records a candidate. Cannot write `maps_to`, cannot write CONFIRMED |
+| `confirm_source_field_semantics()` | Records a decision. OWNER/ADMIN only, audited |
+| `save_mapping_profile()` | Saves a file shape and the fields it covers |
+| `resolve_mapping_profile()` | Returns each field with a `usable` flag |
+| `mapping_lineage()` | Where a number came from: metric, source, original column, who confirmed it, when |
+
+All are `SECURITY INVOKER`, so RLS applies inside them.
+
+---
+
 ## 8. Regenerating types
 
 `src/types/database.ts` is currently hand-written to match the migrations. Keep

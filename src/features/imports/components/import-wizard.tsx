@@ -6,6 +6,7 @@ import { CircleAlert, CircleCheck, TriangleAlert, Upload } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { ColumnMeanings } from "@/features/imports/components/column-meanings"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
@@ -371,6 +372,12 @@ export function ImportWizard({ businessCurrency }: { businessCurrency: string })
               })}
             </CardContent>
           </Card>
+
+          <ColumnMeanings
+            source={options.source}
+            entity={entity}
+            columns={upload.columns}
+          />
 
           <div className="flex flex-wrap gap-3">
             <Button onClick={handlePreview} disabled={pending} className="rounded-4xl">

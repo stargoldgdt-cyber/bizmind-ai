@@ -15,9 +15,22 @@
  * `mapsTo: null` means the field is preserved and displayed under the source's
  * own name, and never feeds a BizMind figure. Only an explicit confirmation,
  * stored in the database, can change that — not an edit to this file.
+ *
+ * A `CONFIRMED` entry here is DOCUMENTATION of a decision somebody made, not
+ * the decision itself. Analytics reads `source_field_semantics`, where the
+ * confirmation carries a real user id and a timestamp and is held in place by
+ * database constraints. Editing this file grants nothing; it only records what
+ * was already granted, so the reasoning survives in the repository.
+ *
+ * Mapping targets come from the canonical vocabulary in
+ * `src/services/metrics/canonical.ts`. A field can only ever be mapped to a
+ * SOURCED metric — never to gross profit, net profit or a margin, which
+ * BizMind calculates for itself.
  */
 
-export type SemanticsStatus = "UNVERIFIED" | "CONFIRMED" | "REJECTED"
+import type { MappingStatus } from "./canonical-mapping"
+
+export type SemanticsStatus = MappingStatus
 
 export type SourceFieldDefinition = {
   /** Our normalised key. */
@@ -26,10 +39,17 @@ export type SourceFieldDefinition = {
   sourceLabel: string
   status: SemanticsStatus
   /**
-   * The BizMind metric this field may feed. NULL while unverified, and NULL is
-   * the safe default: an unmapped field can mislead nobody.
+   * What BizMind SUSPECTS the field means. A name-matching result. It exists
+   * so the question can be asked well; it authorises nothing.
+   */
+  candidateMetric?: string | null
+  /**
+   * The canonical metric this field may feed. NULL until a person confirms it,
+   * and NULL is the safe default: an unmapped field can mislead nobody.
    */
   mapsTo: string | null
+  /** Who established the meaning. Present only on a CONFIRMED field. */
+  confirmedBy?: string
   /** What is known and, more importantly, what is not. */
   note: string
   /** What evidence would settle the question. */
@@ -67,11 +87,18 @@ export type SourceProfile = {
  * produce that column. It is seller-supplied data appended to the export,
  * which means no Amazon documentation can define it. Only the seller can.
  *
+ * That question has since been answered. The business owner confirmed that for
+ * THIS business the column holds the cost of the units sold, so it is mapped to
+ * `cogs` with their confirmation on record. The confirmation is about this
+ * seller's bookkeeping, not about the phrase: another business's "Wholesale
+ * Price" column starts again as an open question.
+ *
  * The source's own "Profit/Loss" is Payment - product Wholesale Price
- * (49,648.59 - 53,510.20 = -3,861.61, and both sampled rows match). It is
- * preserved under that name and is NOT mapped to BizMind's net profit, because
- * the two are only equivalent if the wholesale field means one specific thing,
- * and that has not been established.
+ * (49,648.59 - 53,510.20 = -3,861.61, and both sampled rows match). It stays
+ * under that name and is NOT BizMind's net profit — now for a structural
+ * reason as well as a semantic one: net profit is a COMPUTED metric, and no
+ * source column may be mapped to one. It also omits every operating expense
+ * Amazon never saw.
  */
 export const AMAZON_SETTLEMENT: SourceProfile = {
   key: "amazon_ae_settlement",
@@ -86,7 +113,8 @@ export const AMAZON_SETTLEMENT: SourceProfile = {
     {
       key: "sales",
       sourceLabel: "Sales",
-      status: "UNVERIFIED",
+      status: "PENDING_CONFIRMATION",
+      candidateMetric: "revenue",
       mapsTo: null,
       note: "Gross product sales before refunds. Component of Total Sales.",
       resolutionHint:
@@ -95,14 +123,14 @@ export const AMAZON_SETTLEMENT: SourceProfile = {
     {
       key: "shipping_fee_refund",
       sourceLabel: "Shipping Fee Refund",
-      status: "UNVERIFIED",
+      status: "PENDING_CONFIRMATION",
       mapsTo: null,
       note: "Shipping charges returned to the seller.",
     },
     {
       key: "inventory_reimbursements",
       sourceLabel: "Inventory Reimbursements",
-      status: "UNVERIFIED",
+      status: "PENDING_CONFIRMATION",
       mapsTo: null,
       note:
         "Compensation for lost or damaged inventory. BLANK throughout the " +
@@ -115,21 +143,22 @@ export const AMAZON_SETTLEMENT: SourceProfile = {
     {
       key: "other_refund",
       sourceLabel: "Other Refund",
-      status: "UNVERIFIED",
+      status: "PENDING_CONFIRMATION",
       mapsTo: null,
       note: "Refunds not covered by the other refund categories.",
     },
     {
       key: "refunded_expenses",
       sourceLabel: "Refunded expenses",
-      status: "UNVERIFIED",
+      status: "PENDING_CONFIRMATION",
       mapsTo: null,
       note: "Expenses returned to the seller.",
     },
     {
       key: "refunded_sales",
       sourceLabel: "Refunded sales",
-      status: "UNVERIFIED",
+      status: "PENDING_CONFIRMATION",
+      candidateMetric: "refunds",
       mapsTo: null,
       note:
         "Sales value refunded to buyers. A candidate for BizMind's refunds " +
@@ -142,7 +171,8 @@ export const AMAZON_SETTLEMENT: SourceProfile = {
     {
       key: "total_sales",
       sourceLabel: "Total Sales",
-      status: "UNVERIFIED",
+      status: "PENDING_CONFIRMATION",
+      candidateMetric: "revenue",
       mapsTo: null,
       note:
         "The settlement's own sales total. Reconciles exactly as " +
@@ -154,28 +184,32 @@ export const AMAZON_SETTLEMENT: SourceProfile = {
     {
       key: "shipping_fee",
       sourceLabel: "Shipping Fee",
-      status: "UNVERIFIED",
+      status: "PENDING_CONFIRMATION",
+      candidateMetric: "shipping_expense",
       mapsTo: null,
       note: "Shipping charged or incurred. Sign convention not established.",
     },
     {
       key: "other",
       sourceLabel: "Other",
-      status: "UNVERIFIED",
+      status: "PENDING_CONFIRMATION",
+      candidateMetric: "other_expenses",
       mapsTo: null,
       note: "Uncategorised amount. Blank in the sample; preserved as unknown.",
     },
     {
       key: "promo_rebates",
       sourceLabel: "Promo rebates",
-      status: "UNVERIFIED",
+      status: "PENDING_CONFIRMATION",
+      candidateMetric: "promotional_rebates",
       mapsTo: null,
       note: "Promotional discounts funded by the seller.",
     },
     {
       key: "cost_of_advertising",
       sourceLabel: "Cost of Advertising",
-      status: "UNVERIFIED",
+      status: "PENDING_CONFIRMATION",
+      candidateMetric: "advertising_cost",
       mapsTo: null,
       note:
         "BLANK across every row of the sample. Preserved as unknown. Treating " +
@@ -189,7 +223,8 @@ export const AMAZON_SETTLEMENT: SourceProfile = {
     {
       key: "amazon_fees",
       sourceLabel: "Amazon fees",
-      status: "UNVERIFIED",
+      status: "PENDING_CONFIRMATION",
+      candidateMetric: "marketplace_fees",
       mapsTo: null,
       note:
         "Marketplace commission and related charges. The strongest candidate " +
@@ -201,14 +236,16 @@ export const AMAZON_SETTLEMENT: SourceProfile = {
     {
       key: "storage_fee",
       sourceLabel: "Storage Fee",
-      status: "UNVERIFIED",
+      status: "PENDING_CONFIRMATION",
+      candidateMetric: "storage_cost",
       mapsTo: null,
       note: "Warehousing charges. Blank in the sample; preserved as unknown.",
     },
     {
       key: "total_expense",
       sourceLabel: "Total Expense",
-      status: "UNVERIFIED",
+      status: "PENDING_CONFIRMATION",
+      candidateMetric: "total_expense",
       mapsTo: null,
       note: "The settlement's own expense total. Part of the verified identity.",
       derived: true,
@@ -216,7 +253,8 @@ export const AMAZON_SETTLEMENT: SourceProfile = {
     {
       key: "payment",
       sourceLabel: "Payment",
-      status: "UNVERIFIED",
+      status: "PENDING_CONFIRMATION",
+      candidateMetric: "payment_received",
       mapsTo: null,
       note:
         "What Amazon actually paid out. Equals Total Sales - Total Expense " +
@@ -228,37 +266,49 @@ export const AMAZON_SETTLEMENT: SourceProfile = {
     {
       key: "product_wholesale_price",
       sourceLabel: "product Wholesale Price",
-      status: "UNVERIFIED",
-      mapsTo: null,
+      status: "CONFIRMED",
+      candidateMetric: "cogs",
+      mapsTo: "cogs",
+      confirmedBy: "Business owner",
       note:
-        "Source-defined product wholesale cost -- COGS attribution unverified. " +
-        "It sits OUTSIDE the settlement: Total Sales - Total Expense = Payment " +
-        "closes exactly without it, so Amazon did not produce this column and " +
-        "no Amazon documentation defines it. It could be (A) the cost of the " +
-        "units sold in the period, (B) procurement spend during the period, or " +
-        "(C) a seller-specific figure. Those give materially different profit, " +
-        "and the column name alone cannot distinguish them.",
+        "CONFIRMED BY THE BUSINESS OWNER as this seller's cost of goods." +
+        "\n\n" +
+        "The question was open until they answered it, and it could not have " +
+        "been settled from the file. The column sits OUTSIDE the settlement: " +
+        "Total Sales - Total Expense = Payment closes exactly without it, so " +
+        "Amazon never produced it. It is seller-supplied, which means no " +
+        "Amazon documentation could ever define it. The three readings the " +
+        "name allowed were (A) the cost of the units sold in the period, " +
+        "(B) procurement spend during the period, and (C) a seller-specific " +
+        "figure. They give materially different profit. The owner confirmed " +
+        "(A)." +
+        "\n\n" +
+        "THIS CONFIRMATION IS ABOUT THIS BUSINESS, NOT ABOUT THE NAME. Another " +
+        "seller's 'Wholesale Price' column is still unknown and is asked about " +
+        "from scratch. Nothing here makes the phrase mean cost of goods.",
       resolutionHint:
-        "Two checks would settle it. First, does the value track units sold " +
-        "period by period, or does it move with purchase orders? A period with " +
-        "sales but no purchasing, or purchasing with no sales, separates (A) " +
-        "from (B) immediately. Second, ask whoever maintains the sheet how they " +
-        "populate it -- this is seller-supplied data, so the seller is the only " +
-        "authority on it.",
+        "Settled. If the way the sheet is filled in ever changes, the mapping " +
+        "must be re-confirmed rather than assumed to still hold.",
     },
     {
       key: "profit_loss",
       sourceLabel: "Profit/Loss",
-      status: "UNVERIFIED",
+      status: "PENDING_CONFIRMATION",
       mapsTo: null,
       note:
         "Source-defined result, computed as Payment - product Wholesale Price " +
-        "(verified against the sample). NOT equivalent to BizMind net profit: " +
-        "it inherits whatever the wholesale field means, and it excludes any " +
-        "operating expense not settled through Amazon. Preserved under the " +
-        "source's own name.",
+        "(verified against the sample). NOT BizMind net profit, and it cannot " +
+        "become it: net_profit is a COMPUTED metric, so no source column may " +
+        "be mapped to it at all. The database refuses it, not just this file." +
+        "\n\n" +
+        "Even now that the wholesale column is confirmed as cost of goods, this " +
+        "figure still excludes every operating expense that was never settled " +
+        "through Amazon. Preserved under the source's own name so it can be " +
+        "compared against BizMind's own figure rather than mistaken for it.",
       resolutionHint:
-        "Cannot be confirmed before product_wholesale_price is.",
+        "There is nothing to confirm. A source cannot supply a conclusion " +
+        "BizMind reaches for itself. To make BizMind's net profit match this " +
+        "figure, record the missing expenses.",
       derived: true,
     },
   ],
@@ -298,13 +348,32 @@ export function unverifiedFields(profile: SourceProfile): SourceFieldDefinition[
 }
 
 /**
- * Whether a source field may feed a BizMind metric.
+ * Whether this file RECORDS a confirmed mapping for the field.
  *
- * The in-code definition is only half the answer: the database record in
- * `source_field_semantics` is what actually authorises a mapping, because it
- * carries who confirmed it and when. This function is the conservative check
- * used before that lookup.
+ * It does not grant one. Authorisation lives in `source_field_semantics`,
+ * where a confirmation carries a user id and a timestamp and is held in place
+ * by database constraints. This is documentation of a decision, checked here
+ * so the repository and the database can be compared and any disagreement
+ * found by a test rather than by a wrong number.
  */
-export function isMappable(field: SourceFieldDefinition): boolean {
+export function hasDocumentedConfirmation(field: SourceFieldDefinition): boolean {
   return field.status === "CONFIRMED" && field.mapsTo !== null
+}
+
+/** Every field in a profile whose meaning a person has settled. */
+export function confirmedFields(profile: SourceProfile): SourceFieldDefinition[] {
+  return profile.fields.filter(hasDocumentedConfirmation)
+}
+
+/**
+ * Fields BizMind has a guess about and no answer to.
+ *
+ * This is the list the import wizard turns into questions.
+ */
+export function fieldsAwaitingConfirmation(
+  profile: SourceProfile
+): SourceFieldDefinition[] {
+  return profile.fields.filter(
+    (f) => f.status === "SUGGESTED" || f.status === "PENDING_CONFIRMATION"
+  )
 }

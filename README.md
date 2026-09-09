@@ -55,6 +55,8 @@ Full instructions, including how secrets are handled, are in
 | `npm run test:analytics-data` | Analytics against the live database |
 | `npm run test:costs` | Historical cost stability against the live database |
 | `npm run test:source-truth` | Blank-is-not-zero and the semantics gate, live |
+| `npm run test:mapping` | Canonical vocabulary and the suggestion engine |
+| `npm run test:mapping-data` | Mapping gates, profiles and isolation, live |
 
 ---
 
@@ -75,6 +77,7 @@ Supabase (PostgreSQL, Auth, RLS) · OpenAI · Vercel
 | [SETUP.md](./SETUP.md) | Getting it running, and how secrets work |
 | [DATABASE.md](./DATABASE.md) | Schema, tenant isolation, migrations |
 | [INTEGRATIONS.md](./INTEGRATIONS.md) | Import pipeline and the connector contract |
+| [MAPPING.md](./MAPPING.md) | Canonical vocabulary, and why a column name is not a definition |
 | [DECISIONS.md](./DECISIONS.md) | Why each major choice was made |
 | [AGENTS.md](./AGENTS.md) | Next.js 16 framework rules (auto-generated) |
 

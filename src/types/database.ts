@@ -83,7 +83,25 @@ export type ImportStatus =
   | "FAILED"
   | "CANCELLED"
 
-export type SemanticsStatus = "UNVERIFIED" | "CONFIRMED" | "REJECTED"
+/**
+ * The lifecycle of a source-field mapping.
+ *
+ * Only `CONFIRMED` permits a source figure to become a BizMind figure, and the
+ * database enforces that with a CHECK constraint rather than trusting code.
+ * `UNKNOWN` is a real answer, not a failure: it records that a person looked
+ * and does not know, which stops the same question being asked every import.
+ */
+export type MappingStatus =
+  | "SUGGESTED"
+  | "PENDING_CONFIRMATION"
+  | "CONFIRMED"
+  | "REJECTED"
+  | "UNKNOWN"
+
+/** Whether a source may supply a metric, or BizMind alone calculates it. */
+export type MetricOrigin = "sourced" | "computed"
+
+export type MappingConfidence = "high" | "medium" | "low"
 
 export type InventoryMovementType =
   | "PURCHASE"
@@ -782,6 +800,194 @@ export type Database = {
         ]
       }
 
+      canonical_metrics: {
+        /**
+         * BizMind's own vocabulary. Shared by every tenant, so no business_id.
+         * Definitions live in `src/services/metrics/canonical.ts`; this table
+         * exists so a constraint can act on the vocabulary.
+         */
+        Row: {
+          key: string
+          origin: MetricOrigin
+          created_at: string
+        }
+        /** Written by migrations only. No tenant may add a metric. */
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+
+      source_records: {
+        Row: Tenanted & {
+          import_batch_id: string | null
+          source: ChannelType
+          record_type: string
+          external_id: string | null
+          period_start: string | null
+          period_end: string | null
+          /** The record as supplied. A blank cell is null, NEVER 0. */
+          figures: Json
+          /** Which columns were blank, so blank stays distinct from zero. */
+          blank_fields: string[]
+          /** Reconciliations run at import. A failure is recorded, not fixed. */
+          checks: Json
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          import_batch_id?: string | null
+          source: ChannelType
+          record_type: string
+          external_id?: string | null
+          period_start?: string | null
+          period_end?: string | null
+          figures?: Json
+          blank_fields?: string[]
+          checks?: Json
+        }
+        Update: {
+          figures?: Json
+          blank_fields?: string[]
+          checks?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "source_records_import_batch_id_fkey"
+            columns: ["import_batch_id"]
+            isOneToOne: false
+            referencedRelation: "import_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+
+      source_field_semantics: {
+        Row: Tenanted & {
+          source: ChannelType
+          entity: ImportEntity | null
+          field_key: string
+          source_label: string
+          status: MappingStatus
+          /**
+           * What a name-matching rule SUSPECTS. Never read by analytics.
+           * Kept in its own column so it cannot be promoted by accident.
+           */
+          candidate_metric: string | null
+          candidate_confidence: MappingConfidence | null
+          candidate_reason: string | null
+          ambiguity_warning: string | null
+          /**
+           * What BizMind is PERMITTED to treat this field as. Null unless a
+           * person confirmed it. Constrained to sourced canonical metrics.
+           */
+          maps_to: string | null
+          note: string | null
+          resolution_hint: string | null
+          confirmed_by: string | null
+          confirmed_at: string | null
+          updated_at: string
+        }
+        /**
+         * A SUGGESTION is writable directly, because it is not a claim about
+         * money. A confirmation is, so it goes through
+         * `confirm_source_field_semantics()`, which checks the caller's role
+         * and writes an audit entry. The CHECK constraints refuse an
+         * unconfirmed mapping either way.
+         */
+        Insert: {
+          business_id: string
+          source: ChannelType
+          entity?: ImportEntity | null
+          field_key: string
+          source_label: string
+          status?: MappingStatus
+          candidate_metric?: string | null
+          candidate_confidence?: MappingConfidence | null
+          candidate_reason?: string | null
+          ambiguity_warning?: string | null
+          note?: string | null
+          resolution_hint?: string | null
+        }
+        Update: {
+          candidate_metric?: string | null
+          candidate_confidence?: MappingConfidence | null
+          candidate_reason?: string | null
+          ambiguity_warning?: string | null
+          note?: string | null
+          resolution_hint?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "semantics_maps_to_sourced_metric"
+            columns: ["maps_to", "sourced_origin"]
+            isOneToOne: false
+            referencedRelation: "canonical_metrics"
+            referencedColumns: ["key", "origin"]
+          },
+        ]
+      }
+
+      source_mapping_profiles: {
+        Row: Tenanted & {
+          source: ChannelType
+          entity: ImportEntity
+          name: string
+          /** The file's column set, normalised. Recognises the same export. */
+          signature: string
+          columns: string[]
+          created_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          source: ChannelType
+          entity: ImportEntity
+          name: string
+          signature: string
+          columns?: string[]
+        }
+        Update: {
+          name?: string
+          columns?: string[]
+        }
+        Relationships: []
+      }
+
+      source_mapping_profile_fields: {
+        /**
+         * Which source fields a profile covers. Holds no metric of its own:
+         * meaning is reached through `semantics_id`, behind the gate.
+         */
+        Row: Tenanted & {
+          profile_id: string
+          semantics_id: string
+          position: number
+        }
+        Insert: {
+          business_id: string
+          profile_id: string
+          semantics_id: string
+          position?: number
+        }
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: "source_mapping_profile_fields_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "source_mapping_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "source_mapping_profile_fields_semantics_id_fkey"
+            columns: ["semantics_id"]
+            isOneToOne: false
+            referencedRelation: "source_field_semantics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+
       audit_logs: {
         Row: Tenanted & {
           actor_id: string | null
@@ -1042,6 +1248,92 @@ export type Database = {
           gross_margin: Numeric | null
         }[]
       }
+
+      /* ---- Canonical field mapping (migration 0009) ---------------------
+       * Suggesting is ordinary work. Confirming is a claim about money, so
+       * it is restricted to an owner or admin and writes an audit entry. */
+
+      suggest_source_field_semantics: {
+        Args: {
+          p_business_id: string
+          p_source: ChannelType
+          p_entity: ImportEntity
+          p_field_key: string
+          p_source_label: string
+          p_candidate_metric?: string | null
+          p_confidence?: MappingConfidence | null
+          p_reason?: string | null
+          p_ambiguity?: string | null
+        }
+        Returns: Database["public"]["Tables"]["source_field_semantics"]["Row"]
+      }
+
+      confirm_source_field_semantics: {
+        Args: {
+          p_business_id: string
+          p_source: ChannelType
+          p_field_key: string
+          p_status: MappingStatus
+          p_maps_to?: string | null
+          p_note?: string | null
+          p_source_label?: string | null
+          p_entity?: ImportEntity | null
+        }
+        Returns: Database["public"]["Tables"]["source_field_semantics"]["Row"]
+      }
+
+      save_mapping_profile: {
+        Args: {
+          p_business_id: string
+          p_source: ChannelType
+          p_entity: ImportEntity
+          p_name: string
+          p_signature: string
+          p_columns: string[]
+          p_field_keys: string[]
+        }
+        Returns: Database["public"]["Tables"]["source_mapping_profiles"]["Row"]
+      }
+
+      resolve_mapping_profile: {
+        Args: {
+          p_business_id: string
+          p_source: ChannelType
+          p_entity: ImportEntity
+          p_signature: string
+        }
+        Returns: {
+          profile_id: string
+          profile_name: string
+          field_key: string
+          source_label: string
+          status: MappingStatus
+          maps_to: string | null
+          candidate_metric: string | null
+          confidence: MappingConfidence | null
+          confirmed_at: string | null
+          /** The only condition under which a source figure may be used. */
+          usable: boolean
+        }[]
+      }
+
+      mapping_lineage: {
+        Args: { p_business_id: string; p_metric?: string | null }
+        Returns: {
+          canonical_metric: string | null
+          source: ChannelType
+          source_label: string
+          field_key: string
+          status: MappingStatus
+          confirmed_by: string | null
+          confirmed_by_name: string | null
+          confirmed_at: string | null
+          note: string | null
+          candidate_metric: string | null
+          candidate_confidence: MappingConfidence | null
+          records_preserved: number
+        }[]
+      }
     }
 
     Enums: {
@@ -1053,6 +1345,7 @@ export type Database = {
       inventory_movement_type: InventoryMovementType
       import_entity: ImportEntity
       import_status: ImportStatus
+      mapping_status: MappingStatus
     }
 
     CompositeTypes: Record<never, never>
@@ -1080,6 +1373,11 @@ export type Expense = T["expenses"]["Row"]
 export type AuditLog = T["audit_logs"]["Row"]
 export type ImportBatch = T["import_batches"]["Row"]
 export type ImportIssue = T["import_issues"]["Row"]
+export type CanonicalMetricRow = T["canonical_metrics"]["Row"]
+export type SourceRecord = T["source_records"]["Row"]
+export type SourceFieldSemantics = T["source_field_semantics"]["Row"]
+export type SourceMappingProfile = T["source_mapping_profiles"]["Row"]
+export type SourceMappingProfileField = T["source_mapping_profile_fields"]["Row"]
 
 /** A business plus the calling user's role in it. */
 export type BusinessWithRole = Business & { role: BusinessRole }

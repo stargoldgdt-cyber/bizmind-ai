@@ -208,6 +208,31 @@ the failure attached. It is never silently corrected.
 
 ---
 
+## 6d. Flexible source fields, standard BizMind meaning
+
+A connector does not require a business to rename its columns. It proposes what
+each column probably is, and waits.
+
+```
+"Product Wholesale Price"  ->  cost of goods?  ->  medium confidence
+                               "A wholesale price can be what you PAY a
+                                supplier or what you CHARGE a trade buyer.
+                                Only the first is a cost."
+```
+
+The owner confirms, maps it elsewhere, ignores the column, or says they are not
+sure. Their answer is stored against their name and reused for the same file
+next month.
+
+`src/services/ingestion/canonical-mapping.ts` holds the alias table. Adding an
+alias widens what BizMind will **ask** about; it never widens what BizMind will
+**assume**. Nothing in that module can return a confirmed status — the return
+type does not permit it, and the database would refuse it anyway.
+
+Full model, statuses, profile behaviour and lineage: [MAPPING.md](MAPPING.md).
+
+---
+
 ## 7. Safety
 
 - **All-or-nothing.** Each import runs in one transaction. A failure on row 900

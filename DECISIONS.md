@@ -962,3 +962,63 @@ An empty string now renders as "—" rather than being formatted: `Intl` turns
 `""` into `0.00`, which would state that a figure nobody recorded is zero.
 
 **Cost to change:** Low.
+
+---
+
+## 2026-09-09 — Shopify will be GraphQL-only, because REST is closed to us
+
+**Decided:** The Shopify connector will use the GraphQL Admin API exclusively.
+
+**Why:** this is not a preference. Shopify made the REST Admin API **legacy on
+1 October 2024**, and **from 1 April 2025 every new public app must be built
+exclusively on GraphQL**. BizMind has no Shopify app yet, so it is a new app.
+
+A connector built on REST could not be listed, and the work would be discarded.
+Every tutorial showing `/admin/api/2024-01/orders.json` is describing a door
+that is closed to us.
+
+**Consequences that follow, and none of them are small:**
+
+- Rate limiting is a **calculated query cost** in a leaky bucket, not a request
+  count. The client paces itself from `extensions.cost.throttleStatus`, which
+  makes it adaptive without hard-coding the merchant's plan.
+- Pagination is **cursor-based**; the cursor is the sync checkpoint.
+- **New public apps must use expiring tokens and implement refresh.** A design
+  assuming a permanent token does not pass review, so the connection record
+  carries a refresh token and an expiry from the start.
+
+**Version strategy:** pin one dated version in an environment variable and
+upgrade deliberately. Versions ship quarterly with 12 months of support and 9
+months of overlap, so a considered annual upgrade is comfortable. Tracking
+"latest" would mean a silent schema change every quarter.
+
+**Source:** shopify.dev, consulted 2026-09-09. References in
+PHASE9_INTEGRATIONS.md §10.
+
+**Cost to change:** N/A. There is no alternative.
+
+---
+
+## 2026-09-09 — The sync engine is built before the first connector
+
+**Decided:** Phase 10's job table, claimer, retry and backoff are built and
+tested against a **fixture connector** in the repository, before either real
+connector exists. This inverts the phase numbering on purpose.
+
+**Why:** the engine can then be proven with no credentials, no vendor account,
+no network and no approvals — none of which are under our control. The first
+real connector plugs into something already known to work, so a failure during
+the Shopify OAuth dance is a Shopify problem rather than a question about which
+of two new systems is wrong.
+
+It also means WooCommerce goes first among the connectors: a key and a secret,
+no OAuth, no app review, no Shopify approvals, and testable against a local
+install. It will find the mapping bugs cheaply.
+
+**Queue:** PostgreSQL with `FOR UPDATE SKIP LOCKED`, driven by Vercel Cron. No
+queue provider is introduced until something requires one. Work must be
+resumable at any point, which the durable cursor already provides, so a
+serverless time limit truncates progress rather than losing it. Moving to a
+real queue later replaces the claimer and leaves the connectors untouched.
+
+**Cost to change:** Low, which is the point.

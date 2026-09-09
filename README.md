@@ -85,6 +85,11 @@ Supabase (PostgreSQL, Auth, RLS) · OpenAI · Vercel
 | [MAPPING.md](./MAPPING.md) | Canonical vocabulary, and why a column name is not a definition |
 | [AI.md](./AI.md) | How the AI is stopped from ever producing a figure |
 | [MONEY.md](./MONEY.md) | Why money is a string, and what keeps it exact |
+| [ROADMAP.md](./ROADMAP.md) | **Phases 9–12: what is decided, what is not, what comes first** |
+| [PHASE9_INTEGRATIONS.md](./PHASE9_INTEGRATIONS.md) | Shopify + WooCommerce design |
+| [PHASE10_SYNC.md](./PHASE10_SYNC.md) | Sync and webhook reliability engine |
+| [PHASE11_AUTOMATION.md](./PHASE11_AUTOMATION.md) | Alerts and deterministic automation |
+| [PHASE12_AI_RECOMMENDATIONS.md](./PHASE12_AI_RECOMMENDATIONS.md) | Daily brief and recommendations |
 | [DECISIONS.md](./DECISIONS.md) | Why each major choice was made |
 | [AGENTS.md](./AGENTS.md) | Next.js 16 framework rules (auto-generated) |
 

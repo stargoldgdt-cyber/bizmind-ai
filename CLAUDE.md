@@ -283,14 +283,24 @@ Work in phases. Do not jump ahead, and do not expand scope mid-phase.
 7.1 Source truth           ✅ complete, blank never becomes zero
 7.2 Canonical mapping      ✅ complete, no name becomes a fact
 8  AI business analyst      ✅ complete, AI cannot state a figure
-9  Shopify integration
-10 WooCommerce integration
-11 Generic REST API
-12 Webhook + sync engine
-13 Alerts + automation
+9  Shopify + WooCommerce    ARCHITECTED, not built — PHASE9_INTEGRATIONS.md
+10 Sync + webhook engine    ARCHITECTED, not built — PHASE10_SYNC.md
+11 Alerts + automation      ARCHITECTED, not built — PHASE11_AUTOMATION.md
+12 AI recommendations       ARCHITECTED, not built — PHASE12_AI_RECOMMENDATIONS.md
+13 Generic REST API
 14 Audit + security hardening
 15 Production deployment
 ```
+
+Phases 9–12 were renumbered when they were designed: the generic REST connector
+moved after the two named ones, because a generic design written before any real
+connector exists is a guess.
+
+**Read `ROADMAP.md` before starting any of them.** It records what is decided,
+what is not, the changes that must land first, and the recommended order — which
+is deliberately NOT the numbering. The sync engine (10) should be built before
+the first connector (9), against a fixture connector, so the engine is proven
+without credentials, without a vendor, and without a network.
 
 Before every commit:
 

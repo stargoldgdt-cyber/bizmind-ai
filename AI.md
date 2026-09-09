@@ -43,6 +43,12 @@ dashboard          the paragraph, or nothing at all
 
 ## 3. The model has nothing to calculate with
 
+Every figure in the fact sheet is an exact decimal the database produced, and
+it stays exact all the way here: see [MONEY.md](MONEY.md). A figure shown to
+the model is the figure in the database, digit for digit.
+
+
+
 It never sees an order, a line item, a customer, or a raw row of anything. It
 sees a fact sheet: a block of text listing the figures BizMind computed, each
 with a label, its value formatted exactly as the dashboard shows it, what the

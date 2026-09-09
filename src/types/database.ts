@@ -19,16 +19,17 @@
  * Every money and quantity column is `numeric(20,4)` in PostgreSQL and is
  * typed here as `string`. That is deliberate, not an oversight.
  *
- * CORRECTION (2026-09-09): PostgREST returns numerics as unquoted JSON
- * NUMBERS carrying full scale, not as strings. The wire format is exact;
- * `JSON.parse` is what converts them to binary floating point, where 0.10
- * cannot be represented exactly.
+ * Money is `numeric(20,4)` in PostgreSQL and reaches the application as an
+ * EXACT DECIMAL STRING, because migration 0011 casts it to `text` in SQL while
+ * it is still exact. `{"revenue":"9550.5000"}` — quoted, full scale.
  *
- * So declaring them `string` here does NOT make accidental arithmetic
- * impossible — at runtime they are numbers and `a + b` simply works. The rule
- * still holds and is enforced by review and tests: the database computes every
- * figure, the application only displays it. The declaration is left as-is
- * deliberately; see DATABASE.md for why changing it is its own task.
+ * Before 0011 these arrived as unquoted JSON numbers and `JSON.parse` narrowed
+ * them to doubles, so the `string` declaration here was simply false.
+ *
+ * The type does not prevent arithmetic — `a + b` on two strings compiles and
+ * concatenates. `scripts/verify-money-guard.ts` is what prevents it, by
+ * scanning the source. Counts stay `number`: they are exact integers well
+ * below 2^53, and casting them would make the types lie the other way.
  */
 
 /* ---- Enumerations -------------------------------------------------------- */
@@ -127,6 +128,10 @@ export type Json =
 /**
  * A `numeric` column. Always a string on the wire — see the note above.
  * Never do arithmetic on this in JavaScript; aggregate in SQL instead.
+ */
+/**
+ * An exact decimal, as text. Migration 0011 casts every money and ratio column
+ * to `text` in SQL, so this declaration matches the runtime value.
  */
 type Numeric = string
 
@@ -1177,6 +1182,8 @@ export type Database = {
           cost_gap: Numeric | null
           /** Share of orders with NO recorded fee. Unknown, not zero. */
           fee_gap: Numeric | null
+          /** Refunds as a percentage of revenue. Computed in SQL. */
+          refund_rate: Numeric | null
         }[]
       }
 

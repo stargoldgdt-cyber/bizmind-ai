@@ -58,6 +58,8 @@ Full instructions, including how secrets are handled, are in
 | `npm run test:mapping` | Canonical vocabulary and the suggestion engine |
 | `npm run test:mapping-data` | Mapping gates, profiles and isolation, live |
 | `npm run test:migration-0010` | Live contract test for the coverage-gap columns |
+| `npm run test:money-guard` | Fails the build on any money arithmetic in TypeScript |
+| `npm run test:money-boundary` | Proves exact decimals survive database → AI, live |
 | `npm run test:ai` | The number guard and safe degradation, no key needed |
 | `npm run ai:check` | Verifies the OpenAI key, model and one real explanation |
 
@@ -82,6 +84,7 @@ Supabase (PostgreSQL, Auth, RLS) · OpenAI · Vercel
 | [INTEGRATIONS.md](./INTEGRATIONS.md) | Import pipeline and the connector contract |
 | [MAPPING.md](./MAPPING.md) | Canonical vocabulary, and why a column name is not a definition |
 | [AI.md](./AI.md) | How the AI is stopped from ever producing a figure |
+| [MONEY.md](./MONEY.md) | Why money is a string, and what keeps it exact |
 | [DECISIONS.md](./DECISIONS.md) | Why each major choice was made |
 | [AGENTS.md](./AGENTS.md) | Next.js 16 framework rules (auto-generated) |
 

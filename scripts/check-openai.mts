@@ -165,6 +165,7 @@ const current: Financials = {
   fee_coverage: "62.50",
   cost_gap: "25.00",
   fee_gap: "37.50",
+  refund_rate: "0.00",
 }
 
 const comparisons: MetricComparison[] = [

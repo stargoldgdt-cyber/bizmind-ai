@@ -71,6 +71,7 @@ const EMPTY_FINANCIALS: Financials = {
   fee_coverage: null,
   cost_gap: null,
   fee_gap: null,
+  refund_rate: null,
 }
 
 const EMPTY_RECONCILIATION: Reconciliation = {

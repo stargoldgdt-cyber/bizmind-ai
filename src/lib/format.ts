@@ -1,22 +1,79 @@
 /**
  * Display formatting.
  *
- * IMPORTANT: these functions format values FOR DISPLAY ONLY. They convert a
- * `numeric` string into a number to hand it to `Intl.NumberFormat`, which is
- * safe because the result is immediately rendered as text and rounded anyway.
+ * THESE FUNCTIONS NEVER CONVERT A MONEY VALUE TO A NUMBER.
  *
- * Never use this conversion as a step towards arithmetic. Every business
- * figure is calculated in SQL, in exact decimal, before it reaches here.
+ * Money reaches the application as an exact decimal string -- "9550.5000",
+ * "9007199254740993.0000" -- because migration 0011 casts it to text inside
+ * SQL, while it is still exact. The last place that exactness could be lost is
+ * here, and for a while it was: this file used to call `Number(value)` before
+ * handing the result to `Intl.NumberFormat`, which turned
+ * 9007199254740993.0000 into 9,007,199,254,740,992.00 on the way to the
+ * screen. The database was right and the dashboard was wrong.
+ *
+ * `Intl.NumberFormat` accepts a string and formats it as an exact decimal,
+ * rounding correctly without ever building a double. So the string is passed
+ * straight through. A figure is displayed as the digits the database produced,
+ * or not displayed at all.
+ *
+ * There is no arithmetic in this file. Formatting is not calculation: rounding
+ * for display is done by Intl, on the exact value, at the moment of rendering.
  */
 
-/** Formats money in the business's own currency. */
+/** What is shown when a figure does not exist. Never "0". */
+const UNKNOWN = "—"
+
+/**
+ * An exact decimal as text, or a plain number for counts.
+ *
+ * A number is accepted because counts genuinely are numbers. Passing a money
+ * value as one is a bug the money-boundary test catches, not something this
+ * file can detect.
+ */
+type Displayable = string | number | null | undefined
+
+/** Digits only, with an optional sign and decimal part. */
+const DECIMAL = /^[+-]?\d+(?:\.\d+)?$/
+
+/**
+ * What `Intl.NumberFormat.format` accepts.
+ *
+ * Its string overload is typed as a template-literal type, which TypeScript
+ * cannot prove a runtime string satisfies. `displayable()` below checks the
+ * shape with `DECIMAL` first, so the assertion states something already
+ * verified rather than something hoped for.
+ */
+type IntlValue = Parameters<Intl.NumberFormat["format"]>[0]
+
+/**
+ * Whatever Intl can format exactly, or null if there is nothing to show.
+ *
+ * An empty string returns null rather than being formatted: `Intl` renders it
+ * as 0.00, which would state that a figure nobody recorded is zero.
+ */
+function displayable(value: Displayable): string | number | null {
+  if (value === null || value === undefined) return null
+
+  if (typeof value === "number") return Number.isFinite(value) ? value : null
+
+  const trimmed = value.trim()
+  if (trimmed === "") return null
+  return DECIMAL.test(trimmed) ? trimmed : null
+}
+
+/**
+ * Formats money in the business's own currency.
+ *
+ * The value is passed to Intl exactly as the database produced it, so every
+ * digit of a `numeric(20,4)` survives to the screen.
+ */
 export function formatMoney(
-  value: string | number | null | undefined,
+  value: Displayable,
   currency: string,
   options: { compact?: boolean } = {}
 ): string {
-  const amount = toNumber(value)
-  if (amount === null) return "—"
+  const amount = displayable(value)
+  if (amount === null) return UNKNOWN
 
   try {
     return new Intl.NumberFormat("en-US", {
@@ -25,52 +82,34 @@ export function formatMoney(
       notation: options.compact ? "compact" : "standard",
       maximumFractionDigits: options.compact ? 1 : 2,
       minimumFractionDigits: options.compact ? 0 : 2,
-    }).format(amount)
+    }).format(amount as IntlValue)
   } catch {
-    // An unrecognised ISO code should degrade, not crash the dashboard.
-    return `${currency} ${amount.toFixed(2)}`
+    // An unrecognised ISO code should degrade, not crash the dashboard. The
+    // digits are still shown exactly; only the currency styling is lost.
+    return `${currency} ${amount}`
   }
 }
 
 /** Formats a plain count or quantity. */
-export function formatNumber(
-  value: string | number | null | undefined,
-  maximumFractionDigits = 0
-): string {
-  const amount = toNumber(value)
-  if (amount === null) return "—"
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits }).format(amount)
-}
+export function formatNumber(value: Displayable, maximumFractionDigits = 0): string {
+  const amount = displayable(value)
+  if (amount === null) return UNKNOWN
 
-/** Formats a percentage that the database already calculated. */
-export function formatPercent(value: string | number | null | undefined): string {
-  const amount = toNumber(value)
-  if (amount === null) return "—"
-  return `${amount.toFixed(1)}%`
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits }).format(amount as IntlValue)
 }
 
 /**
- * Percentage change between two periods.
+ * Formats a percentage the database already calculated.
  *
- * Returns null when there is no meaningful comparison — a previous value of
- * zero has no percentage change, and rendering "+100%" or "∞" there would be
- * an invented figure. The interface says "no prior data" instead.
+ * The rounding is Intl's, applied to the exact value. Nothing here works one
+ * out: a percentage shown to an owner is a figure, and figures come from SQL.
  */
-export function percentChange(
-  current: string | number | null | undefined,
-  previous: string | number | null | undefined
-): number | null {
-  const now = toNumber(current)
-  const before = toNumber(previous)
+export function formatPercent(value: Displayable): string {
+  const amount = displayable(value)
+  if (amount === null) return UNKNOWN
 
-  if (now === null || before === null) return null
-  if (before === 0) return null
-
-  return ((now - before) / Math.abs(before)) * 100
-}
-
-function toNumber(value: string | number | null | undefined): number | null {
-  if (value === null || value === undefined) return null
-  const parsed = typeof value === "number" ? value : Number(value)
-  return Number.isFinite(parsed) ? parsed : null
+  return `${new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(amount as IntlValue)}%`
 }

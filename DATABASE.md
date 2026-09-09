@@ -121,37 +121,86 @@ Every money and quantity column is **`numeric(20,4)`**. Never `float` or
 `double`: binary floating point cannot represent `0.10` exactly, and the error
 compounds across aggregation. `numeric` is exact decimal arithmetic.
 
-### How a numeric actually reaches the application
+### How a money figure reaches the application (migration 0011)
 
-This was **stated incorrectly here until 2026-09-09** and corrected after
-probing the live deployment. The truth, measured rather than assumed:
+**Money crosses the boundary as exact decimal text, and the cast happens in
+SQL.**
 
-PostgREST emits a numeric as an **unquoted JSON number carrying its full
-scale** — `{"revenue":0.1000,"cogs":0.30000000}`. JSON numbers are arbitrary
-precision by specification, so **the wire format is exact**.
+```
+numeric(20,4)  →  ::text in SQL  →  {"revenue":"9007199254740993.0000"}  →  string
+     exact            lossless              quoted, full scale               exact
+```
 
-`JSON.parse()` is what narrows them, to IEEE-754 doubles: `0.30000000` becomes
-`0.3`. So by the time a figure reaches JavaScript it is a `number`, not a
-`string`.
+`numeric::text` is lossless in PostgreSQL: it writes the stored decimal digits,
+full scale included. Because the value is already a string when it reaches
+`JSON.parse`, nothing narrows it to a double. `Money = string` is therefore
+**true at runtime**, and true because the database says so.
 
-Two consequences, and it is worth being precise about which is which:
+#### What this replaced, and why
 
-- **Not a live defect.** Nothing in this codebase does arithmetic on a money
-  value, and every figure is rounded for display. A double holds about
-  15–17 significant digits, far more than any realistic amount needs.
-- **The safety net is weaker than it was described.** The claim used to be that
-  string-typed money made accidental arithmetic impossible. It does not:
-  `revenue + cogs` is ordinary addition at runtime. The rule that all financial
-  arithmetic happens in SQL is enforced by review and by tests, not by the type.
+Until 2026-09-09 this document claimed PostgREST returned numerics as JSON
+strings. It did not. Probing the live database showed unquoted numbers —
+`{"revenue":0.1000,"cogs":0.30000000}` — which `JSON.parse` narrowed to
+IEEE-754 doubles. The declared type was a lie and the safety it promised did
+not exist.
 
-`Money` is still declared as `string` in TypeScript, which does not match the
-runtime value. That mismatch is recorded rather than quietly fixed, because
-correcting it touches every consumer of every figure and deserves its own
-change. **All financial arithmetic happens in SQL** — the rule stands; only the
-explanation of why it is safe has been corrected.
+Converting after the fact (`String(Number(value))`) would have been theatre:
+the precision is gone by then. The cast had to happen while the value was still
+exact, which is why it happens in SQL.
 
-`scripts/verify-migration-0010.mts` asserts the real wire format, so this
-cannot drift back into folklore.
+#### The shape of it
+
+| Layer | Holds |
+| --- | --- |
+| `analytics_core` schema | The exact-numeric implementations. **Not exposed through PostgREST** |
+| `public` wrappers | The same figures, cast to `text`. The only contract application code can reach |
+
+Three functions (`analytics_financials`, `analytics_channels`,
+`analytics_products`) were **moved** into `analytics_core` with
+`ALTER FUNCTION … SET SCHEMA`, so their arithmetic was carried across verbatim
+rather than retyped. The three that build on them
+(`analytics_compare`, `analytics_reconciliation`, `analytics_health_inputs`)
+read exact numerics from `analytics_core`, do their arithmetic in SQL as
+before, and cast only their own output.
+
+The wrappers are `SECURITY INVOKER`. Making them `DEFINER` would have avoided
+granting EXECUTE on the inner functions and would also have bypassed Row Level
+Security, which is never worth a convenience.
+
+#### Counts are not money
+
+`orders_count`, `items_total`, `customers_count` and friends stay `bigint` and
+arrive as JavaScript numbers. They are exact integers far below 2^53 and are
+declared `number`, so that declaration is already true. Casting them would make
+the types lie in the other direction.
+
+#### NULL still means unknown
+
+`null::numeric::text` is NULL, which PostgREST emits as JSON null. A figure the
+database could not calculate arrives as `null` — never `"0"`, never `""`,
+never `0`.
+
+#### What the type does NOT do
+
+It does not prevent arithmetic. `a + b` on two strings compiles and returns
+`"10002000"`. Nothing in the type system stops that, and this document used to
+imply otherwise.
+
+What prevents it is `scripts/verify-money-guard.ts`, which scans the source for
+arithmetic on a money-named field and fails the build. Ordering goes through
+`compareMoney` in `src/services/analytics/money.ts`, which compares digits and
+converts nothing.
+
+`scripts/verify-money-boundary.mts` proves the whole path against the live
+database using 9007199254740993 — 2^53+1, the smallest integer a double cannot
+hold. If any step converts it, the value becomes …992 and the suite fails.
+
+#### One known inconsistency
+
+`dashboard_summary()` and `channel_performance()` from migration 0003 still
+return `numeric`. Nothing in the application calls them — a test asserts that —
+and they were left alone rather than widening this change. They must be cast if
+they are ever used.
 
 Quantities are numeric rather than integer because goods sell by weight and
 volume as well as by the piece.

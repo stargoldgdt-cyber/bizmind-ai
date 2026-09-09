@@ -259,8 +259,11 @@ Rules:
 - Comment *why*, not *what*. Explain non-obvious decisions and constraints.
 - Keep functions small enough to test.
 - Handle errors explicitly. Never swallow one silently.
-- Money: store amounts in the smallest currency unit as integers where
-  precision matters. Never do financial arithmetic in floating point.
+- Money: `numeric(20,4)` in PostgreSQL, never `float`. It crosses into the
+  application as **exact decimal text**, cast to `text` in SQL while it is
+  still exact — see MONEY.md. Never do financial arithmetic in TypeScript at
+  all: `npm run test:money-guard` fails the build on it. Compare with
+  `compareMoney`, format with `formatMoney`, calculate in SQL.
 
 ---
 

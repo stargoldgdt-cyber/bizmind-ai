@@ -871,3 +871,94 @@ documented type instead of assuming it. The assertion failed, which is exactly
 what it was for.
 
 **Cost to change:** Medium, and worth scheduling.
+
+---
+
+## 2026-09-09 — Money crosses the boundary as exact text, cast in SQL
+
+**Decided:** Every money and ratio column is cast to `text` inside the
+PostgreSQL function that produces it. The application receives exact decimal
+strings — `"9007199254740993.0000"` — and never converts one to a number.
+
+**Why here and not anywhere else:** the cast has to happen while the value is
+still exact. `String(Number(value))` after `JSON.parse` would look like a fix
+and be none: the precision is gone by then. SQL is the last point at which
+every digit still exists, and `numeric::text` is lossless.
+
+**The problem it fixes:** this codebase declared `Money = string` and claimed
+PostgREST returned numerics as strings. It returned unquoted JSON numbers, and
+`JSON.parse` narrowed each one to an IEEE-754 double. The type was a lie and
+the promised safety did not exist.
+
+**Structure:** three analytics functions were MOVED into a private
+`analytics_core` schema with `ALTER FUNCTION … SET SCHEMA`, so their arithmetic
+was carried across verbatim rather than retyped — nothing retyped means nothing
+mistyped. Thin `public` wrappers cast their output. The three that build on
+them read exact numerics from `analytics_core`, calculate in SQL as before, and
+cast only their own output. `analytics_core` is not exposed through PostgREST,
+so exactly one representation of a figure is reachable by application code.
+
+**Rejected: `Money = number`.** It would have made the declaration truthful and
+made the product worse — enshrining floating point as the financial
+representation to avoid admitting the boundary was wrong.
+
+**Rejected: computing the complement in TypeScript.** Same reasoning as the
+coverage gap: convenient, and the start of a rule with exceptions.
+
+**Counts stay `bigint`.** They are exact integers far below 2^53 and are
+already declared `number`. Casting them would make the types lie the other way.
+
+**Cost to change:** High to reverse, and it should not be reversed.
+
+---
+
+## 2026-09-09 — The type never prevented arithmetic; a scanner does
+
+**Decided:** `scripts/verify-money-guard.ts` scans every source file for
+arithmetic on a money-named field and fails the build. It runs in
+`npm run verify`.
+
+**Why:** `a + b` on two strings compiles and returns `"10002000"`. TypeScript
+does not stop it and no declaration could. Claiming the type provides the
+guarantee was the more dangerous half of the original mistake — a safety net
+people believe in is worse than none.
+
+The scanner tests itself against known-bad and known-good samples, so a regex
+that quietly stopped matching is caught rather than silently protecting
+nothing. It caught its own weakness twice while being written, and both
+corrections are recorded in its comments.
+
+**Three files are exempt, each with a stated reason.** An exemption without a
+reason is how a rule stops applying.
+
+**What it found, on its first run:**
+
+- `.sort((a, b) => Number(b.revenue) - Number(a.revenue))` — replaced with
+  `compareMoney`, which compares digit strings and converts nothing.
+- `const rate = (refunds / revenue) * 100`, **printed to the owner in an
+  insight title** — a financial figure calculated in floating point in
+  TypeScript. Now `refund_rate`, computed in SQL.
+- `percentChange()` in `format.ts` — computed a percentage in TypeScript, was
+  unused, and was sitting inside an exempted file. Deleted.
+
+**Cost to change:** Low.
+
+---
+
+## 2026-09-09 — The display layer formats the string, it does not convert it
+
+**Decided:** `formatMoney`, `formatNumber` and `formatPercent` pass the exact
+decimal string straight to `Intl.NumberFormat`, which accepts a string and
+rounds it exactly.
+
+**Why:** the boundary test caught this. Every layer preserved
+9007199254740993.0000 — and the dashboard displayed
+**AED 9,007,199,254,740,992.00**, because `format.ts` called `Number(value)`
+before formatting. The database was right and the screen was wrong, which is
+the failure the whole exercise exists to prevent, hiding in the last place
+anybody would look.
+
+An empty string now renders as "—" rather than being formatted: `Intl` turns
+`""` into `0.00`, which would state that a figure nobody recorded is zero.
+
+**Cost to change:** Low.

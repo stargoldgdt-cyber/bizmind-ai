@@ -8,6 +8,12 @@
  * business, so every band and every rule is asserted rather than assumed.
  */
 
+import {
+  byMoneyDescending,
+  compareMoney,
+  isPositiveMoney,
+  isZeroMoney,
+} from "../src/services/analytics/money"
 import { calculateHealth } from "@/services/analytics/health"
 import { generateInsights } from "@/services/analytics/insights"
 import { resolveCustomPeriod, resolvePeriod } from "@/services/analytics/periods"
@@ -241,6 +247,7 @@ function financials(overrides: Partial<Financials> = {}): Financials {
     fee_coverage: null,
     cost_gap: null,
     fee_gap: null,
+    refund_rate: null,
     ...overrides,
   }
 }
@@ -492,6 +499,69 @@ check(
     )
   })()
 )
+
+/* -------------------------------------------------------------------------- */
+section("4. EXACT DECIMAL COMPARISON -- no conversion, no arithmetic")
+
+// The one thing TypeScript legitimately needs to do with money is put two
+// figures in order. Doing that by subtracting Number() conversions is
+// arithmetic, and it is wrong for values differing beyond a double's reach.
+
+check("larger revenue wins", compareMoney("2000.00", "1000.00") > 0)
+check("smaller loses", compareMoney("999.99", "1000.00") < 0)
+check("equal is zero", compareMoney("1000.00", "1000.00") === 0)
+
+check(
+  "trailing zeros do not change a value -- 1000.1000 equals 1000.10",
+  compareMoney("1000.1000", "1000.10") === 0
+)
+check("leading zeros are ignored", compareMoney("0007.5", "7.5") === 0)
+check("a missing decimal part compares correctly", compareMoney("7", "7.0000") === 0)
+
+check("negatives sort below positives", compareMoney("-1.00", "0.50") < 0)
+check("two negatives order by magnitude", compareMoney("-5.00", "-2.00") < 0)
+check("minus zero is still zero", compareMoney("-0.0000", "0") === 0)
+
+// THE CASE A DOUBLE CANNOT HANDLE. 2^53 is representable; 2^53+1 is not, and
+// rounds down onto it. Both become 9007199254740992, so subtracting Number()
+// conversions reports two different figures as equal.
+//
+// The first version of this test used 2^53+1 and 2^53+2 and failed, because
+// 2^53+2 IS representable. Worth keeping the corrected pair explicit: the
+// boundary is not "large numbers", it is odd integers above 2^53.
+const big = "9007199254740992.0000"
+const bigger = "9007199254740993.0000"
+
+check(
+  "a difference beyond IEEE-754 precision is still detected",
+  compareMoney(bigger, big) > 0,
+  `Number() subtraction gives ${Number(bigger) - Number(big)}`
+)
+check(
+  "and Number() genuinely cannot tell those two apart",
+  Number(bigger) - Number(big) === 0
+)
+check(
+  "small differences at the far end of the scale too",
+  compareMoney("0.0001", "0.0002") < 0
+)
+
+// Unknown is not zero. A channel whose revenue was never recorded must not be
+// presented as the smallest one.
+check("unknown sorts last when ordering descending", byMoneyDescending(null, "0") > 0)
+check("two unknowns are equal", compareMoney(null, undefined) === 0)
+check("an empty string counts as unknown", compareMoney("", "5") < 0)
+
+check("a positive figure is recognised", isPositiveMoney("0.0001"))
+check("zero is not positive", !isPositiveMoney("0.0000"))
+check("unknown is not positive", !isPositiveMoney(null))
+check("an explicit zero is distinguishable from unknown", isZeroMoney("0.0000"))
+check("and unknown is not zero", !isZeroMoney(null))
+
+// A number reaching this code means the boundary is broken somewhere, and the
+// live suite fails on exactly that. Here it must merely not crash.
+check("a stray number is ordered rather than throwing", compareMoney(5, "3") > 0)
+check("and a stray zero is still zero", isZeroMoney(0))
 
 /* -------------------------------------------------------------------------- */
 console.log(`\n${"=".repeat(74)}`)

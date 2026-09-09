@@ -1,3 +1,4 @@
+import { byMoneyDescending, isPositiveMoney } from "./money"
 import type {
   ChannelPerformance,
   Financials,
@@ -180,12 +181,15 @@ function betterMarginSmallerChannel(ctx: Context): Insight | null {
         // moved there would be advice with no possible action behind it.
         c.channel_id !== null &&
         num(c.gross_margin) !== null &&
-        Number(c.revenue) > 0 &&
+        isPositiveMoney(c.revenue) &&
         num(c.cost_coverage) === 100 &&
         // Unrecorded fees inflate a channel's margin just as missing costs do.
         num(c.fee_coverage) === 100
     )
-    .sort((a, b) => Number(b.revenue) - Number(a.revenue))
+    // Ordered by comparing exact decimals digit by digit. Subtracting two
+    // Number() conversions would be arithmetic on money, and wrong for any
+    // pair differing only beyond a double's precision.
+    .sort((a, b) => byMoneyDescending(a.revenue, b.revenue))
 
   if (ranked.length < 2) return null
 
@@ -311,7 +315,7 @@ function lowMarginProducts(ctx: Context): Insight | null {
       const coverage = num(p.cost_coverage)
       // Only judge products whose costs are fully known — otherwise the low
       // margin might be a data gap rather than a pricing problem.
-      return margin !== null && coverage === 100 && Number(p.revenue) > 0 && margin < overall - 15
+      return margin !== null && coverage === 100 && isPositiveMoney(p.revenue) && margin < overall - 15
     })
     .sort((a, b) => (num(a.gross_margin) ?? 0) - (num(b.gross_margin) ?? 0))
     .slice(0, 3)
@@ -394,15 +398,15 @@ function unattributedOrders(ctx: Context): Insight | null {
 
 /** Refunds eating a material share of revenue. */
 function highRefundRate(ctx: Context): Insight | null {
-  const revenue = Number(ctx.current.revenue)
-  if (revenue <= 0) return null
+  if (!isPositiveMoney(ctx.current.revenue)) return null
+  if (!isPositiveMoney(ctx.current.refunds)) return null
 
-  const refunds = Number(ctx.current.refunds)
-  if (refunds <= 0) return null
-
-  // Ratio of two figures the database produced; used only to pick a threshold.
-  const rate = (refunds / revenue) * 100
-  if (rate < 5) return null
+  // The rate is COMPUTED IN SQL and read here. It used to be worked out on
+  // this line as (refunds / revenue) * 100 -- a financial figure calculated in
+  // TypeScript, in floating point, and then shown to the owner in the title.
+  // Migration 0011 returns it from the database instead.
+  const rate = num(ctx.current.refund_rate)
+  if (rate === null || rate < 5) return null
 
   return {
     type: "high_refund_rate",

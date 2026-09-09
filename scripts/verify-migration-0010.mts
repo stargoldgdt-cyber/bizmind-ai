@@ -221,32 +221,35 @@ try {
   /* ---------------------------------------------------------------------- */
   section("2. TYPE, SHAPE AND NULLABILITY")
 
-  // WHAT POSTGREST ACTUALLY DOES, established by probing this deployment
-  // rather than by repeating what the codebase asserted.
+  // THE CONTRACT THESE ASSERTIONS ONCE DESCRIBED HAS CHANGED, ON PURPOSE.
   //
-  // It emits numerics as UNQUOTED JSON numbers carrying their full scale --
-  // {"cost_gap":50.00}. JSON numbers are arbitrary precision by specification,
-  // so the wire format is exact. `JSON.parse` is what narrows them to IEEE-754
-  // doubles once they reach JavaScript.
+  // When this suite was first written it found PostgREST emitting numerics as
+  // UNQUOTED JSON numbers -- {"cost_gap":50.00} -- which `JSON.parse` narrowed
+  // to IEEE-754 doubles. That is what prompted migration 0011.
   //
-  // The practical consequence is small, because nothing in this codebase does
-  // arithmetic on a money value. The DOCUMENTED consequence was wrong, and is
-  // corrected in DATABASE.md and analytics/types.ts. See the report.
+  // Since 0011 every money and ratio column is cast to `text` in SQL, while it
+  // is still exact, so the gaps now arrive as quoted decimal strings. The
+  // assertions below were inverted rather than deleted: the old expectation is
+  // recorded in this comment so the change reads as a decision, not a drift.
   const wire = await rawFinancials(businessId)
 
   check(
-    "the wire format carries the numeric's full scale",
-    /"cost_gap":50\.\d{2}/.test(wire),
-    wire.slice(0, 100)
+    "the wire format carries the figure's full scale",
+    /"cost_gap":"50\.\d{2}"/.test(wire),
+    wire.slice(0, 120)
   )
   check(
-    "and it is an unquoted JSON number, not a quoted string",
-    !/"cost_gap":"/.test(wire)
+    "and it is now a QUOTED string, so JSON.parse cannot narrow it",
+    /"cost_gap":"/.test(wire) && !/"cost_gap":\d/.test(wire)
   )
   check(
-    "so after JSON.parse it is a JavaScript number",
-    typeof f.cost_gap === "number",
+    "so after JSON.parse it is still a string",
+    typeof f.cost_gap === "string",
     typeof f.cost_gap
+  )
+  check(
+    "while the counts beside it are still numbers",
+    typeof f.items_total === "number" && typeof f.orders_count === "number"
   )
 
   check("cost_gap = 50", Number(f.cost_gap) === 50, String(f.cost_gap))

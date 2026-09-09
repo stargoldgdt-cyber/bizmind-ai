@@ -3,18 +3,29 @@
  *
  * THE RULE THIS LAYER EXISTS TO ENFORCE
  * -------------------------------------
- * Every money figure below arrives from PostgreSQL as a `numeric`.
+ * Every money figure below arrives as an EXACT DECIMAL STRING, and the string
+ * is the whole point.
  *
- * CORRECTION (2026-09-09), after probing the live deployment: PostgREST emits
- * these as unquoted JSON numbers with full scale -- {"revenue":0.1000} -- so
- * the wire format is exact, but `JSON.parse` narrows them to doubles. At
- * runtime these values are NUMBERS, not strings.
+ * PostgreSQL holds these as `numeric(20,4)`. Migration 0011 casts them to
+ * `text` inside SQL, while they are still exact, so what crosses the wire is
+ * `{"revenue":"9550.5000"}` -- quoted, full scale, nothing lost. Before that
+ * migration they crossed as unquoted JSON numbers and `JSON.parse` narrowed
+ * them to IEEE-754 doubles, which made this very declaration a lie.
  *
- * They are still declared as strings here. That is now a known mismatch rather
- * than a design: correcting it touches every consumer, so it is recorded in
- * DATABASE.md and left for a change of its own. What has NOT changed is the
- * rule -- no arithmetic on money in TypeScript. It is simply enforced by
- * review and tests rather than by the type system, which is worth knowing.
+ * So `Money = string` is now TRUE at runtime, and it is true because the
+ * database says so, not because TypeScript was asked nicely.
+ *
+ * WHAT THE TYPE DOES AND DOES NOT DO
+ * ----------------------------------
+ * It does not prevent arithmetic. `a + b` on two strings compiles and returns
+ * "10002000". Nothing in the type system stops that, and this file used to
+ * claim otherwise.
+ *
+ * What prevents it is `scripts/verify-money-guard.ts`, which scans the source
+ * for arithmetic on a money-named field and fails the build. Comparisons are
+ * allowed -- judgement over a figure the database produced. Ordering goes
+ * through `compareMoney` in `./money.ts`, which compares digits and converts
+ * nothing.
  *
  * TypeScript in this service performs NO arithmetic on money. Not sums, not
  * differences, not percentages — period-over-period deltas come from SQL for
@@ -73,6 +84,14 @@ export type Financials = {
   cost_gap: Ratio
   /** Share of orders with NO recorded fee. Unknown, not zero. */
   fee_gap: Ratio
+  /**
+   * Refunds as a percentage of revenue, computed in SQL.
+   *
+   * Exists because the insight engine used to work this out in TypeScript and
+   * show the result to the owner. A figure somebody reads is a figure the
+   * database should have produced.
+   */
+  refund_rate: Ratio
 }
 
 export type MetricDirection = "up" | "down" | "flat" | "unknown"

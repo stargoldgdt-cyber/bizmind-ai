@@ -163,6 +163,8 @@ const current: Financials = {
   line_revenue: "8900.0000",
   orders_fees_unknown: 3,
   fee_coverage: "62.50",
+  cost_gap: "25.00",
+  fee_gap: "37.50",
 }
 
 const comparisons: MetricComparison[] = [

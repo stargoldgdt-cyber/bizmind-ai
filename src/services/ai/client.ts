@@ -65,7 +65,10 @@ export type CompletionRequest = {
   user: string
   /** Hard cap. These are short explanations, not essays. */
   maxOutputTokens?: number
-  /** Low by default: this is explanation, not invention. */
+  /**
+   * Zero by default. This is explanation, not invention: variety buys nothing
+   * here, and a model feeling creative is a model deriving a percentage.
+   */
   temperature?: number
 }
 
@@ -101,7 +104,7 @@ export async function complete(request: CompletionRequest): Promise<AiResult> {
       },
       body: JSON.stringify({
         model,
-        temperature: request.temperature ?? 0.2,
+        temperature: request.temperature ?? 0,
         max_completion_tokens: request.maxOutputTokens ?? 700,
         messages: [
           { role: "system", content: request.system },

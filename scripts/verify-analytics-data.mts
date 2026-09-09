@@ -283,6 +283,24 @@ try {
   check("cost coverage = 100", eq(f.cost_coverage, 100), String(f.cost_coverage))
   check("orders without a channel = 0", f.orders_without_channel === 0)
 
+  // The gaps exist as their own SQL-computed figures so nothing downstream --
+  // the AI layer above all -- ever has to derive one number from another.
+  check("cost gap = 0, every line is costed", eq(f.cost_gap, 0), String(f.cost_gap))
+  check(
+    "coverage and gap account for every order line between them",
+    Math.abs(Number(f.cost_coverage) + Number(f.cost_gap) - 100) < 0.01,
+    `${f.cost_coverage} + ${f.cost_gap}`
+  )
+  check(
+    "the same holds for fees",
+    Math.abs(Number(f.fee_coverage) + Number(f.fee_gap) - 100) < 0.01,
+    `${f.fee_coverage} + ${f.fee_gap}`
+  )
+  check(
+    "each gap is computed by SQL, not returned as text the app must parse",
+    f.cost_gap !== undefined && f.fee_gap !== undefined
+  )
+
   /* ---------------------------------------------------------------------- */
   section("2. CHANNELS -- and the comparison the product exists to make")
 
@@ -425,6 +443,9 @@ try {
   check("margin is NULL, not 0", emptyPeriod.gross_margin === null)
   check("AOV is NULL, not 0", emptyPeriod.avg_order_value === null)
   check("cost coverage is NULL, not 100", emptyPeriod.cost_coverage === null)
+  check("cost gap is NULL too, not 0 -- there is nothing to have a gap in",
+    emptyPeriod.cost_gap === null, String(emptyPeriod.cost_gap))
+  check("fee gap is NULL, not 0", emptyPeriod.fee_gap === null, String(emptyPeriod.fee_gap))
 
   const emptyChannels = await rpc("analytics_channels", {
     p_business_id: businessId,

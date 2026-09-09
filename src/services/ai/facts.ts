@@ -166,6 +166,29 @@ export function buildFactSheet(input: FactSheetInput): FactSheet {
   // would describe an overstated margin as though it were settled fact.
   const quality: Fact[] = [
     {
+      key: "cost_gap",
+      label: "Share of order lines with NO recorded cost",
+      display:
+        current.cost_gap === null
+          ? "not calculated (there are no order lines in this period)"
+          : formatPercent(current.cost_gap),
+      definition:
+        "The proportion of order lines where no cost was recorded at the time " +
+        "of sale. Those lines contribute nothing to cost of goods, so profit " +
+        "is overstated.",
+    },
+    {
+      key: "fee_gap",
+      label: "Share of orders with NO recorded fee",
+      display:
+        current.fee_gap === null
+          ? "not calculated (there are no orders in this period)"
+          : formatPercent(current.fee_gap),
+      definition:
+        "The proportion of orders where the source did not record a fee. That " +
+        "is unknown, not zero.",
+    },
+    {
       key: "cost_coverage",
       label: "Cost coverage",
       display:

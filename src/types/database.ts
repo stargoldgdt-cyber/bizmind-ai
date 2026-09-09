@@ -1169,6 +1169,10 @@ export type Database = {
           cost_coverage: Numeric | null
           orders_fees_unknown: number
           fee_coverage: Numeric | null
+          /** Share of order lines with NO recorded cost. Computed in SQL. */
+          cost_gap: Numeric | null
+          /** Share of orders with NO recorded fee. Unknown, not zero. */
+          fee_gap: Numeric | null
         }[]
       }
 

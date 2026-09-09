@@ -54,6 +54,16 @@ export type Financials = {
   orders_fees_unknown: number
   /** Share of orders with a known fee. Below 100 means profit is overstated. */
   fee_coverage: Ratio
+  /**
+   * Share of order lines with NO recorded cost, computed in SQL.
+   *
+   * The complement of `cost_coverage`, and it exists as its own figure for a
+   * specific reason: the AI layer must never derive one number from another,
+   * and "25% of your lines have no cost" is the sentence an owner acts on.
+   */
+  cost_gap: Ratio
+  /** Share of orders with NO recorded fee. Unknown, not zero. */
+  fee_gap: Ratio
 }
 
 export type MetricDirection = "up" | "down" | "flat" | "unknown"

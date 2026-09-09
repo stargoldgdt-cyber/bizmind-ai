@@ -767,3 +767,43 @@ one of those lines ends "Your figures above are unaffected", because silence
 would invite the reading that something is wrong with the numbers.
 
 **Cost to change:** Low.
+
+---
+
+## 2026-09-09 — When the AI wants a number, compute it
+
+**Decided:** `cost_gap` and `fee_gap` — the share of order lines with no
+recorded cost, and of orders with no recorded fee — are computed in SQL and
+supplied to the AI layer as figures in their own right (migration 0010).
+
+**Why:** Measured against a real model, the number guard rejected five
+explanations out of eight. Every rejection was the same: given "cost coverage
+is 75%", the model wrote "25% of order lines have no cost". Correct arithmetic,
+and precisely what the guard exists to stop.
+
+Adding an explicit instruction not to do it moved the pass rate from 3/8 to
+3/8. The prompt was not the problem.
+
+The problem was that BizMind had never computed a figure the explanation
+genuinely needed. "25% of your order lines have no cost recorded" is the
+sentence an owner acts on; "cost coverage is 75%" is the same fact phrased for
+an analyst. With only the second available, deriving the first was the only way
+to write a useful sentence — so the model kept doing it, and the guard kept
+being right to refuse.
+
+Supplying the gap took it to **8/8**.
+
+**Rejected:** Computing the complement in TypeScript. It is not money, so it
+sits in a grey area of the arithmetic rule — which is exactly why it should not
+be done. A rule with a convenient exception is not a rule, and the next
+exception would be easier to justify than this one.
+
+**Also rejected:** Loosening the guard to tolerate a complement. That is the
+same as allowing derived figures, which is the one thing this phase exists to
+prevent.
+
+**The general lesson, worth more than the feature:** when the AI reaches for a
+number it was not given, that is evidence of a missing figure, not of a
+disobedient model. Compute it.
+
+**Cost to change:** Low.

@@ -69,6 +69,8 @@ const EMPTY_FINANCIALS: Financials = {
   line_revenue: "0",
   orders_fees_unknown: 0,
   fee_coverage: null,
+  cost_gap: null,
+  fee_gap: null,
 }
 
 const EMPTY_RECONCILIATION: Reconciliation = {

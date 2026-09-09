@@ -78,6 +78,27 @@ Tolerances, because being pedantic is not the same as being safe:
 | `AED 9,550.50` | `9,550.50`, `9550.5` |
 | `8` | `8` |
 
+### What happened when this met a real model
+
+Worth recording, because the fix was not the obvious one.
+
+Measured over eight runs, the guard rejected **five**. Every rejection was the
+same move: given "cost coverage is 75%", the model wrote "25% of order lines
+have no cost". Correct arithmetic — and exactly what must never happen, because
+a model that computes a right answer today computes a wrong one tomorrow and
+the sentence looks identical either way.
+
+Adding an explicit instruction not to do it changed nothing: **3/8 before,
+3/8 after.**
+
+The prompt was never the problem. BizMind had not computed a figure the
+explanation genuinely needed, so the only way to write a true and useful
+sentence was to derive one. Migration 0010 added `cost_gap` and `fee_gap` as
+SQL-computed figures, and the sheet now supplies them. **8/8.**
+
+The rule the rest of the product runs on, applied to itself: if an explanation
+needs a number, compute it. Do not ask the model more firmly not to.
+
 ### What the guard does not catch
 
 It is worth being straight about the limit. The allowlist is built from every
@@ -182,7 +203,7 @@ than this codebase will, which is why `ai:check` verifies rather than assumes.
 npm run test:ai
 ```
 
-68 assertions, no network and no key — the key is deleted from the environment
+71 assertions, no network and no key — the key is deleted from the environment
 before anything is imported, so a test that accidentally reached OpenAI would
 fail rather than quietly spend money.
 

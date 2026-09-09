@@ -84,6 +84,8 @@ const FINANCIALS: Financials = {
   line_revenue: "8900.0000",
   orders_fees_unknown: 3,
   fee_coverage: "62.50",
+  cost_gap: "25.00",
+  fee_gap: "37.50",
 }
 
 const COMPARISONS: MetricComparison[] = [
@@ -248,6 +250,36 @@ check(
   "the deterministic findings are included and marked as already established",
   SHEET_TEXT.includes("Findings BizMind has already established") &&
     SHEET_TEXT.includes("Revenue rose but gross profit fell")
+)
+
+// The lesson from measuring this against a real model. Given only "cost
+// coverage 75%", it wrote "25% of order lines have no cost" in five replies
+// out of eight -- correct arithmetic, and exactly what must never happen.
+// Adding an instruction not to changed nothing (3/8 before, 3/8 after).
+// Supplying the gap as its own SQL-computed figure took it to 8/8.
+//
+// The rule the rest of the product runs on, applied here: if an explanation
+// needs a number, COMPUTE IT. Do not ask the model more firmly not to.
+check(
+  "THE GAP IS SUPPLIED, so no explanation ever needs to derive it",
+  SHEET_TEXT.includes("Share of order lines with NO recorded cost: 25.0%") &&
+    SHEET_TEXT.includes("Share of orders with NO recorded fee: 37.5%")
+)
+check(
+  "and a reply quoting the gap passes the guard",
+  guardNumbers(
+    "Cost coverage is 75.0%, so 25.0% of your order lines have no recorded cost.",
+    SHEET_TEXT
+  ).ok
+)
+check(
+  "a gap the database could not calculate says so, rather than reading as zero",
+  renderFactSheet(
+    buildFactSheet({
+      ...INPUT,
+      current: { ...FINANCIALS, cost_gap: null, fee_gap: null },
+    })
+  ).includes("Share of order lines with NO recorded cost: not calculated")
 )
 
 // The point of the whole design: there is nothing to add up.

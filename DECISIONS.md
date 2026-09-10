@@ -1147,3 +1147,47 @@ concept has no business widening a production enum that analytics groups by.
 
 **Cost to change:** Low. It is one directory and it can stay forever as a
 regression harness.
+
+---
+
+## 2026-09-10 — What installing the migration actually found
+
+**Recorded because the pattern matters more than the four bugs.**
+
+Migration 0012 passed review, passed 462 offline assertions, typechecked,
+linted and built. Installing it against a real database found **five** faults
+in four attempts, and every one of them read as correct:
+
+1. **A record variable in a multi-item `INTO` list** (42601). Caught by
+   PostgreSQL itself.
+2. **A column-level `REVOKE` that cannot undo a table-level `GRANT`.** The
+   credentials were readable and the code said they were not.
+3. **Privileges inherited before the migration ran.** Supabase's
+   `alter default privileges` grants ALL on every new table, so declining to
+   grant was never enough — the privilege had to be taken away.
+4. **A uniqueness rule that did not exist.** The index was keyed on
+   `integration_id`, which is per-business, so "one live store belongs to one
+   business" was enforced against nothing. With `webhook_account_lookup()`
+   ending in `LIMIT 1`, a shop connected twice would have delivered into
+   whichever tenant the planner returned first.
+5. **A `CASE` of bare literals is `text`, not an enum** (42804). Every webhook
+   delivery failed on it.
+
+Two were found by the migration's own verification block refusing to install.
+Two were found by the live test suite. **None would have been found by
+reading.**
+
+**The conclusions worth keeping:**
+
+- A migration should assert its own guarantees rather than trust that its
+  statements did what they appear to do. Faults 2 and 3 were caught that way,
+  and both were security holes.
+- A privilege model must be tested against a real database with a real second
+  tenant. Fault 4 was invisible to every other kind of check.
+- The database's own HINT can be wrong for the situation. When `sync_enqueue`
+  failed, PostgreSQL suggested
+  `GRANT SELECT ON integration_accounts TO authenticated` — which would have
+  undone fault 2's fix entirely. A generic hint does not know two of those
+  columns are secret.
+
+**Cost to change:** N/A. This is a record, not a decision.

@@ -1054,6 +1054,13 @@ export type Database = {
          */
         Row: Tenanted & {
           integration_id: string
+          /**
+           * Copied from the parent integration and held there by a composite
+           * foreign key. Exists so store uniqueness can be enforced ACROSS
+           * businesses -- keying it on integration_id made it per-business,
+           * which is not what it claimed to do.
+           */
+          provider: IntegrationProvider
           external_account_id: string
           display_name: string | null
           status: IntegrationStatus

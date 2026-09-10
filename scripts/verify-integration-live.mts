@@ -311,14 +311,18 @@ try {
     otherToken
   )
 
+  // Explicit columns, because `select=*` is refused for EVERYONE now -- and a
+  // refusal would prove nothing about isolation. Asking only for columns B is
+  // entitled to read makes the empty result the real answer: RLS returned
+  // nothing, rather than the request failing for an unrelated reason.
   const bReadsA = await attempt(
-    `/rest/v1/integration_accounts?select=*&business_id=eq.${businessId}`,
+    `/rest/v1/integration_accounts?select=id,status,external_account_id&business_id=eq.${businessId}`,
     {},
     otherToken
   )
   check("B cannot read A's connections",
     bReadsA.ok && JSON.parse(bReadsA.body).length === 0,
-    bReadsA.body.slice(0, 80)
+    `${bReadsA.status} ${bReadsA.body.slice(0, 80)}`
   )
 
   const bReadsJobs = await attempt(
@@ -555,6 +559,15 @@ try {
       `/rest/v1/webhook_events?select=id&business_id=eq.${businessId}&external_event_id=eq.delivery-1`
     )
     const eventId = events[0]?.id
+
+    if (!eventId) {
+      // Without this the suite died with a confusing PostgREST 404 about a
+      // function "without parameters" -- an undefined argument serialises to
+      // {}. A missing prerequisite should say so, not masquerade as a
+      // different failure three sections later.
+      check("an event exists to replay", false, "no delivery was stored")
+      throw new Error("Cannot test replay: webhook ingest stored nothing.")
+    }
 
     const bReplaysA = await tryRpc("webhook_event_replay", { p_event_id: eventId }, otherToken)
     check("B CANNOT REPLAY A'S WEBHOOK EVENT using its id", !bReplaysA.ok,

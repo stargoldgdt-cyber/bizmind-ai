@@ -1279,22 +1279,32 @@ security invoker
 set search_path = ''
 as $$
 declare
-  v_account public.integration_accounts;
-  v_job     public.sync_jobs;
+  v_business_id uuid;
+  v_status      public.integration_status;
+  v_job         public.sync_jobs;
 begin
-  select * into v_account from public.integration_accounts where id = p_account_id;
+  -- Two named columns, not `*`. This function is SECURITY INVOKER, and
+  -- `authenticated` is deliberately not granted SELECT on the two credential
+  -- columns -- so `select *` would fail with 42501 for a legitimate caller.
+  --
+  -- It stays INVOKER on purpose: RLS scopes this lookup, so an account
+  -- belonging to another business is not found at all. The role check below is
+  -- a second boundary, not the only one.
+  select a.business_id, a.status into v_business_id, v_status
+  from public.integration_accounts a
+  where a.id = p_account_id;
 
-  if v_account.id is null then
+  if v_business_id is null then
     raise exception 'No such integration account.' using errcode = 'P0002';
   end if;
 
   if not public.current_user_has_role(
-       v_account.business_id, array['OWNER','ADMIN']::public.business_role[]) then
+       v_business_id, array['OWNER','ADMIN']::public.business_role[]) then
     raise exception 'Only an owner or admin can start a sync.'
       using errcode = '42501';
   end if;
 
-  if v_account.status = 'DISCONNECTED' then
+  if v_status = 'DISCONNECTED' then
     raise exception 'That connection has been disconnected.' using errcode = 'P0001';
   end if;
 
@@ -1303,7 +1313,7 @@ begin
     priority, next_run_at
   )
   values (
-    v_account.business_id, p_account_id, p_resource, p_mode, 'QUEUED',
+    v_business_id, p_account_id, p_resource, p_mode, 'QUEUED',
     p_priority, now()
   )
   on conflict (integration_account_id, resource) do update set
@@ -1321,7 +1331,7 @@ begin
   returning * into v_job;
 
   perform public.write_audit_log(
-    v_account.business_id, 'integration.sync.enqueued', 'sync_jobs', v_job.id,
+    v_business_id, 'integration.sync.enqueued', 'sync_jobs', v_job.id,
     null, jsonb_build_object('resource', p_resource, 'mode', p_mode)
   );
 

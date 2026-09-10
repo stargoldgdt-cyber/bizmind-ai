@@ -146,12 +146,25 @@ and the channel is carried across.
 would split its history in two, and every figure that groups by channel would
 quietly halve. Nobody would see an error.
 
-A partial unique index on `(integration_id, external_account_id)`
+A partial unique index on `(provider, external_account_id)`
 `where status <> 'DISCONNECTED'` means **one live store belongs to exactly one
-business**. Without it the same shop could be connected by two customers and a
-webhook would resolve ambiguously — a cross-tenant leak wearing the costume of
-a feature request. It is partial so a store can be disconnected and later
-connected by someone else.
+business**. It is partial so a store can be disconnected and later connected by
+someone else.
+
+`provider` is denormalised onto `integration_accounts` for this, and held
+there by a composite foreign key onto `integrations(id, provider)` — so the
+copy cannot drift from its parent.
+
+**The first version keyed this on `integration_id` and did nothing.**
+`integrations` is unique on `(business_id, provider)`, so two businesses have
+two different `integration_id` values and the same store connected by both did
+not collide. The live suite caught it.
+
+That was not a cosmetic duplicate. `webhook_account_lookup()` ends in
+`LIMIT 1`; with two matching rows, a delivery would have landed in whichever
+tenant the planner returned first — a silent, unreproducible cross-tenant
+write. Migration 0014 fixed it and its verification block refuses to install if
+the index is ever keyed on `integration_id` again.
 
 ---
 

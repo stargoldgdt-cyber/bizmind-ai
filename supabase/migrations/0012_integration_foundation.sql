@@ -409,29 +409,63 @@ begin
     $f$, t || '_delete_owner', t);
 
     execute format('revoke all on public.%I from anon', t);
-    execute format(
-      'grant select, insert, update, delete on public.%I to authenticated', t);
+
+    -- integration_accounts is granted separately, column by column. A
+    -- table-wide SELECT here would make the credential columns readable and
+    -- COULD NOT BE TAKEN BACK: see the note below.
+    if t <> 'integration_accounts' then
+      execute format(
+        'grant select, insert, update, delete on public.%I to authenticated', t);
+    end if;
   end loop;
 end;
 $$;
 
 /**
- * Credentials are never selectable by a signed-in user.
+ * Credentials are never readable or writable by a signed-in user.
  *
  * RLS decides which ROWS are visible; a column grant decides which COLUMNS.
  * Without this, an owner could read their own encrypted tokens through
- * PostgREST -- and "encrypted" is not "safe to hand to a browser". Only
- * service_role, which bypasses column privileges, can read them, and only the
- * one server-side module that holds that key ever does.
+ * PostgREST -- and "encrypted" is not "safe to hand to a browser".
+ *
+ * THIS IS A GRANT LIST, NOT A REVOKE LIST, AND THAT MATTERS.
+ *
+ * The first version of this migration granted SELECT on the whole table and
+ * then revoked two columns. That does nothing: in PostgreSQL a column-level
+ * REVOKE cannot remove a table-level GRANT. Table-wide SELECT means SELECT on
+ * every column, and there is no way to subtract one afterwards.
+ *
+ * The migration's own verification block caught it and refused to install --
+ * which is exactly why that block asserts privileges rather than trusting that
+ * the statements above did what they read as doing.
+ *
+ * So the privilege is never granted in the first place. Every column is listed
+ * except the two that hold secrets. Adding a column to this table means adding
+ * it here, and forgetting to means it is invisible rather than exposed -- the
+ * safe direction to fail in.
  */
-revoke select (credentials_encrypted, webhook_secret_encrypted)
-  on public.integration_accounts from authenticated;
+grant select (
+  id, business_id, integration_id, external_account_id, display_name,
+  status, channel_id, metadata, last_successful_sync_at,
+  last_attempted_sync_at, last_error, connected_by, connected_at,
+  revoked_at, created_at, updated_at
+) on public.integration_accounts to authenticated;
 
-revoke insert (credentials_encrypted, webhook_secret_encrypted)
-  on public.integration_accounts from authenticated;
+grant insert (
+  id, business_id, integration_id, external_account_id, display_name,
+  status, channel_id, metadata, last_successful_sync_at,
+  last_attempted_sync_at, last_error, connected_by, connected_at,
+  revoked_at, created_at, updated_at
+) on public.integration_accounts to authenticated;
 
-revoke update (credentials_encrypted, webhook_secret_encrypted)
-  on public.integration_accounts from authenticated;
+grant update (
+  id, business_id, integration_id, external_account_id, display_name,
+  status, channel_id, metadata, last_successful_sync_at,
+  last_attempted_sync_at, last_error, connected_by, connected_at,
+  revoked_at, created_at, updated_at
+) on public.integration_accounts to authenticated;
+
+grant delete on public.integration_accounts to authenticated;
 
 
 -- ----------------------------------------------------------------------------
@@ -1053,7 +1087,7 @@ create or replace function public.integration_account_connect(
 )
 returns public.integration_accounts
 language plpgsql
-security invoker
+security definer
 set search_path = ''
 as $$
 declare
@@ -1067,6 +1101,13 @@ begin
     raise exception 'Not authenticated.' using errcode = '28000';
   end if;
 
+  -- SECURITY DEFINER, so this check IS the tenant boundary rather than a
+  -- friendlier error in front of one. It validates the caller's role against
+  -- the business they named, which a caller who is not a member cannot pass.
+  --
+  -- Definer is necessary because the function does `returning *`, and that
+  -- needs SELECT on every column -- including the two that `authenticated` is
+  -- deliberately not granted. The secrets are blanked before returning.
   if not public.current_user_has_role(
        p_business_id, array['OWNER','ADMIN']::public.business_role[]) then
     raise exception 'Only an owner or admin can connect an integration.'
@@ -1079,7 +1120,10 @@ begin
     set status = 'CONNECTED', updated_at = now()
   returning * into v_integration;
 
-  select to_jsonb(a) into v_before
+  -- The audit "before" snapshot must not carry ciphertext into a table an
+  -- admin can read. audit_logs is readable by admins; these columns are not.
+  select to_jsonb(a) - 'credentials_encrypted' - 'webhook_secret_encrypted'
+    into v_before
   from public.integration_accounts a
   where a.business_id = p_business_id
     and a.integration_id = v_integration.id
@@ -1129,23 +1173,39 @@ begin
     )
   );
 
+  -- The return type is the full row, so the sealed secrets would travel back
+  -- to the browser on a RECONNECT -- when they already exist. Blanked here.
+  -- The caller never needs them: it writes them through the privileged path
+  -- and never reads one.
+  v_account.credentials_encrypted := null;
+  v_account.webhook_secret_encrypted := null;
+
   return v_account;
 end;
 $$;
 
 
-/** Revokes a connection. Business data is kept, deliberately. */
+/**
+ * Revokes a connection. Business data is kept, deliberately.
+ *
+ * SECURITY DEFINER, unlike its sibling `integration_account_connect`, for one
+ * specific reason: it clears the stored secrets, and `authenticated` is not
+ * granted UPDATE on those columns. A caller cannot write them directly, so the
+ * clearing has to happen inside a function that can.
+ *
+ * That means RLS does not filter the lookup below, so the ROLE CHECK is what
+ * enforces the tenant boundary here -- and it checks the role against the
+ * account's own business, which a foreign caller cannot satisfy.
+ */
 create or replace function public.integration_account_revoke(p_account_id uuid)
 returns public.integration_accounts
 language plpgsql
-security invoker
+security definer
 set search_path = ''
 as $$
 declare
   v_account public.integration_accounts;
 begin
-  -- RLS decides whether this row is visible at all, so a foreign account id
-  -- simply finds nothing.
   select * into v_account from public.integration_accounts where id = p_account_id;
 
   if v_account.id is null then
@@ -1445,6 +1505,29 @@ begin
        'webhook_secret_encrypted', 'SELECT') then
     raise exception
       'SECURITY: authenticated can read integration_accounts.webhook_secret_encrypted';
+  end if;
+
+  -- Writing them is checked too. A user who could overwrite a webhook secret
+  -- could set one they know and then forge deliveries that verify.
+  if has_column_privilege(
+       'authenticated', 'public.integration_accounts',
+       'webhook_secret_encrypted', 'UPDATE') then
+    raise exception
+      'SECURITY: authenticated can overwrite integration_accounts.webhook_secret_encrypted';
+  end if;
+
+  if has_column_privilege(
+       'authenticated', 'public.integration_accounts',
+       'credentials_encrypted', 'UPDATE') then
+    raise exception
+      'SECURITY: authenticated can overwrite integration_accounts.credentials_encrypted';
+  end if;
+
+  -- And the ordinary columns must still be readable, or the app is broken in
+  -- the other direction.
+  if not has_column_privilege(
+       'authenticated', 'public.integration_accounts', 'status', 'SELECT') then
+    raise exception 'authenticated cannot read integration_accounts.status';
   end if;
 
   raise notice

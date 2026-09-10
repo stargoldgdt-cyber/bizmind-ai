@@ -107,12 +107,30 @@ without guessing what an old value was.
 
 ### The columns are unreadable by users
 
-Migration 0012 **revokes SELECT, INSERT and UPDATE on the credential columns
-from `authenticated`**. RLS decides which *rows* are visible; a column grant
-decides which *columns*. Without this an owner could read their own encrypted
-tokens through PostgREST — and "encrypted" is not "safe to hand to a browser".
+`authenticated` is granted SELECT, INSERT and UPDATE on
+`integration_accounts` **column by column, with the two credential columns
+left out**. RLS decides which *rows* are visible; a column grant decides which
+*columns*. Without this an owner could read their own encrypted tokens through
+PostgREST — and "encrypted" is not "safe to hand to a browser".
 
-`SELECT *` does not smuggle them out either. A test proves it.
+**It is a grant list rather than a revoke list, and that distinction is the
+whole thing.** The first version granted SELECT on the whole table and then
+revoked two columns. That does nothing: in PostgreSQL a column-level REVOKE
+cannot remove a table-level GRANT. The migration's own verification block
+caught it and refused to install — which is why that block asserts privileges
+rather than trusting that the statements above did what they read as doing.
+
+Adding a column to this table means adding it to those lists. Forgetting means
+the column is invisible rather than exposed: the safe direction to fail in.
+
+Two consequences follow, and both are tested:
+
+- `SELECT *` is **refused outright**, because it needs SELECT on every column.
+- `integration_account_connect()` is SECURITY DEFINER (it does `RETURNING *`)
+  and **blanks the secret fields before returning**, so a reconnect does not
+  hand back the ciphertext that already exists.
+- The audit "before" snapshot has those keys stripped, or `to_jsonb(row)`
+  would copy the ciphertext into a table admins can read.
 
 ---
 

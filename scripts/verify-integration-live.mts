@@ -171,6 +171,14 @@ try {
   })
 
   check("a connection is created", connected.external_account_id === STORE_A)
+  check("AND IT DOES NOT HAND THE SECRETS BACK to the caller",
+    connected.credentials_encrypted === null &&
+      connected.webhook_secret_encrypted === null,
+    JSON.stringify({
+      c: connected.credentials_encrypted,
+      w: connected.webhook_secret_encrypted,
+    })
+  )
   check("it is CONNECTED", connected.status === "CONNECTED")
   check("it records who connected it", connected.connected_by !== null)
   check("and it created a channel", connected.channel_id !== null)
@@ -209,6 +217,19 @@ try {
     audit[0]?.action === "integration.connection.reconnected", audit[0]?.action
   )
 
+  // audit_logs is readable by admins. A "before" snapshot taken with
+  // to_jsonb(row) would carry the ciphertext straight into a table they can
+  // read, defeating the column grant one line at a time.
+  const auditBefore = await api(
+    `/rest/v1/audit_logs?select=before_data&business_id=eq.${businessId}&action=eq.integration.connection.reconnected&limit=1`
+  )
+  const snapshot = JSON.stringify(auditBefore[0]?.before_data ?? {})
+  check("THE AUDIT SNAPSHOT CARRIES NO CIPHERTEXT",
+    !snapshot.includes("credentials_encrypted") &&
+      !snapshot.includes("webhook_secret_encrypted"),
+    snapshot.slice(0, 120)
+  )
+
   /* ---------------------------------------------------------------------- */
   section("2. CREDENTIALS ARE NOT READABLE BY A SIGNED-IN USER")
 
@@ -224,14 +245,23 @@ try {
   )
   check("and so is the webhook secret", !readWebhookSecret.ok)
 
-  const readStar = await api(
+  // Stronger than "the columns come back empty": asking for everything is
+  // refused outright, because the privilege was never granted rather than
+  // granted and then revoked. A column-level REVOKE cannot undo a table-level
+  // GRANT, which is what the first version of this migration tried to do --
+  // and its own verification block refused to install it.
+  const readStar = await attempt(
     `/rest/v1/integration_accounts?select=*&id=eq.${accountId}`
   )
-  check("SELECT * does not smuggle them out either",
-    readStar[0] !== undefined &&
-      !("credentials_encrypted" in readStar[0]) &&
-      !("webhook_secret_encrypted" in readStar[0]),
-    Object.keys(readStar[0] ?? {}).join(",")
+  check("SELECT * IS REFUSED, so nothing can ask for everything",
+    !readStar.ok, `${readStar.status} ${readStar.body.slice(0, 90)}`
+  )
+
+  const readAllowed = await api(
+    `/rest/v1/integration_accounts?select=id,status,display_name&id=eq.${accountId}`
+  )
+  check("but the ordinary columns are readable, so the app still works",
+    readAllowed[0]?.status === "CONNECTED"
   )
 
   const writeSecret = await attempt(

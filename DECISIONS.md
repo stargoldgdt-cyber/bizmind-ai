@@ -1102,11 +1102,22 @@ A ciphertext carried across tenants fails authentication.
 **Why the key is not in the database:** so a database backup on its own does
 not yield a usable credential for somebody else's store.
 
-**Also decided:** migration 0012 revokes SELECT, INSERT and UPDATE on the
-credential columns from `authenticated`. RLS decides which rows are visible; a
-column grant decides which columns. Without it an owner could read their own
-encrypted tokens through PostgREST — and "encrypted" is not "safe to hand to a
-browser".
+**Also decided:** `authenticated` is granted privileges on
+`integration_accounts` column by column, with the two credential columns left
+out. RLS decides which rows are visible; a column grant decides which columns.
+Without it an owner could read their own encrypted tokens through PostgREST —
+and "encrypted" is not "safe to hand to a browser".
+
+**Corrected during installation.** The first version granted SELECT on the
+whole table and then revoked two columns. In PostgreSQL that is a no-op: a
+column-level REVOKE cannot remove a table-level GRANT. The credentials were
+readable, and the code read as though they were not.
+
+The migration's own verification block refused to install it —
+`SECURITY: authenticated can read integration_accounts.credentials_encrypted`.
+That is the argument for asserting privileges inside a migration rather than
+trusting that the statements above did what they appear to do. The fix is a
+grant list, so forgetting a column hides it rather than exposing it.
 
 **Cost to change:** Rotating the key invalidates every stored credential.
 

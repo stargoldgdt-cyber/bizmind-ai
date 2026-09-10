@@ -408,15 +408,39 @@ begin
         business_id, array['OWNER']::public.business_role[]))
     $f$, t || '_delete_owner', t);
 
-    execute format('revoke all on public.%I from anon', t);
+    -- REVOKE FROM `authenticated` TOO, AND FIRST.
+    --
+    -- Supabase configures the project with
+    --
+    --   alter default privileges in schema public
+    --     grant all on tables to postgres, anon, authenticated, service_role;
+    --
+    -- so a table has table-wide SELECT for `authenticated` the instant it is
+    -- created -- before a single grant in this file runs. Simply declining to
+    -- grant it is not enough, and an earlier version of this migration made
+    -- exactly that mistake: it skipped the grant, and the verification block
+    -- still found the credentials readable.
+    --
+    -- Every privilege is taken away here and only the needed ones are given
+    -- back, so this migration decides the privileges rather than inheriting
+    -- whatever the project defaults happen to be.
+    execute format('revoke all on public.%I from anon, authenticated', t);
 
-    -- integration_accounts is granted separately, column by column. A
-    -- table-wide SELECT here would make the credential columns readable and
-    -- COULD NOT BE TAKEN BACK: see the note below.
+    -- integration_accounts is granted separately, column by column, because
+    -- two of its columns hold secrets. A table-wide SELECT would make them
+    -- readable and COULD NOT BE TAKEN BACK afterwards: in PostgreSQL a
+    -- column-level REVOKE cannot remove a table-level GRANT.
     if t <> 'integration_accounts' then
       execute format(
         'grant select, insert, update, delete on public.%I to authenticated', t);
     end if;
+
+    -- Stated rather than inherited, for the same reason. The webhook receiver
+    -- and the sync worker run as service_role, and relying on a project
+    -- default for that would make this migration correct only on a database
+    -- configured exactly like this one.
+    execute format(
+      'grant select, insert, update, delete on public.%I to service_role', t);
   end loop;
 end;
 $$;
@@ -1528,6 +1552,15 @@ begin
   if not has_column_privilege(
        'authenticated', 'public.integration_accounts', 'status', 'SELECT') then
     raise exception 'authenticated cannot read integration_accounts.status';
+  end if;
+
+  -- service_role must be able to write the secrets, or connecting a store
+  -- would succeed and then silently store no credentials.
+  if not has_column_privilege(
+       'service_role', 'public.integration_accounts',
+       'credentials_encrypted', 'UPDATE') then
+    raise exception
+      'service_role cannot write integration_accounts.credentials_encrypted';
   end if;
 
   raise notice

@@ -175,9 +175,19 @@ check("and is not recognised as a provider", !isKnownProvider("MAGENTO"))
 check("the real providers are recognised even before they are built",
   isKnownProvider("SHOPIFY") && isKnownProvider("WOOCOMMERCE")
 )
-check("only the fixture connector ships today",
-  registeredProviders().join(",") === "FIXTURE",
+// This said "only the fixture connector ships today" until WooCommerce
+// landed. Inverted rather than deleted: the meaningful guarantee now is that
+// SHOPIFY is not registered, because a connector that appears in the registry
+// before it exists is one an owner could try to connect to nothing.
+check("the fixture and WooCommerce connectors ship",
+  registeredProviders().sort().join(",") === "FIXTURE,WOOCOMMERCE",
   registeredProviders().join(",")
+)
+check("SHOPIFY IS NOT REGISTERED -- it is not built yet",
+  getConnector("SHOPIFY") === null
+)
+check("but the engine already recognises the name, so a job for it fails cleanly",
+  isKnownProvider("SHOPIFY")
 )
 check("the fixture connector does not claim a production channel type",
   fixtureConnector.channelType === "OTHER"

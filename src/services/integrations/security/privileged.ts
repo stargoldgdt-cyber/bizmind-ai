@@ -51,6 +51,7 @@ const TRUSTED_FUNCTIONS = [
   "sync_claim_jobs",
   "sync_job_context",
   "sync_apply_orders",
+  "sync_apply_products",
   "sync_run_start",
   "sync_job_complete",
 ] as const

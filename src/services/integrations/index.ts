@@ -13,8 +13,10 @@
 
 import { registerConnector } from "./contract"
 import { fixtureConnector } from "./connectors/fixture"
+import { wooCommerceConnector } from "./connectors/woocommerce"
 
 registerConnector(fixtureConnector)
+registerConnector(wooCommerceConnector)
 
 export {
   getConnector,

@@ -1191,3 +1191,66 @@ reading.**
   columns are secret.
 
 **Cost to change:** N/A. This is a record, not a decision.
+
+---
+
+## 2026-09-10 — WooCommerce leaves four fields null, on purpose
+
+**Decided:** The WooCommerce connector maps `subtotal`, `fee_total`,
+`unit_cost` and the per-line `discount` to NULL, even though a plausible number
+could be assembled for each.
+
+**Why:**
+
+- `subtotal` would be `total - total_tax - shipping_total + discount_total`.
+  That is arithmetic on money in TypeScript, which MONEY.md forbids outright.
+- `unit_cost` **does not exist in WooCommerce core.** There is nothing to map.
+- `fee_total` would be a sum of `fee_lines` — both a sum, and a claim about
+  meaning that nobody has established. Phase 7.2's rule applies: a field is not
+  a fee because it is called one. WooCommerce has no marketplace and therefore
+  no marketplace fee.
+- The line `discount` would be `subtotal - total`. A subtraction.
+
+**The consequence, accepted deliberately:** gross profit and margin are
+OVERSTATED for every WooCommerce order until costs arrive another way. That is
+not a defect of the connector; it is the truth about what WooCommerce knows.
+The cost-coverage figure already says so on every screen showing a margin, and
+the AI refuses to recommend anything resting on it.
+
+A connector that filled those nulls with arithmetic would produce a margin that
+looks right and is not — which is the exact failure this product exists to
+avoid, arriving through the one door nobody was watching.
+
+**Cost to change:** Low, and it should not change. If cost data becomes
+available from a plugin, it arrives as its own mapped field with its own
+semantics confirmation.
+
+---
+
+## 2026-09-10 — A store URL is untrusted input that we then fetch
+
+**Decided:** `checkSiteUrl()` refuses loopback, private ranges, link-local
+(including `169.254.169.254`), `.local`, `.internal`, embedded credentials, and
+anything not HTTPS. Redirects are not followed.
+
+**Why:** a connection form that takes a URL and fetches it is a server-side
+request forgery hole. An owner who types `http://169.254.169.254` is confused;
+an attacker who types it is asking our server to read its own cloud credentials
+and hand them back in an error message.
+
+Not following redirects matters for a second reason: a redirect would carry the
+`Authorization` header — the merchant's own consumer secret — to a host they
+never named.
+
+**Plain HTTP is refused rather than supported through OAuth 1.0a**, which
+WooCommerce documents for exactly that case. Supporting it would be effort
+spent making an insecure configuration usable, and the merchant would be worse
+off for our helpfulness.
+
+**Known limit, stated:** the check is on the literal host, not a resolved
+address, so DNS could point a public name at a private one. Blocking that
+properly needs resolution at request time. What bounds the damage today is that
+BizMind only ever sends a store's own credentials to the host its owner named,
+and never reflects a response body back to them.
+
+**Cost to change:** Low.

@@ -75,6 +75,8 @@ type ApplyResult = {
   orders_created?: number
   orders_updated?: number
   items_written?: number
+  products_created?: number
+  products_updated?: number
 }
 
 /**
@@ -236,12 +238,21 @@ async function runOneJob(job: JobRow): Promise<JobOutcome> {
 
   if (records.length > 0) {
     try {
-      const outcome = await callTrusted<ApplyResult>("sync_apply_orders", {
-        p_job_id: job.id,
-        p_rows: records as unknown as RawRecord[],
-      })
+      // Which apply function is a property of the RESOURCE, not the provider.
+      // Both take a job id and derive the tenant from it, so neither can be
+      // pointed at another business.
+      const isProducts =
+        context.resource === "PRODUCTS" || context.resource === "INVENTORY"
 
-      applied = (outcome?.orders_created ?? 0) + (outcome?.orders_updated ?? 0)
+      const outcome = await callTrusted<ApplyResult>(
+        isProducts ? "sync_apply_products" : "sync_apply_orders",
+        { p_job_id: job.id, p_rows: records as unknown as RawRecord[] }
+      )
+
+      applied = isProducts
+        ? (outcome?.products_created ?? 0) + (outcome?.products_updated ?? 0)
+        : (outcome?.orders_created ?? 0) + (outcome?.orders_updated ?? 0)
+
       skipped = Math.max(records.length - applied, 0)
     } catch (applyError) {
       error =

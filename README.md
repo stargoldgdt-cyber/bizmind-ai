@@ -61,6 +61,7 @@ Full instructions, including how secrets are handled, are in
 | `npm run test:money-guard` | Fails the build on any money arithmetic in TypeScript |
 | `npm run test:money-boundary` | Proves exact decimals survive database → AI, live |
 | `npm run test:integration-engine` | The engine and fixture connector, no database |
+| `npm run test:woocommerce` | The WooCommerce connector, no store needed |
 | `npm run test:integration-live` | Tenant isolation and idempotency, live |
 | `npm run verify:integrations` | Both integration suites |
 | `npm run test:ai` | The number guard and safe degradation, no key needed |
@@ -89,6 +90,7 @@ Supabase (PostgreSQL, Auth, RLS) · OpenAI · Vercel
 | [AI.md](./AI.md) | How the AI is stopped from ever producing a figure |
 | [MONEY.md](./MONEY.md) | Why money is a string, and what keeps it exact |
 | [INTEGRATION_ENGINE.md](./INTEGRATION_ENGINE.md) | The sync and webhook engine connectors plug into |
+| [WOOCOMMERCE.md](./WOOCOMMERCE.md) | The first real connector, and what WooCommerce cannot tell us |
 | [ROADMAP.md](./ROADMAP.md) | **Phases 9–12: what is decided, what is not, what comes first** |
 | [PHASE9_INTEGRATIONS.md](./PHASE9_INTEGRATIONS.md) | Shopify + WooCommerce design |
 | [PHASE10_SYNC.md](./PHASE10_SYNC.md) | Sync and webhook reliability engine |

@@ -291,7 +291,8 @@ Work in phases. Do not jump ahead, and do not expand scope mid-phase.
 7.1 Source truth           ✅ complete, blank never becomes zero
 7.2 Canonical mapping      ✅ complete, no name becomes a fact
 8  AI business analyst      ✅ complete, AI cannot state a figure
-9  Shopify + WooCommerce    designed, not built — PHASE9_INTEGRATIONS.md
+9  WooCommerce connector    ✅ BUILT — WOOCOMMERCE.md
+   Shopify connector        designed, not built — PHASE9_INTEGRATIONS.md
 10 Sync + webhook engine    ✅ ENGINE BUILT — INTEGRATION_ENGINE.md
    + fixture connector      ✅ proves the engine with no network
 11 Alerts + automation      ARCHITECTED, not built — PHASE11_AUTOMATION.md

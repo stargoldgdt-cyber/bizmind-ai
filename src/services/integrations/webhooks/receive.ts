@@ -50,7 +50,7 @@ type LookupRow = {
 type IngestRow = {
   outcome: "ACCEPTED" | "DUPLICATE" | "REJECTED" | "UNKNOWN_ACCOUNT"
   event_id: string | null
-  business_id: string | null
+  resolved_business_id: string | null
 }
 
 export async function receiveWebhook(input: {

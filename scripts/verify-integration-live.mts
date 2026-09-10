@@ -409,7 +409,7 @@ try {
     const firstRow = first.body?.[0]
     check("a verified delivery is accepted", firstRow?.outcome === "ACCEPTED", JSON.stringify(firstRow))
     check("THE TENANT IS RESOLVED FROM THE CONNECTION, not from the request",
-      firstRow?.business_id === businessId
+      firstRow?.resolved_business_id === businessId
     )
 
     // Five redeliveries. Providers retry by design.
@@ -460,7 +460,7 @@ try {
     check("AN UNKNOWN STORE RESOLVES TO NOTHING",
       unknown.body?.[0]?.outcome === "UNKNOWN_ACCOUNT", JSON.stringify(unknown.body?.[0])
     )
-    check("and no business is invented for it", unknown.body?.[0]?.business_id === null)
+    check("and no business is invented for it", unknown.body?.[0]?.resolved_business_id === null)
 
     const forged = await serviceRpc("webhook_event_ingest", {
       p_provider: "FIXTURE",

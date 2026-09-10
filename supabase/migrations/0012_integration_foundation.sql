@@ -462,7 +462,15 @@ create or replace function public.webhook_event_ingest(
 returns table (
   outcome    text,   -- ACCEPTED | DUPLICATE | REJECTED | UNKNOWN_ACCOUNT
   event_id   uuid,
-  business_id uuid
+  /**
+   * Named `resolved_` rather than `business_id` deliberately.
+   *
+   * In a plpgsql function an OUT parameter is a variable in scope, and a
+   * variable sharing a name with a column makes `on conflict (business_id, ...)`
+   * ambiguous. The lookup functions beside this one are `language sql`, where
+   * no such substitution happens -- this is the one that needed the care.
+   */
+  resolved_business_id uuid
 )
 language plpgsql
 security definer
@@ -832,22 +840,28 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_job     public.sync_jobs;
-  v_account public.integration_accounts;
+  v_job      public.sync_jobs;
   v_provider public.integration_provider;
-  v_source  public.channel_type;
-  v_batch   uuid;
-  v_result  jsonb;
+  v_source   public.channel_type;
+  v_batch    uuid;
+  v_result   jsonb;
 begin
   select * into v_job from public.sync_jobs where id = p_job_id;
   if v_job.id is null then
     raise exception 'No such sync job.' using errcode = 'P0002';
   end if;
 
-  select a.*, i.provider into v_account, v_provider
+  -- Only the provider is needed, to pick the channel type. An earlier version
+  -- selected the whole account row alongside it, which PL/pgSQL refuses:
+  -- a record variable cannot share an INTO list with a scalar (42601).
+  select i.provider into v_provider
   from public.integration_accounts a
   join public.integrations i on i.id = a.integration_id
   where a.id = v_job.integration_account_id;
+
+  if v_provider is null then
+    raise exception 'That sync job has no connected account.' using errcode = 'P0002';
+  end if;
 
   v_source := case v_provider
                 when 'SHOPIFY' then 'SHOPIFY'::public.channel_type

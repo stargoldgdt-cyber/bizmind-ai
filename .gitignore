@@ -59,3 +59,6 @@ next-env.d.ts
 .idea/
 *.swp
 *.swo
+
+# Supabase CLI scratch files
+supabase/.temp/

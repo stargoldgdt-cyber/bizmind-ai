@@ -54,6 +54,22 @@ const TRUSTED_FUNCTIONS = [
   "sync_apply_products",
   "sync_run_start",
   "sync_job_complete",
+  /**
+   * Automation (migration 0016).
+   *
+   * `automation_claim_due` is the one function here that deliberately reads
+   * across every tenant -- it answers "which rules are due?", which has no
+   * per-business form. That is safe only because it returns nothing but rule
+   * IDs, and `automation_evaluate_rule` then resolves each rule's business
+   * from the rule row itself. Neither takes a business id, so the refusal
+   * below still holds for both.
+   *
+   * They live on this list rather than behind a second privileged module
+   * because a product with two service-role doors has twice the number of
+   * places a future mistake can become a cross-tenant one.
+   */
+  "automation_claim_due",
+  "automation_evaluate_rule",
 ] as const
 
 export type TrustedFunction = (typeof TRUSTED_FUNCTIONS)[number]

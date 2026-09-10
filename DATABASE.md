@@ -614,6 +614,78 @@ All are `SECURITY INVOKER`, so RLS applies inside them.
 
 ---
 
+## 7d. Automation and alerts (migrations 0016, 0017)
+
+Full explanation in [AUTOMATION.md](AUTOMATION.md). What the schema does:
+
+### canonical_metrics gains `analytics_key`
+
+A rule targets a **canonical** metric — `marketplace_fees` — but the analytics
+functions return a column called `fees`. The mapping already existed in
+`src/services/metrics/canonical.ts` as `analyticsKey`; 0016 copies it here so a
+rule can be resolved in SQL without asking the application.
+
+`NULL` means the analytics engine does not publish that metric, so no rule can
+fire on it. The evaluator records `NO_ANALYTICS_KEY` rather than treating the
+absence as a comparison that failed.
+
+### Three tables
+
+| Table | Holds |
+| --- | --- |
+| `automation_rules` | Standing instructions: metric, operator, threshold, period |
+| `automation_runs` | **Every** evaluation, including the ones that fired nothing |
+| `alerts` | What fired, with the figure that fired it copied onto the row |
+
+`automation_runs` is the one worth arguing for. A table of alerts records what
+happened; only this records what *didn't*, and why — which is the question an
+owner asks after something goes wrong.
+
+### Evaluation is a database function
+
+`automation_evaluate_rule(p_rule_id)` reads `analytics_financials()` (or
+`analytics_compare()` for a percentage change), compares in SQL, writes a run
+row, and raises an alert only if the comparison matched. Nothing is compared in
+TypeScript, so an alert can never disagree with the dashboard.
+
+It takes a **rule id, never a business id**: the tenant is read off the rule
+row. That is the same trusted-resolution pattern the sync functions use, and it
+is why the privileged path can refuse any call carrying a business id.
+
+### The worker's claim crosses tenants; nothing else does
+
+| Function | Security | Granted to |
+| --- | --- | --- |
+| `automation_claim_due()` | DEFINER | `service_role` **only** |
+| `automation_evaluate_rule()` | DEFINER, membership-checked when a session exists | `authenticated`, `service_role` |
+| `automation_evaluate_business()` | DEFINER, membership-checked | `authenticated` |
+| `alert_acknowledge()` | INVOKER — RLS scopes it | `authenticated` |
+
+`automation_claim_due()` answers "which rules are due?", which has no
+per-business form. It returns nothing but rule IDs, and is deliberately absent
+from `src/types/database.ts` so it cannot be reached from a session-scoped
+client. Migration 0016 refuses to install if `authenticated` can execute it.
+
+### Alerts carry their own operator (0017)
+
+0016 copied metric, value, threshold and period onto each alert so it could be
+read months later without depending on a rule that may since have changed. It
+did not copy the **operator** — and without it a `CHANGE_PCT` alert on revenue
+(a percentage) and a value alert on revenue (money) are indistinguishable on
+the row. 0017 adds it, `NOT NULL`, and asserts that before committing.
+
+### Policies
+
+RLS is enabled **and forced** on all three tables. Four policies each: any
+member reads; OWNER/ADMIN insert, update and delete rules; any member updates
+an alert, because acknowledging is the job of whoever deals with it.
+
+0016 revokes the Supabase default privileges from `anon` and `authenticated`
+before granting anything back, and refuses to install if `anon` can still read
+any of the three.
+
+---
+
 ## 8. Regenerating types
 
 `src/types/database.ts` is currently hand-written to match the migrations. Keep

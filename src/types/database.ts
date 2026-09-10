@@ -138,6 +138,54 @@ export type WebhookEventStatus =
 
 export type SyncResourceKey = "ORDERS" | "PRODUCTS" | "CUSTOMERS" | "INVENTORY"
 
+/* ---- Automation (migration 0016) ----------------------------------------- */
+
+/**
+ * How a rule compares a metric to its threshold.
+ *
+ * `CHANGE_PCT_*` compare the period-on-period percentage change instead of the
+ * value, so "revenue fell by more than 20%" is `CHANGE_PCT_LT` with a
+ * threshold of `-20`.
+ */
+export type AutomationOperator =
+  | "LT"
+  | "LTE"
+  | "GT"
+  | "GTE"
+  | "CHANGE_PCT_LT"
+  | "CHANGE_PCT_GT"
+
+export type AlertSeverity = "INFO" | "WARNING" | "CRITICAL"
+
+export type AlertStatus = "OPEN" | "ACKNOWLEDGED" | "RESOLVED"
+
+export type AutomationRunStatus =
+  | "FIRED"
+  | "NOT_MATCHED"
+  /** Deliberately not judged. `skipped_reason` says why. */
+  | "SKIPPED"
+  | "FAILED"
+
+/**
+ * Why an evaluation declined to reach a verdict.
+ *
+ * These exist so "why didn't I get an alert?" has an answer. A silent
+ * non-event is indistinguishable from a broken rule, and an owner who cannot
+ * tell them apart stops relying on alerts altogether.
+ */
+export type AutomationSkipReason =
+  /** The rule fired recently and is inside its cooldown window. */
+  | "COOLDOWN"
+  /** The figure could not be measured — no orders, or a ratio with no base. */
+  | "METRIC_NULL"
+  /** Cost or fee coverage is short, so a profit figure would be overstated. */
+  | "INCOMPLETE_DATA"
+  | "DISABLED"
+  /** The metric exists in the vocabulary but analytics does not publish it. */
+  | "NO_ANALYTICS_KEY"
+  /** `analytics_compare()` produces no period-on-period change for it. */
+  | "NO_COMPARISON"
+
 export type InventoryMovementType =
   | "PURCHASE"
   | "SALE"
@@ -848,6 +896,16 @@ export type Database = {
         Row: {
           key: string
           origin: MetricOrigin
+          /**
+           * The column this metric occupies in the analytics functions —
+           * `marketplace_fees` lives in a column called `fees`. Copied from
+           * `analyticsKey` in canonical.ts by migration 0016 so an automation
+           * rule can be resolved in SQL without asking the application.
+           *
+           * NULL means analytics does not publish it, so no rule can fire on
+           * it — which the evaluator records rather than treating as false.
+           */
+          analytics_key: string | null
           created_at: string
         }
         /** Written by migrations only. No tenant may add a metric. */
@@ -1220,6 +1278,152 @@ export type Database = {
           },
         ]
       }
+
+      /* ---- Automation (migration 0016) --------------------------------- */
+
+      automation_rules: {
+        /**
+         * A standing instruction: watch this metric, tell me when it crosses
+         * this line.
+         *
+         * `threshold` is `numeric` and therefore a string, like every other
+         * figure here. It is never compared in TypeScript — the comparison
+         * happens inside `automation_evaluate_rule()`, so an alert can never
+         * be based on a number that differs from the dashboard's.
+         */
+        Row: Tenanted & {
+          name: string
+          description: string | null
+          enabled: boolean
+          metric: string
+          operator: AutomationOperator
+          threshold: Numeric
+          period_days: number
+          severity: AlertSeverity
+          cooldown_hours: number
+          evaluate_every_minutes: number
+          next_run_at: string
+          suppress_when_incomplete: boolean
+          /** Always true in V1: nothing executes, so nothing acts unapproved. */
+          requires_approval: boolean
+          created_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          name: string
+          description?: string | null
+          enabled?: boolean
+          metric: string
+          operator: AutomationOperator
+          threshold: Numeric
+          period_days?: number
+          severity?: AlertSeverity
+          cooldown_hours?: number
+          evaluate_every_minutes?: number
+          suppress_when_incomplete?: boolean
+          created_by?: string | null
+        }
+        Update: {
+          name?: string
+          description?: string | null
+          enabled?: boolean
+          metric?: string
+          operator?: AutomationOperator
+          threshold?: Numeric
+          period_days?: number
+          severity?: AlertSeverity
+          cooldown_hours?: number
+          evaluate_every_minutes?: number
+          suppress_when_incomplete?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_rules_metric_fkey"
+            columns: ["metric"]
+            isOneToOne: false
+            referencedRelation: "canonical_metrics"
+            referencedColumns: ["key"]
+          },
+        ]
+      }
+
+      automation_runs: {
+        /**
+         * One evaluation, whatever came of it.
+         *
+         * The rows that did NOT fire are the valuable ones. A table of alerts
+         * records what happened; only this records what didn't, and why.
+         */
+        Row: Tenanted & {
+          rule_id: string
+          evaluated_at: string
+          status: AutomationRunStatus
+          metric_value: Numeric | null
+          /** Null on a FAILED run that never got far enough to know it. */
+          threshold: Numeric | null
+          skipped_reason: AutomationSkipReason | null
+          alert_id: string | null
+          error: string | null
+        }
+        /** Written by `automation_evaluate_rule()`, never by hand. */
+        Insert: never
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: "automation_runs_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "automation_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+
+      alerts: {
+        /**
+         * The metric, value, threshold and period are COPIED here rather than
+         * joined from the rule. A rule can be edited afterwards, and an alert
+         * that re-read its rule would quietly rewrite its own history.
+         */
+        Row: Tenanted & {
+          rule_id: string | null
+          run_id: string | null
+          severity: AlertSeverity
+          title: string
+          body: string
+          metric: string
+          metric_value: Numeric
+          threshold: Numeric
+          period_days: number
+          /**
+           * How the comparison was made (migration 0017).
+           *
+           * Without this, a CHANGE_PCT alert on revenue and a value alert on
+           * revenue are indistinguishable on the row — one stores a
+           * percentage and the other stores money, and both say
+           * `metric: "revenue"`. The display layer needs it to know whether
+           * to print a currency symbol.
+           */
+          operator: AutomationOperator
+          status: AlertStatus
+          acknowledged_by: string | null
+          acknowledged_at: string | null
+        }
+        /** Raised by `automation_evaluate_rule()` alone. */
+        Insert: never
+        /** Acknowledged through `alert_acknowledge()`, which stamps the actor. */
+        Update: { status?: AlertStatus }
+        Relationships: [
+          {
+            foreignKeyName: "alerts_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "automation_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
 
     Views: Record<never, never>
@@ -1582,6 +1786,28 @@ export type Database = {
         Args: { p_event_id: string }
         Returns: Database["public"]["Tables"]["webhook_events"]["Row"]
       }
+
+      /* ---- Automation (migration 0016) ---------------------------------
+       * `automation_claim_due` is absent on purpose. It reads rules across
+       * every business, is granted to service_role alone, and is reached only
+       * through `callTrusted()`. Typing it here would put a cross-tenant
+       * function within reach of the session-scoped client. */
+
+      automation_evaluate_rule: {
+        Args: { p_rule_id: string }
+        Returns: Database["public"]["Tables"]["automation_runs"]["Row"]
+      }
+
+      /** Returns how many rules fired. */
+      automation_evaluate_business: {
+        Args: { p_business_id: string }
+        Returns: number
+      }
+
+      alert_acknowledge: {
+        Args: { p_alert_id: string }
+        Returns: Database["public"]["Tables"]["alerts"]["Row"]
+      }
     }
 
     Enums: {
@@ -1594,6 +1820,10 @@ export type Database = {
       import_entity: ImportEntity
       import_status: ImportStatus
       mapping_status: MappingStatus
+      automation_operator: AutomationOperator
+      alert_severity: AlertSeverity
+      alert_status: AlertStatus
+      automation_run_status: AutomationRunStatus
     }
 
     CompositeTypes: Record<never, never>
@@ -1632,6 +1862,9 @@ export type SyncJob = T["sync_jobs"]["Row"]
 export type SyncRun = T["sync_runs"]["Row"]
 export type SyncLog = T["sync_logs"]["Row"]
 export type WebhookEvent = T["webhook_events"]["Row"]
+export type AutomationRule = T["automation_rules"]["Row"]
+export type AutomationRun = T["automation_runs"]["Row"]
+export type Alert = T["alerts"]["Row"]
 
 /** A business plus the calling user's role in it. */
 export type BusinessWithRole = Business & { role: BusinessRole }

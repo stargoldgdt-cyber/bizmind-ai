@@ -107,8 +107,13 @@ export const config = {
    * that store and this business share, and their tenant is resolved from a
    * connection an owner created — never from the request.
    * See `src/services/integrations/webhooks/receive.ts`.
+   *
+   * The automation worker route is excluded for the same reason: a cron
+   * service carries no session, so the auth round trip buys nothing. Its
+   * authentication is a shared secret compared in constant time, and it
+   * refuses every request when that secret is not configured.
    */
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/v1/webhooks|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff2?)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/v1/webhooks|api/v1/automation/run|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff2?)$).*)",
   ],
 }

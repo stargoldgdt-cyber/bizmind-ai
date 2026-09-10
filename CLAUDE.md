@@ -295,7 +295,8 @@ Work in phases. Do not jump ahead, and do not expand scope mid-phase.
    Shopify connector        designed, not built — PHASE9_INTEGRATIONS.md
 10 Sync + webhook engine    ✅ ENGINE BUILT — INTEGRATION_ENGINE.md
    + fixture connector      ✅ proves the engine with no network
-11 Alerts + automation      ARCHITECTED, not built — PHASE11_AUTOMATION.md
+11 Alerts + automation      ✅ BUILT — AUTOMATION.md
+   rule-based only; nothing executes, and no model may fire an alert
 12 AI recommendations       ARCHITECTED, not built — PHASE12_AI_RECOMMENDATIONS.md
 13 Generic REST API
 14 Audit + security hardening

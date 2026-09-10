@@ -68,6 +68,8 @@ Nobody else can reach it. Press `Ctrl + C` in the terminal to stop it.
 | `npm run test:money-boundary` | Proves no penny is lost between database and screen |
 | `npm run verify:integrations` | Proves one business cannot touch another's integrations |
 | `npm run test:woocommerce` | Proves the WooCommerce mapping never invents a figure |
+| `npm run test:automation` | Proves an alert rule that could never fire cannot be saved |
+| `npm run test:automation-live` | Proves an alert stays quiet on a figure it cannot trust |
 | `npm run test:ai` | Proves the AI can never show you an invented number |
 | `npm run ai:check` | Checks your OpenAI key and writes one real explanation |
 

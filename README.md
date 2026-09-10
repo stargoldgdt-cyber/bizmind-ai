@@ -63,6 +63,8 @@ Full instructions, including how secrets are handled, are in
 | `npm run test:integration-engine` | The engine and fixture connector, no database |
 | `npm run test:woocommerce` | The WooCommerce connector, no store needed |
 | `npm run test:integration-live` | Tenant isolation and idempotency, live |
+| `npm run test:automation` | Alert rules, thresholds and the migration guards, no database |
+| `npm run test:automation-live` | Proves a rule stays silent when it should, live |
 | `npm run verify:integrations` | Both integration suites |
 | `npm run test:ai` | The number guard and safe degradation, no key needed |
 | `npm run ai:check` | Verifies the OpenAI key, model and one real explanation |

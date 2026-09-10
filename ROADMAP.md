@@ -1,14 +1,21 @@
 # Roadmap — Phases 9 to 12
 
-**Everything here is designed and nothing is built.** No connector exists, no
-credentials have been created, no vendor has been contacted.
+**This file was written when all four phases were designs.** Three have since
+been built, and the `PHASE*` documents below are kept as the record of what was
+*intended* — where a built phase departed from its design, the built document
+is the authority.
 
-| Phase | Document | State |
+| Phase | Designed as | State |
 | --- | --- | --- |
-| 9 — Shopify + WooCommerce | [PHASE9_INTEGRATIONS.md](PHASE9_INTEGRATIONS.md) | Designed. Blocked on 6 decisions |
-| 10 — Sync + webhook engine | [PHASE10_SYNC.md](PHASE10_SYNC.md) | Designed. Blocked on 5 |
-| 11 — Alerts + automation | [PHASE11_AUTOMATION.md](PHASE11_AUTOMATION.md) | Designed. Blocked on 5 |
-| 12 — AI recommendations | [PHASE12_AI_RECOMMENDATIONS.md](PHASE12_AI_RECOMMENDATIONS.md) | Designed. Blocked on 6 |
+| 10 — Sync + webhook engine | [PHASE10_SYNC.md](PHASE10_SYNC.md) | ✅ **Built** — [INTEGRATION_ENGINE.md](INTEGRATION_ENGINE.md) |
+| 9 — WooCommerce | [PHASE9_INTEGRATIONS.md](PHASE9_INTEGRATIONS.md) | ✅ **Built** — [WOOCOMMERCE.md](WOOCOMMERCE.md). Never run against a real store |
+| 9 — Shopify | [PHASE9_INTEGRATIONS.md](PHASE9_INTEGRATIONS.md) | Designed. **Deferred by the owner.** Blocked on 6 decisions |
+| 11 — Alerts + automation | [PHASE11_AUTOMATION.md](PHASE11_AUTOMATION.md) | ✅ **Built** — [AUTOMATION.md](AUTOMATION.md) |
+| 12 — AI recommendations | [PHASE12_AI_RECOMMENDATIONS.md](PHASE12_AI_RECOMMENDATIONS.md) | Designed. Blocked on 3 |
+
+The engine was built before the first connector, against a fixture connector,
+exactly as §1 recommended — and nothing in the engine changed to accommodate
+WooCommerce afterwards, which was the point.
 
 ---
 
@@ -115,13 +122,22 @@ a duplicate channel and quietly splits the history.
 9. Cron cadence, and whether a nightly reconciliation sweep is V1.
 10. Whether a missed-webhook detector is V1.
 
-**Blocking Phase 11**
+**Phase 11 — settled during the build (see AUTOMATION.md)**
 
-11. **Inventory-days and receivables metrics do not exist.** Two of the five
-    example rules cannot be built until the model supports them. Receivables
-    would need invoices, which the universal data model does not have.
-12. Notification channel — in-app only, or email.
-13. Evaluation cadence and cooldown semantics.
+11. ~~Inventory-days and receivables metrics do not exist.~~ **Confirmed and
+    accepted.** Both rules are not built rather than approximated. Days-of-cover
+    needs a per-SKU sales rate the model does not carry; receivables needs
+    invoices, which it does not have at all. A third gap surfaced: `refund_rate`
+    is computed by analytics but is not in the canonical vocabulary, so no rule
+    can target it — the refunds template watches the month-on-month change
+    instead. Adding it to the vocabulary is a small follow-up.
+12. Notification channel — **still open.** V1 is in-app only: alerts are rows an
+    owner sees when they look. Email or push is the obvious next step and needs
+    a provider decision.
+13. ~~Evaluation cadence and cooldown semantics.~~ **Settled.** Cadence is
+    per-rule (`evaluate_every_minutes`, default 60) with the worker claiming
+    what is due; cooldown is per-rule hours since the last **FIRED** run,
+    default 24. Zero is permitted and is not the default.
 
 **Blocking Phase 12**
 
@@ -151,18 +167,25 @@ Nothing below can be done from the terminal.
 9. Confirm the store is served over HTTPS.
 
 **Before Phase 10**
-10. Add the cron schedule to `vercel.json`.
+10. Add the cron schedule to `vercel.json`. **Still outstanding, and it now
+    covers two workers: the sync worker and `/api/v1/automation/run`.** Until
+    it exists, rules are only evaluated when somebody presses "run now".
 11. Set webhook signing secrets in environment variables.
 
+**Before Phase 11 runs on a schedule**
+12. Set `CRON_SECRET` in the hosting environment. The automation route refuses
+    every request while it is unset — deliberately, so a missing variable
+    cannot quietly become a public endpoint.
+
 **Before Phase 11 (only if email is chosen)**
-12. Choose a provider and verify a sending domain.
+13. Choose a provider and verify a sending domain. V1 is in-app only.
 
 **Before Phase 12**
-13. Nothing. The OpenAI key is configured and verified.
+14. Nothing. The OpenAI key is configured and verified.
 
 **Carried over from earlier phases, still outstanding**
-14. **Re-enable "Confirm email" in Supabase before real customers.** It is off.
-15. Delete the two throwaway QA users (`qa-primary-…`, `qa-secondary-…`).
+15. **Re-enable "Confirm email" in Supabase before real customers.** It is off.
+16. Delete the two throwaway QA users (`qa-primary-…`, `qa-secondary-…`).
 
 ---
 

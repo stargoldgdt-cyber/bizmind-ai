@@ -87,12 +87,28 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   /**
-   * Run on everything except static assets and image files.
+   * Run on everything except static assets and the webhook endpoints.
    *
-   * Without this exclusion the auth check would also run for CSS, JavaScript
-   * and images, which is wasted work and can block those assets from loading.
+   * Without the asset exclusion the auth check would also run for CSS,
+   * JavaScript and images, which is wasted work and can block those assets
+   * from loading.
+   *
+   * THE WEBHOOK EXCLUSION IS NOT THE SAME KIND OF OPTIMISATION.
+   *
+   * `proxy()` calls `supabase.auth.getUser()` — a network round trip to the
+   * auth server — on every path it matches. A webhook carries no session, so
+   * that round trip buys nothing, and it spends part of a budget that is not
+   * ours: Shopify allows five seconds in total for a delivery and DELETES the
+   * subscription after eight consecutive failures. The punishment for being
+   * slow here is silent: no error, just a store that stops updating.
+   *
+   * Excluding these routes does not make them public. Their authentication is
+   * the provider's signature, verified in constant time against a secret only
+   * that store and this business share, and their tenant is resolved from a
+   * connection an owner created — never from the request.
+   * See `src/services/integrations/webhooks/receive.ts`.
    */
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff2?)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/v1/webhooks|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff2?)$).*)",
   ],
 }

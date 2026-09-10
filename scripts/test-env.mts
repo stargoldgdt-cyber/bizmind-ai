@@ -51,6 +51,18 @@ export const OPENAI_API_KEY = read("OPENAI_API_KEY")
 export const OPENAI_MODEL = read("OPENAI_MODEL")
 
 /**
+ * The service-role key, for the integration suite only.
+ *
+ * Absent by default. The suite SKIPS its trusted-path sections loudly rather
+ * than passing them silently: a security test that quietly did not run is
+ * worse than one that failed.
+ */
+export const SUPABASE_SERVICE_ROLE_KEY = read("SUPABASE_SERVICE_ROLE_KEY")
+
+/** Needed to seal integration credentials. */
+export const BIZMIND_ENCRYPTION_KEY = read("BIZMIND_ENCRYPTION_KEY")
+
+/**
  * Exits with a readable message rather than a stack trace, because these
  * suites are usually run by hand.
  */

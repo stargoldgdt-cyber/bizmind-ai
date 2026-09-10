@@ -106,6 +106,14 @@ Non-negotiable:
 4. Never use the Supabase **service-role key** to serve a user request. It
    bypasses RLS. It is for trusted background jobs only, and never reaches the
    browser.
+
+   Two such jobs exist: the webhook receiver and the sync worker, neither of
+   which has a session. The key is confined to two modules under
+   `src/services/integrations/security/`, `callTrusted()` can only reach
+   tenant-resolving functions, and **a call carrying a business id is
+   refused** — because those functions derive their own tenant and there must
+   be no parameter to point at another one. A test fails the build if the key
+   appears anywhere else. See INTEGRATION_ENGINE.md.
 5. Every new table needs its RLS policy written in the same migration that
    creates it.
 
@@ -283,8 +291,9 @@ Work in phases. Do not jump ahead, and do not expand scope mid-phase.
 7.1 Source truth           ✅ complete, blank never becomes zero
 7.2 Canonical mapping      ✅ complete, no name becomes a fact
 8  AI business analyst      ✅ complete, AI cannot state a figure
-9  Shopify + WooCommerce    ARCHITECTED, not built — PHASE9_INTEGRATIONS.md
-10 Sync + webhook engine    ARCHITECTED, not built — PHASE10_SYNC.md
+9  Shopify + WooCommerce    designed, not built — PHASE9_INTEGRATIONS.md
+10 Sync + webhook engine    ✅ ENGINE BUILT — INTEGRATION_ENGINE.md
+   + fixture connector      ✅ proves the engine with no network
 11 Alerts + automation      ARCHITECTED, not built — PHASE11_AUTOMATION.md
 12 AI recommendations       ARCHITECTED, not built — PHASE12_AI_RECOMMENDATIONS.md
 13 Generic REST API

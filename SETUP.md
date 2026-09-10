@@ -66,6 +66,7 @@ Nobody else can reach it. Press `Ctrl + C` in the terminal to stop it.
 | `npm run test:migration-0010` | Checks the newest database change really holds |
 | `npm run test:money-guard` | Stops anyone doing money sums in the app code |
 | `npm run test:money-boundary` | Proves no penny is lost between database and screen |
+| `npm run verify:integrations` | Proves one business cannot touch another's integrations |
 | `npm run test:ai` | Proves the AI can never show you an invented number |
 | `npm run ai:check` | Checks your OpenAI key and writes one real explanation |
 
@@ -119,6 +120,27 @@ database already calculated, and any explanation containing a figure that is
 not in your records is thrown away rather than shown. See [AI.md](AI.md).
 
 Supabase is set up below.
+
+### Keys the integration engine needs
+
+Two more secrets, both server-side only.
+
+**`BIZMIND_ENCRYPTION_KEY`** encrypts integration credentials before they are
+stored. Generate one and put it in `.env.local`:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+**Changing this key makes every stored credential unreadable** and every store
+would have to be reconnected. Treat it like a database password.
+
+**`SUPABASE_SERVICE_ROLE_KEY`** is on your Supabase dashboard under
+Settings → API. It is needed because a webhook arrives with no signed-in user,
+so the usual security cannot work out whose data it is. It is read in exactly
+two files and a test fails the build if it appears anywhere else.
+
+Both go in `.env.local`, which Git ignores. Never paste either into a chat.
 
 ### Credentials for the test suites
 

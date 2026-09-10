@@ -1,0 +1,268 @@
+# The integration engine
+
+**Built and tested. No real provider is connected to it yet.**
+
+Shopify and WooCommerce plug in here. This document describes what they plug
+into, and — more usefully — the rules they will not be able to break.
+
+---
+
+## 1. The dividing line
+
+```
+Connector          how to ask one provider for a page, and what its
+                   signature header means
+
+Engine             when to ask, what to do when it fails, how to be sure the
+                   same order is not written twice, and whose data it is
+```
+
+A connector that retries, schedules, or decides a tenant has taken a job that
+belongs to the engine — and taken it once per provider. That is how the sixth
+integration ends up costing as much as the first.
+
+A connector may **not**: write to a business table, calculate a financial
+figure, decide which business a record belongs to, or retry.
+
+---
+
+## 2. The session-less path
+
+Every other table in this database is protected by RLS keyed on `auth.uid()`.
+A webhook has no session. `write_audit_log()` even raises
+`28000 Not authenticated` without one — so the path had to be built explicitly.
+
+```
+provider + external account id  →  integration_accounts  →  business_id
+```
+
+**The business is derived from a connection row an authenticated owner
+created.** It is never read from a request body, a header, or a query
+parameter. An unrecognised store resolves to nothing and the delivery is
+dropped: it is not guessed at, and it does not become somebody else's.
+
+### The order of operations is the security model
+
+```
+1. read the RAW body            bytes, untouched
+2. identify the provider        from the path, against a registry
+3. identify the store           from headers — still untrusted
+4. resolve the connection       the ONLY source of the tenant
+5. verify the signature         constant time, over the raw body
+6. persist                      a unique key decides duplicates
+7. return quickly               processing happens later
+```
+
+Nothing before step 4 is trusted. Nothing after step 5 happens if verification
+failed.
+
+### Why it returns before processing
+
+Shopify allows **five seconds in total** and **deletes the subscription after
+eight consecutive failures**. Normalising and writing inline would eventually
+exceed that on a busy store, and the punishment is silent — no error, just a
+store that quietly stops updating.
+
+---
+
+## 3. Privilege, and how little of it there is
+
+Two modules hold the service-role key, both under
+`src/services/integrations/security/`:
+
+| Module | Does |
+| --- | --- |
+| `privileged.ts` | Calls an **allowlist** of tenant-resolving functions |
+| `store-secrets.ts` | Writes two credential columns on one table |
+
+`privileged.ts` never exports the client. It exports `callTrusted()`, which:
+
+- refuses any function not on the allowlist, **at runtime as well as in the
+  type** — a type is erased, and this is the one place being wrong is expensive
+- **refuses any call carrying a business id**, because every function it can
+  reach derives its own tenant and there must be no parameter to point at
+  another one
+
+CLAUDE.md forbids the service-role key for serving a *user request*. That rule
+is not bent: a verified vendor callback and a scheduled worker are background
+jobs, which is the case it explicitly allows.
+
+A test asserts the key appears in exactly those two files.
+
+---
+
+## 4. Credentials
+
+AES-256-GCM from Node's own `crypto`. The key lives in
+`BIZMIND_ENCRYPTION_KEY`, in the environment — **never in the database**, so a
+database backup on its own does not yield a usable credential.
+
+Every ciphertext is bound to a context: `business_id` + purpose. The attack
+this defends against is not "read the secret" but **"move a valid secret to a
+row where it authorises something else"**. A ciphertext carried across tenants
+fails authentication rather than decrypting.
+
+Format `v1.<iv>.<tag>.<ciphertext>` — versioned so the scheme can be rotated
+without guessing what an old value was.
+
+### The columns are unreadable by users
+
+Migration 0012 **revokes SELECT, INSERT and UPDATE on the credential columns
+from `authenticated`**. RLS decides which *rows* are visible; a column grant
+decides which *columns*. Without this an owner could read their own encrypted
+tokens through PostgREST — and "encrypted" is not "safe to hand to a browser".
+
+`SELECT *` does not smuggle them out either. A test proves it.
+
+---
+
+## 5. Connection identity
+
+`external_account_id` is the provider's own permanent name for a store: a
+`myshopify.com` domain, a WooCommerce site URL.
+
+Connecting is an **upsert** on `(business_id, integration_id, external_account_id)`,
+and the channel is carried across.
+
+**Why this matters more than it looks.** A second channel for the same store
+would split its history in two, and every figure that groups by channel would
+quietly halve. Nobody would see an error.
+
+A partial unique index on `(integration_id, external_account_id)`
+`where status <> 'DISCONNECTED'` means **one live store belongs to exactly one
+business**. Without it the same shop could be connected by two customers and a
+webhook would resolve ambiguously — a cross-tenant leak wearing the costume of
+a feature request. It is partial so a store can be disconnected and later
+connected by someone else.
+
+---
+
+## 6. Idempotency, decided by the database
+
+**Webhooks.** `unique (business_id, idempotency_key)` on `webhook_events`.
+
+Not an application-level "if exists" check: two concurrent redeliveries both
+pass an existence check and both insert. Only the database can decide this
+once. Five redeliveries produce one row, one processing result, and zero
+duplicate business mutations — asserted live.
+
+**Sync.** The existing partial unique index
+`(business_id, source, external_id)` from migration 0002. A provider repeating
+a record across pages is ordinary, not exotic: anything ordered by an
+`updated_at` that ticks during a sync will do it.
+
+Two independent defences, both already proven by earlier phases.
+
+---
+
+## 7. The sync lifecycle
+
+```
+QUEUED → RUNNING → SUCCEEDED
+                 → PARTIAL        some rows applied, cursor still advanced
+                 → RETRYING       backoff, then claimed again
+                 → DEAD_LETTER    out of attempts. Needs a person
+```
+
+**One page per claim.** A serverless function has a wall-clock limit, and a
+worker that must finish a whole store or lose its progress never finishes a
+large store. Because the cursor is durable, being cut off costs one page.
+
+**The cursor is written last.** Advancing it before the records are applied
+would skip data on a crash — silently, with nothing to notice.
+
+**Retry:** exponential from 30s, capped at 8h, with **full jitter** — a random
+point in `[0, exponential]`. Without it a thousand connections failing on one
+provider outage retry in lockstep and become the outage.
+
+**A rate limit is not a failure.** The attempt is refunded. Charging one would
+kill a healthy sync of a busy store.
+
+**A permanent error skips the queue.** A revoked token cannot be fixed by
+waiting, so it goes straight to `DEAD_LETTER` rather than burning seven
+attempts discovering that.
+
+**Partial failure applies the good rows.** Losing 247 orders because 3 were
+malformed protects nothing; the 3 are recorded in `import_issues`.
+
+**Claiming uses `FOR UPDATE SKIP LOCKED`** — the second worker walks past a
+held row rather than blocking on it or duplicating it.
+
+---
+
+## 8. Nothing bypasses the ingestion pipeline
+
+```
+SOURCE → RAW → MAPPING → VALIDATION → NORMALIZATION → CANONICAL → ANALYTICS
+```
+
+A connector produces `RawRecord`s. `sync_apply_orders()` and
+`webhook_apply_records()` create an import batch and call the **existing**
+`import_apply_orders()` — the same function the CSV importer uses, with the
+same validation, the same idempotency, and the same refusal to turn a blank
+into a zero.
+
+Both take a **job id** or an **event id**, never a business id: the tenant is
+derived, so a worker cannot be pointed at another one.
+
+A test asserts no file under `src/services/integrations/` converts a money
+value to a number or imports the analytics service.
+
+---
+
+## 9. The fixture connector
+
+**Not a fake integration, and it produces no production data.** It exists to
+prove the engine.
+
+Every failure a real provider will eventually inflict is available on demand,
+deterministically, with no network and no credentials: a rate limit, a 500 that
+clears, a revoked token, a page that repeats a record, a page with one
+unusable row, a forged signature, a delivery with no identity.
+
+Behaviour is chosen by a `scenario` in the connection metadata, so a test asks
+for the failure it wants rather than waiting for one.
+
+The scenarios that clear on the second attempt are the important ones: they let
+a test assert the engine **recovered**, not merely that it gave up politely.
+
+It uses `channelType: "OTHER"` rather than a new enum value — a test-only
+concept has no business widening a production enum that analytics groups by.
+
+---
+
+## 10. Tests
+
+```bash
+npm run test:integration-engine   # 75 assertions, no database, no network
+npm run test:integration-live     # against the real database
+npm run verify:integrations       # both
+```
+
+The offline suite covers crypto (including cross-tenant ciphertext rejection),
+signature comparison, the registry, pagination and cursor progression, every
+failure kind, duplicates and partial pages, webhook identification and
+verification, the narrowness of the privileged door, secret non-leakage, the
+raw-body rule, the proxy exclusion, and the absence of money arithmetic.
+
+The live suite covers connect and reconnect, credential unreadability, enqueue
+idempotency, tenant isolation, anonymous denial, webhook ingest and duplicate
+handling, unknown-store rejection, worker claiming under concurrency, replay
+authorisation, and disconnection.
+
+### Adversarial cases, all expected to be DENIED
+
+- B reads A's connections, jobs, runs, events, logs
+- **B disconnects A's connection using its id** (IDOR)
+- **B triggers a sync on A's connection**
+- **B replays A's webhook event using its id**
+- B inserts an integration into A's business
+- **A connects a store already live on another business**
+- A signed-in user calls any session-less function
+- Anonymous reads any integration table
+- An unverified delivery is replayed
+
+### Sections that need the service-role key are SKIPPED LOUDLY
+
+Never silently passed. A security test that quietly did not run is worse than
+one that failed.

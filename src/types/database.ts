@@ -108,6 +108,36 @@ export type MetricOrigin = "sourced" | "computed"
 
 export type MappingConfidence = "high" | "medium" | "low"
 
+/* ---- Integrations (migration 0012) --------------------------------------- */
+
+export type IntegrationProvider = "FIXTURE" | "WOOCOMMERCE" | "SHOPIFY"
+
+export type IntegrationStatus = "CONNECTED" | "ERROR" | "DISCONNECTED"
+
+export type SyncMode = "INITIAL" | "INCREMENTAL"
+
+export type SyncStatus =
+  | "QUEUED"
+  | "RUNNING"
+  | "SUCCEEDED"
+  /** Some records applied, some rejected. The cursor still advanced. */
+  | "PARTIAL"
+  | "RETRYING"
+  | "FAILED"
+  /** Out of attempts. Needs a person. */
+  | "DEAD_LETTER"
+
+export type WebhookEventStatus =
+  | "RECEIVED"
+  | "PROCESSING"
+  | "PROCESSED"
+  | "DUPLICATE"
+  | "FAILED"
+  | "DEAD_LETTER"
+  | "REJECTED"
+
+export type SyncResourceKey = "ORDERS" | "PRODUCTS" | "CUSTOMERS" | "INVENTORY"
+
 export type InventoryMovementType =
   | "PURCHASE"
   | "SALE"
@@ -997,6 +1027,165 @@ export type Database = {
         ]
       }
 
+      integrations: {
+        Row: Tenanted & {
+          provider: IntegrationProvider
+          status: IntegrationStatus
+          created_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          provider: IntegrationProvider
+          status?: IntegrationStatus
+        }
+        Update: { status?: IntegrationStatus }
+        Relationships: []
+      }
+
+      integration_accounts: {
+        /**
+         * One connected store.
+         *
+         * `credentials_encrypted` and `webhook_secret_encrypted` are absent
+         * from this Row on purpose: migration 0012 REVOKES select on those
+         * columns from `authenticated`, so a client-side read cannot return
+         * them. They are reachable only through the trusted server-side path.
+         */
+        Row: Tenanted & {
+          integration_id: string
+          external_account_id: string
+          display_name: string | null
+          status: IntegrationStatus
+          channel_id: string | null
+          metadata: Json
+          last_successful_sync_at: string | null
+          last_attempted_sync_at: string | null
+          last_error: string | null
+          connected_by: string | null
+          connected_at: string
+          revoked_at: string | null
+          updated_at: string
+        }
+        /** Written through `integration_account_connect()`, never directly. */
+        Insert: never
+        /**
+         * The credential columns appear here but NOT in Row, and that
+         * asymmetry is the point: migration 0012 revokes SELECT on them from
+         * `authenticated`, so nothing that reads a row may see them, while the
+         * one confined server-side writer may set them.
+         */
+        Update: {
+          display_name?: string | null
+          metadata?: Json
+          credentials_encrypted?: string | null
+          webhook_secret_encrypted?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_accounts_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+
+      sync_jobs: {
+        Row: Tenanted & {
+          integration_account_id: string
+          resource: SyncResourceKey
+          mode: SyncMode
+          status: SyncStatus
+          cursor: string | null
+          priority: number
+          next_run_at: string
+          attempts: number
+          max_attempts: number
+          locked_at: string | null
+          locked_until: string | null
+          locked_by: string | null
+          last_error: string | null
+          updated_at: string
+        }
+        /** Written through `sync_enqueue()`. */
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+
+      sync_runs: {
+        Row: {
+          id: string
+          business_id: string
+          job_id: string
+          attempt: number
+          started_at: string
+          completed_at: string | null
+          status: SyncStatus
+          records_fetched: number
+          records_applied: number
+          records_skipped: number
+          cursor_before: string | null
+          cursor_after: string | null
+          error_summary: string | null
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+
+      sync_logs: {
+        Row: Tenanted & {
+          run_id: string | null
+          level: "DEBUG" | "INFO" | "WARN" | "ERROR"
+          provider: IntegrationProvider | null
+          operation: string
+          duration_ms: number | null
+          context: Json
+          error: string | null
+        }
+        Insert: {
+          business_id: string
+          run_id?: string | null
+          level: "DEBUG" | "INFO" | "WARN" | "ERROR"
+          provider?: IntegrationProvider | null
+          operation: string
+          duration_ms?: number | null
+          context?: Json
+          error?: string | null
+        }
+        Update: never
+        Relationships: []
+      }
+
+      webhook_events: {
+        Row: {
+          id: string
+          business_id: string
+          integration_account_id: string
+          provider: IntegrationProvider
+          event_type: string
+          external_event_id: string
+          /** The unique constraint that makes a redelivery free. */
+          idempotency_key: string
+          raw_body: string
+          signature_valid: boolean
+          status: WebhookEventStatus
+          received_at: string
+          processed_at: string | null
+          attempts: number
+          max_attempts: number
+          next_run_at: string | null
+          last_error: string | null
+        }
+        /** Written only by `webhook_event_ingest()`, on the trusted path. */
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+
       audit_logs: {
         Row: Tenanted & {
           actor_id: string | null
@@ -1349,6 +1538,43 @@ export type Database = {
           records_preserved: number
         }[]
       }
+
+      /* ---- Integrations (migration 0012) -------------------------------
+       * Only the AUTHENTICATED functions are typed here. The session-less
+       * ones are granted to service_role alone and are reached exclusively
+       * through `callTrusted()`, which is where their contract is stated. */
+
+      integration_account_connect: {
+        Args: {
+          p_business_id: string
+          p_provider: IntegrationProvider
+          p_external_account_id: string
+          p_display_name: string | null
+          p_channel_type: ChannelType
+          p_metadata?: Json
+        }
+        Returns: Database["public"]["Tables"]["integration_accounts"]["Row"]
+      }
+
+      integration_account_revoke: {
+        Args: { p_account_id: string }
+        Returns: Database["public"]["Tables"]["integration_accounts"]["Row"]
+      }
+
+      sync_enqueue: {
+        Args: {
+          p_account_id: string
+          p_resource: SyncResourceKey
+          p_mode?: SyncMode
+          p_priority?: number
+        }
+        Returns: Database["public"]["Tables"]["sync_jobs"]["Row"]
+      }
+
+      webhook_event_replay: {
+        Args: { p_event_id: string }
+        Returns: Database["public"]["Tables"]["webhook_events"]["Row"]
+      }
     }
 
     Enums: {
@@ -1393,6 +1619,12 @@ export type SourceRecord = T["source_records"]["Row"]
 export type SourceFieldSemantics = T["source_field_semantics"]["Row"]
 export type SourceMappingProfile = T["source_mapping_profiles"]["Row"]
 export type SourceMappingProfileField = T["source_mapping_profile_fields"]["Row"]
+export type Integration = T["integrations"]["Row"]
+export type IntegrationAccount = T["integration_accounts"]["Row"]
+export type SyncJob = T["sync_jobs"]["Row"]
+export type SyncRun = T["sync_runs"]["Row"]
+export type SyncLog = T["sync_logs"]["Row"]
+export type WebhookEvent = T["webhook_events"]["Row"]
 
 /** A business plus the calling user's role in it. */
 export type BusinessWithRole = Business & { role: BusinessRole }

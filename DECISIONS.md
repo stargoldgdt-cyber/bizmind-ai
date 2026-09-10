@@ -1022,3 +1022,117 @@ serverless time limit truncates progress rather than losing it. Moving to a
 real queue later replaces the claimer and leaves the connectors untouched.
 
 **Cost to change:** Low, which is the point.
+
+---
+
+## 2026-09-10 — The session-less write path: two confined modules, not a key
+
+**Decided:** Webhook receipt and background sync use the Supabase service-role
+key, confined to two modules under `src/services/integrations/security/`.
+`privileged.ts` never exports the client; it exports `callTrusted()`, which
+can only reach an allowlist of SECURITY DEFINER functions that each derive
+their own tenant — and which **refuses any call carrying a business id**.
+
+**Why the key at all:** a webhook arrives with no signed-in user, so RLS keyed
+on `auth.uid()` cannot resolve the tenant. `write_audit_log()` does not merely
+fail to help — it raises `28000 Not authenticated`, so the path could not even
+record what it did.
+
+CLAUDE.md forbids the service-role key for serving a *user request*. That rule
+is not bent: a verified vendor callback and a scheduled worker are background
+jobs, which is the case it explicitly allows.
+
+**Why so narrow:** the key bypasses RLS completely, so a module that hands out
+a general-purpose privileged client turns every future mistake into a
+cross-tenant one. The allowlist is enforced at runtime as well as in the type,
+because a type is erased and this is the one place where being wrong is
+expensive. A test asserts the key appears in exactly those two files.
+
+**Rejected: verifying HMAC inside PostgreSQL** so the endpoint could be reached
+by `anon` with no privileged key at all. It is genuinely attractive — the
+secret would never enter application memory. It was rejected because the
+credential is encrypted with a key held OUTSIDE the database, deliberately, so
+the database cannot decrypt it; and because Postgres has no constant-time
+comparison, which would trade one class of attack for another.
+
+**Rejected: SECURITY DEFINER wrappers callable by `authenticated`.** Any
+customer with a login could then forge a delivery into any business on the
+platform.
+
+**Cost to change:** Medium. The boundary is one file.
+
+---
+
+## 2026-09-10 — Connection identity is the provider's own stable id
+
+**Decided:** `integration_accounts.external_account_id` holds the provider's
+permanent name for a store — a `myshopify.com` domain, a WooCommerce site URL.
+Connecting is an upsert on `(business_id, integration_id, external_account_id)`
+and the channel is carried across.
+
+**Why:** reconnecting a store must not create a second channel. If it did, one
+store's history would be split in two and every figure that groups by channel
+would quietly halve — with no error, and nothing on screen to suggest anything
+was wrong. That is the shape of bug this product exists to not have.
+
+**A live store belongs to exactly one business**, enforced by a partial unique
+index on `(integration_id, external_account_id) where status <> 'DISCONNECTED'`.
+Without it the same shop could be connected by two customers and a webhook
+would resolve ambiguously — a cross-tenant leak wearing the costume of a
+feature request. Partial, so a store can be disconnected and later connected by
+someone else.
+
+**Cost to change:** High. It is the reconnection key and the webhook lookup key.
+
+---
+
+## 2026-09-10 — Credentials are encrypted with a key the database does not have
+
+**Decided:** AES-256-GCM from Node's own `crypto`, with the key in
+`BIZMIND_ENCRYPTION_KEY`. Every ciphertext is bound to
+`business_id` + purpose as additional authenticated data.
+
+**Why GCM:** it authenticates as well as encrypts, so a tampered ciphertext
+fails to decrypt rather than decrypting to something attacker-influenced.
+
+**Why the AAD binding:** the attack worth defending against is not "read the
+secret" but "move a valid secret to a row where it authorises something else".
+A ciphertext carried across tenants fails authentication.
+
+**Why the key is not in the database:** so a database backup on its own does
+not yield a usable credential for somebody else's store.
+
+**Also decided:** migration 0012 revokes SELECT, INSERT and UPDATE on the
+credential columns from `authenticated`. RLS decides which rows are visible; a
+column grant decides which columns. Without it an owner could read their own
+encrypted tokens through PostgREST — and "encrypted" is not "safe to hand to a
+browser".
+
+**Cost to change:** Rotating the key invalidates every stored credential.
+
+---
+
+## 2026-09-10 — The engine was built before any connector, against a fixture
+
+**Decided:** The sync and webhook engine, and a deterministic fixture
+connector, were built and tested before Shopify or WooCommerce. This inverts
+the phase numbering deliberately, as ROADMAP.md predicted it should.
+
+**Why:** OAuth approvals, developer accounts and store provisioning are outside
+our control and take days. The retry schedule, the idempotency guarantee and
+the tenant boundary are not, and they are the parts that must be right.
+
+The fixture connector produces every failure a real provider will inflict — a
+rate limit, a 500 that clears, a revoked token, a repeated record, a partial
+page, a forged signature — on demand, with no network and no credentials. The
+scenarios that clear on the SECOND attempt are the valuable ones: they let a
+test assert the engine recovered, not merely that it gave up politely.
+
+So the first real connector debugs one system rather than two.
+
+**It is not a fake integration and produces no production data.** It uses
+`channelType: "OTHER"` rather than a new enum value, because a test-only
+concept has no business widening a production enum that analytics groups by.
+
+**Cost to change:** Low. It is one directory and it can stay forever as a
+regression harness.

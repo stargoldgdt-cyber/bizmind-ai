@@ -79,6 +79,23 @@ Consequences of this design:
   status, last-synced time, failure handling, retries and logs.
 - Integration credentials are stored server-side and never reach the browser.
 
+### The engine beneath the connectors
+
+A connector knows one provider's API. The engine knows scheduling, retries,
+idempotency, logging, sync state, failure handling and tenant safety — and
+knows nothing about any provider. Mixing them is how the sixth integration
+becomes as expensive as the first.
+
+The webhook path has no session, so the tenant is resolved from a connection
+row an owner created:
+
+```
+provider + external account id  ->  integration_accounts  ->  business_id
+```
+
+Never from a request body, a header, or a query parameter. See
+[INTEGRATION_ENGINE.md](./INTEGRATION_ENGINE.md).
+
 ### The mapping step is a gate, not a translation
 
 **Flexible source fields. Standard BizMind meaning.**

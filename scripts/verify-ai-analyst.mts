@@ -623,9 +623,29 @@ check(
 )
 
 const featureFiles = sourceFiles.filter((file) => !aiLayer(file))
+
+/**
+ * Comments and strings removed before the check.
+ *
+ * This failed once on PROSE: a comment in the integration security layer cited
+ * `src/services/ai/client.ts` as the precedent for confining a key to one
+ * file. Citing the rule is not breaking it, and a guard that cannot tell the
+ * difference teaches people to stop writing the citation.
+ */
+function withoutProse(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/.*/g, " ")
+}
+
+const IMPORTS_AI_CLIENT = /(?:import|require).*services\/ai\/client/
+
+const rawClientImporters = featureFiles.filter((file) =>
+  IMPORTS_AI_CLIENT.test(withoutProse(readFileSync(file, "utf8")))
+)
+
 check(
   "nothing outside the AI layer imports the raw client",
-  !featureFiles.some((file) => readFileSync(file, "utf8").includes("services/ai/client"))
+  rawClientImporters.length === 0,
+  rawClientImporters.join(", ")
 )
 
 /* -------------------------------------------------------------------------- */

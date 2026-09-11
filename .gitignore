@@ -62,3 +62,6 @@ next-env.d.ts
 
 # Supabase CLI scratch files
 supabase/.temp/
+
+# Generated import templates — rebuild with: npm run template
+/templates/

@@ -550,6 +550,171 @@ try {
   }
 
   /* ---------------------------------------------------------------------- */
+  section("6b. THE SYNC WRITE PATH ACTUALLY WRITES")
+
+  /*
+   * Added with migration 0018, and the reason is uncomfortable: until then no
+   * test had ever passed a single row to sync_apply_orders(),
+   * sync_apply_products() or webhook_apply_records(). Section 6 proves those
+   * functions are unreachable by a signed-in user -- which they are -- but a
+   * function nobody can call wrongly is not the same as one that works.
+   *
+   * All three inserted file_type 'api' into import_batches, whose check
+   * constraint only ever allowed 'csv' and 'xlsx'. Every sync write failed in
+   * the database, and nothing noticed, because nothing tried.
+   *
+   * The orders paths had a second fault behind the first: they never gave the
+   * batch a channel, and import_apply_orders() takes the channel from the
+   * batch -- so a synced order would have landed attributed to no channel,
+   * counted in the dashboard's "orders without a channel".
+   */
+  if (!HAS_SERVICE_KEY) {
+    skip("a synced order is written", "SUPABASE_SERVICE_ROLE_KEY is not set")
+    skip("a synced order carries the connection's channel", "SUPABASE_SERVICE_ROLE_KEY is not set")
+    skip("re-applying a synced order does not duplicate it", "SUPABASE_SERVICE_ROLE_KEY is not set")
+    skip("a synced product is written", "SUPABASE_SERVICE_ROLE_KEY is not set")
+    skip("a webhook delivery is written with its channel", "SUPABASE_SERVICE_ROLE_KEY is not set")
+    skip("an unverified delivery cannot be written", "SUPABASE_SERVICE_ROLE_KEY is not set")
+  } else {
+    const orderId = `SYNC-${suffix}-1`
+
+    // Exactly the canonical shape a connector emits -- see the WooCommerce
+    // mapper. Money as exact decimal strings, lines nested under `items`.
+    const syncedOrder = {
+      external_id: orderId,
+      order_number: "1",
+      placed_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+      status: "FULFILLED",
+      currency: "AED",
+      total: "250.0000",
+      subtotal: null,
+      discount_total: null,
+      tax_total: null,
+      shipping_total: null,
+      fee_total: "25.0000",
+      customer_email: null,
+      customer_name: null,
+      items: [
+        {
+          sku: `SYNC-SKU-${suffix}`,
+          name: "Synced product",
+          quantity: "2",
+          unit_price: "125.0000",
+          discount: null,
+          unit_cost: "60.0000",
+          tax: null,
+          line_total: "250.0000",
+        },
+      ],
+    }
+
+    const applied = await serviceRpc("sync_apply_orders", {
+      p_job_id: job.id,
+      p_rows: [syncedOrder],
+    })
+    check("A SYNCED ORDER IS WRITTEN THROUGH THE REAL PIPELINE",
+      applied.ok && applied.body?.orders_created === 1,
+      `${applied.status} ${JSON.stringify(applied.body).slice(0, 200)}`
+    )
+
+    const written = await api(
+      `/rest/v1/orders?select=id,source,channel_id&business_id=eq.${businessId}&external_id=eq.${orderId}`
+    )
+    check("it exists exactly once", written.length === 1, String(written.length))
+    check("AND IT BELONGS TO THE CONNECTION'S CHANNEL, not to no channel",
+      written.length === 1 && written[0].channel_id === firstChannel,
+      `${written[0]?.channel_id} vs ${firstChannel}`
+    )
+    check("its source is unchanged by the fix", written[0]?.source === "OTHER",
+      String(written[0]?.source)
+    )
+
+    const batch = applied.body?.batch_id
+      ? await api(
+          `/rest/v1/import_batches?select=file_type,channel_id&id=eq.${applied.body.batch_id}`
+        )
+      : []
+    check("the batch records that it came from an API, and from which channel",
+      batch[0]?.file_type === "api" && batch[0]?.channel_id === firstChannel,
+      JSON.stringify(batch[0])
+    )
+
+    const again = await serviceRpc("sync_apply_orders", {
+      p_job_id: job.id,
+      p_rows: [syncedOrder],
+    })
+    check("APPLYING THE SAME ORDER AGAIN UPDATES IT, never duplicates it",
+      again.ok && again.body?.orders_created === 0 && again.body?.orders_updated === 1,
+      `${again.status} ${JSON.stringify(again.body).slice(0, 200)}`
+    )
+
+    const afterAgain = await api(
+      `/rest/v1/orders?select=id&business_id=eq.${businessId}&external_id=eq.${orderId}`
+    )
+    check("still exactly one row", afterAgain.length === 1, String(afterAgain.length))
+
+    const product = await serviceRpc("sync_apply_products", {
+      p_job_id: job.id,
+      p_rows: [
+        {
+          sku: `SYNC-PRODUCT-${suffix}`,
+          name: "Synced catalogue item",
+          unit_price: "125.0000",
+          unit_cost: "60.0000",
+        },
+      ],
+    })
+    check("A SYNCED PRODUCT IS WRITTEN TOO",
+      product.ok && product.body?.products_created === 1,
+      `${product.status} ${JSON.stringify(product.body).slice(0, 200)}`
+    )
+
+    // The webhook path, through the verified delivery section 6 accepted.
+    const verified = await api(
+      `/rest/v1/webhook_events?select=id&business_id=eq.${businessId}&external_event_id=eq.delivery-1`
+    )
+    const hookOrderId = `HOOK-${suffix}-1`
+
+    // A different order needs a different order number, not just a different
+    // id: orders are also unique on (business_id, order_number). The first
+    // version of this test copied order_number "1" from the order above and
+    // was refused with 23505 -- correctly.
+    const hooked = await serviceRpc("webhook_apply_records", {
+      p_event_id: verified[0]?.id,
+      p_rows: [{ ...syncedOrder, external_id: hookOrderId, order_number: "2" }],
+    })
+    check("A WEBHOOK DELIVERY IS WRITTEN THROUGH THE SAME PIPELINE",
+      hooked.ok && hooked.body?.orders_created === 1,
+      `${hooked.status} ${JSON.stringify(hooked.body).slice(0, 200)}`
+    )
+
+    const hookWritten = await api(
+      `/rest/v1/orders?select=channel_id&business_id=eq.${businessId}&external_id=eq.${hookOrderId}`
+    )
+    check("and it is attributed to the connection's channel as well",
+      hookWritten[0]?.channel_id === firstChannel,
+      `${hookWritten[0]?.channel_id} vs ${firstChannel}`
+    )
+
+    // Section 6 recorded a delivery that failed verification. The write path
+    // has its own refusal, independent of the claim function's filter.
+    const forged = await api(
+      `/rest/v1/webhook_events?select=id&business_id=eq.${businessId}&external_event_id=eq.delivery-forged`
+    )
+    const forgedApply = await serviceRpc("webhook_apply_records", {
+      p_event_id: forged[0]?.id,
+      p_rows: [{ ...syncedOrder, external_id: `FORGED-${suffix}`, order_number: "3" }],
+    })
+    const forgedWritten = await api(
+      `/rest/v1/orders?select=id&business_id=eq.${businessId}&external_id=eq.FORGED-${suffix}`
+    )
+    check("AN UNVERIFIED DELIVERY CANNOT BE WRITTEN, even by the trusted path",
+      !forgedApply.ok && forgedWritten.length === 0,
+      `${forgedApply.status} ${forgedWritten.length} rows`
+    )
+  }
+
+  /* ---------------------------------------------------------------------- */
   section("7. REPLAY AND MANUAL RETRY ARE AUTHORISED")
 
   if (!HAS_SERVICE_KEY) {

@@ -2,6 +2,15 @@
 
 **Built and tested. Not yet run against a real store.**
 
+> **Correction — migration 0018.** Until 0018, no WooCommerce record could
+> reach the database. The sync and webhook write functions created a batch with
+> `file_type = 'api'`, which the database's own rule refused, so every write
+> rolled back. No test ever called them with real rows, which is how it hid.
+> What *was* tested here — mapping, signature verification, SSRF refusal — was
+> genuinely tested; the database write was not. Section 6b of
+> `npm run test:integration-live` now covers it, and synced orders now carry
+> the connection's channel.
+
 The first real connector on the engine described in
 [INTEGRATION_ENGINE.md](INTEGRATION_ENGINE.md). Nothing in the engine changed
 to accommodate it, which was the point of building the engine first.

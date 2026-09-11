@@ -2,6 +2,13 @@
 
 **Built and tested. No real provider is connected to it yet.**
 
+> **Correction — migration 0018.** The write path in section 8 never wrote a
+> row until 0018. `sync_apply_orders()`, `sync_apply_products()` and
+> `webhook_apply_records()` created batches with `file_type = 'api'`, which the
+> database's own rule refused, so every write rolled back — and synced orders
+> would have carried no channel even had they landed. No test passed them a
+> row, which is how it hid. Section 6b of the live suite now does.
+
 Shopify and WooCommerce plug in here. This document describes what they plug
 into, and — more usefully — the rules they will not be able to break.
 
@@ -236,6 +243,11 @@ into a zero.
 Both take a **job id** or an **event id**, never a business id: the tenant is
 derived, so a worker cannot be pointed at another one.
 
+The batch records `file_type = 'api'` and the **connection's channel**, which
+`integration_account_connect()` creates and links. Without the channel,
+`import_apply_orders()` — which takes it from the batch — would attribute every
+synced order to no channel at all. Both were broken until migration 0018.
+
 A test asserts no file under `src/services/integrations/` converts a money
 value to a number or imports the analytics service.
 
@@ -266,7 +278,7 @@ concept has no business widening a production enum that analytics groups by.
 
 ```bash
 npm run test:integration-engine   # 75 assertions, no database, no network
-npm run test:integration-live     # against the real database
+npm run test:integration-live     # 75 assertions, against the real database
 npm run verify:integrations       # both
 ```
 

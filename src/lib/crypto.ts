@@ -105,7 +105,14 @@ export function isEncryptionConfigured(): boolean {
  */
 export type CredentialContext = {
   businessId: string
-  purpose: "access_token" | "api_credentials" | "webhook_secret"
+  purpose:
+    | "access_token"
+    | "api_credentials"
+    | "webhook_secret"
+    /** The secret Google echoes on a change notification (migration 0021). */
+    | "watch_token"
+    /** The short-lived Google sign-in handshake, sealed into a cookie. */
+    | "oauth_state"
 }
 
 function additionalData(context: CredentialContext): Buffer {

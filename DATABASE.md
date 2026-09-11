@@ -722,6 +722,16 @@ written only by service_role functions that take a job, account or channel id
 and derive the tenant from it. A record missing from its source is marked
 `present = false` — **never deleted**.
 
+## 7f. One Google sign-in per business (0022)
+
+| Change | Detail |
+| --- | --- |
+| `integrations.credentials_encrypted` | The business's sealed Google refresh token. Written only by the confined server-side writer |
+| `integrations.authorized_by`, `authorized_at` | Who connected Google, and when |
+| `integrations` privileges | All revoked from `anon` and `authenticated`, then granted back **column by column without the credential** — the same pattern as `integration_accounts`. `select *` is therefore refused |
+| `sync_job_context()` | Returns the connection's own credential, or the business's when it has none |
+| `integration_google_authorize()` | Owner or admin. Creates or refreshes the business's Google row, turns every `REAUTH_REQUIRED` sheet back to `CONNECTED`, writes an audit entry, and returns the row **with the credential blanked** |
+
 ---
 
 ## 8. Regenerating types

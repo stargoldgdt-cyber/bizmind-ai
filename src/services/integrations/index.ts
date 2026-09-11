@@ -13,10 +13,12 @@
 
 import { registerConnector } from "./contract"
 import { fixtureConnector } from "./connectors/fixture"
+import { googleSheetsConnector } from "./connectors/google-sheets"
 import { wooCommerceConnector } from "./connectors/woocommerce"
 
 registerConnector(fixtureConnector)
 registerConnector(wooCommerceConnector)
+registerConnector(googleSheetsConnector)
 
 export {
   getConnector,

@@ -73,3 +73,35 @@ export async function storeAccountSecrets(
     return false
   }
 }
+
+
+/**
+ * Stores the sealed Google authorization for a business (migration 0022).
+ *
+ * The same rules as above: one table, one column, never read back, never
+ * returned. The integration row itself was created by
+ * integration_google_authorize(), which the OAuth callback calls AS THE
+ * SIGNED-IN OWNER -- so the row was resolved under their session and their
+ * role check, and this only writes the ciphertext onto it.
+ */
+export async function storeIntegrationCredentials(
+  integrationId: string,
+  credentialsEncrypted: string
+): Promise<boolean> {
+  try {
+    const { error } = await client()
+      .from("integrations")
+      .update({ credentials_encrypted: credentialsEncrypted })
+      .eq("id", integrationId)
+
+    if (error) {
+      console.error(`[integration] saving the Google sign-in failed: ${error.message}`)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error("[integration] saving the Google sign-in failed", error)
+    return false
+  }
+}

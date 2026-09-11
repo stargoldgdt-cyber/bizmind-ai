@@ -139,6 +139,16 @@ Two consequences follow, and both are tested:
 - The audit "before" snapshot has those keys stripped, or `to_jsonb(row)`
   would copy the ciphertext into a table admins can read.
 
+### A credential can belong to the business (0022)
+
+Google is signed into once per business, not once per sheet, so its sealed
+refresh token lives on the `integrations` row. `integrations` is protected the
+same way as `integration_accounts`: everything revoked, then granted back
+column by column without `credentials_encrypted`. `sync_job_context()` hands
+the worker the connection's own credential when it has one, and the
+business's otherwise. The worker decrypts both the same way, because both are
+sealed with the same business and purpose.
+
 ---
 
 ## 5. Connection identity
@@ -302,8 +312,8 @@ gaps. See [GOOGLE_SHEETS.md](GOOGLE_SHEETS.md) for the connector they serve.
 ## 10. Tests
 
 ```bash
-npm run test:integration-engine   # 75 assertions, no database, no network
-npm run test:integration-live     # 155 assertions, against the real database
+npm run test:integration-engine   # 77 assertions, no database, no network
+npm run test:integration-live     # 166 assertions, against the real database
 npm run verify:integrations       # both
 ```
 

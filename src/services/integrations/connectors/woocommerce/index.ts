@@ -91,7 +91,15 @@ function siteUrlOf(context: ConnectorContext): string {
   return context.externalAccountId
 }
 
-const ENDPOINT: Record<SyncResource, string> = {
+/**
+ * Which WooCommerce endpoint serves each resource.
+ *
+ * Partial on purpose: WooCommerce has no expenses, and a made-up endpoint
+ * would be a lie waiting for a caller. The engine only schedules the resources
+ * listed in `resources` below, and anything else is refused plainly in
+ * fetchPage().
+ */
+const ENDPOINT: Partial<Record<SyncResource, string>> = {
   ORDERS: "orders",
   PRODUCTS: "products",
   CUSTOMERS: "customers",
@@ -172,10 +180,18 @@ export const wooCommerceConnector: Connector = {
 
     const startedAt = new Date().toISOString()
 
+    const path = ENDPOINT[resource]
+    if (!path) {
+      return {
+        kind: "permanent_error",
+        reason: `WooCommerce has no ${resource.toLowerCase()} to sync.`,
+      }
+    }
+
     const response = await wooGet({
       siteUrl: site.origin,
       credentials: credentialsOf(context),
-      path: ENDPOINT[resource],
+      path,
       query,
     })
 

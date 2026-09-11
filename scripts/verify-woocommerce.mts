@@ -100,8 +100,8 @@ const PRODUCT = {
 section("1. REGISTERED, AND NOT PRETENDING TO BE SOMETHING ELSE")
 
 check("the connector is registered", getConnector("WOOCOMMERCE") !== null)
-check("alongside the fixture connector",
-  registeredProviders().sort().join(",") === "FIXTURE,WOOCOMMERCE",
+check("alongside the fixture and Google Sheets connectors, and nothing else",
+  registeredProviders().sort().join(",") === "FIXTURE,GOOGLE_SHEETS,WOOCOMMERCE",
   registeredProviders().join(",")
 )
 check("sales land on the WooCommerce channel", wooCommerceConnector.channelType === "WOOCOMMERCE")

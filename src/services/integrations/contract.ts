@@ -32,10 +32,10 @@
 import type { RawRecord } from "@/services/ingestion/contracts"
 
 /** Providers the engine can host. Mirrors the database enum. */
-export type IntegrationProvider = "FIXTURE" | "WOOCOMMERCE" | "SHOPIFY"
+export type IntegrationProvider = "FIXTURE" | "WOOCOMMERCE" | "SHOPIFY" | "GOOGLE_SHEETS"
 
 /** What a connector can be asked to fetch. Mirrors the `resource` check. */
-export type SyncResource = "ORDERS" | "PRODUCTS" | "CUSTOMERS" | "INVENTORY"
+export type SyncResource = "ORDERS" | "PRODUCTS" | "CUSTOMERS" | "INVENTORY" | "EXPENSES"
 
 export type SyncMode = "INITIAL" | "INCREMENTAL"
 
@@ -71,6 +71,19 @@ export type FetchResult =
   | {
       kind: "page"
       records: RawRecord[]
+      /**
+       * Present for TABLE-SHAPED sources such as a spreadsheet, whose records
+       * are keyed by the source's own column headings rather than by BizMind's
+       * canonical names. The worker then applies the owner's confirmed mapping
+       * through the same `validate()` the CSV importer uses -- there is one
+       * mapping engine, not one per source.
+       */
+      table?: {
+        /** The heading row as it stands right now, for mapping-change checks. */
+        headers: string[]
+        /** The sheet row each record came from. Lineage only, never an identity. */
+        rowNumbers: number[]
+      }
       /** Opaque checkpoint. Written only after these records are applied. */
       nextCursor: string | null
       /** False when this was the last page. */
@@ -101,6 +114,12 @@ export type FetchResult =
        * discovering that -- it goes straight to a state a person can see.
        */
       reason: string
+      /**
+       * What a person must do about it, when the connector can tell. The
+       * worker turns this into the connection's state, so an owner is shown
+       * "reconnect Google" rather than a generic error.
+       */
+      code?: "REAUTH_REQUIRED" | "MAPPING_REVIEW_REQUIRED" | "SOURCE_GONE" | "ACCESS_DENIED"
     }
 
 /* -------------------------------------------------------------------------- */
@@ -225,5 +244,10 @@ export function registeredProviders(): IntegrationProvider[] {
 
 /** Whether a string names a provider the engine knows. */
 export function isKnownProvider(value: string): value is IntegrationProvider {
-  return value === "FIXTURE" || value === "WOOCOMMERCE" || value === "SHOPIFY"
+  return (
+    value === "FIXTURE" ||
+    value === "WOOCOMMERCE" ||
+    value === "SHOPIFY" ||
+    value === "GOOGLE_SHEETS"
+  )
 }

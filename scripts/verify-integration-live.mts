@@ -1479,6 +1479,106 @@ try {
       !reached.ok && [401, 403, 404].includes(reached.status),
       String(reached.status))
   }
+
+  /* ---------------------------------------------------------------------- */
+  section("11. ONE GOOGLE AUTHORIZATION PER BUSINESS (0022)")
+
+  const authorized = await call("integration_google_authorize", { p_business_id: businessId })
+  check("AN OWNER CAN RECORD A GOOGLE SIGN-IN FOR THEIR BUSINESS",
+    authorized.ok && authorized.body?.provider === "GOOGLE_SHEETS", brief(authorized))
+  check("and the response carries no credential",
+    authorized.ok && authorized.body?.credentials_encrypted == null)
+
+  const googleRow = await read(
+    `/rest/v1/integrations?select=id,status,authorized_at&business_id=eq.${businessId}&provider=eq.GOOGLE_SHEETS`
+  )
+  check("the owner can see when Google was connected",
+    googleRow.length === 1 && googleRow[0].authorized_at !== null, JSON.stringify(googleRow))
+
+  const tokenColumn = await attempt(
+    `/rest/v1/integrations?select=credentials_encrypted&business_id=eq.${businessId}`
+  )
+  check("THE STORED GOOGLE AUTHORIZATION IS UNREADABLE BY A SIGNED-IN USER",
+    !tokenColumn.ok, String(tokenColumn.status))
+
+  const everything = await attempt(`/rest/v1/integrations?select=*&business_id=eq.${businessId}`)
+  check("and select * is refused, so nothing can ask for everything",
+    !everything.ok, String(everything.status))
+
+  const tokenWrite = await attempt(
+    `/rest/v1/integrations?business_id=eq.${businessId}&provider=eq.GOOGLE_SHEETS`,
+    { method: "PATCH", body: JSON.stringify({ credentials_encrypted: "forged" }) }
+  )
+  check("nor can a signed-in user write it", !tokenWrite.ok, String(tokenWrite.status))
+
+  const rivalAuthorize = await call(
+    "integration_google_authorize", { p_business_id: businessId }, otherToken
+  )
+  check("ANOTHER BUSINESS CANNOT CONNECT GOOGLE ON THIS ONE'S BEHALF",
+    !rivalAuthorize.ok, brief(rivalAuthorize))
+
+  if (!HAS_SERVICE_KEY) {
+    skip("reconnecting Google repairs every waiting sheet", "SUPABASE_SERVICE_ROLE_KEY is not set")
+    skip("the worker falls back to the business authorization", "SUPABASE_SERVICE_ROLE_KEY is not set")
+  } else {
+    /** A service-role write, only to plant values a signed-in user cannot. */
+    const servicePatch = async (path: string, body: unknown) =>
+      (await fetch(`${SUPABASE_URL}${path}`, {
+        method: "PATCH",
+        headers: {
+          apikey: SERVICE_KEY,
+          Authorization: `Bearer ${SERVICE_KEY}`,
+          "Content-Type": "application/json",
+          Prefer: "return=minimal",
+        },
+        body: JSON.stringify(body),
+      })).ok
+
+    const sheetRows = await read(
+      `/rest/v1/integration_accounts?select=id&business_id=eq.${businessId}` +
+        `&provider=eq.GOOGLE_SHEETS&external_account_id=eq.spreadsheet-${suffix}:0`
+    )
+    const sheetTab = sheetRows[0]?.id as string | undefined
+    check("the Google Sheets tab from section 10 is still there", sheetTab !== undefined)
+
+    if (sheetTab) {
+      await serviceCall("integration_account_set_state", {
+        p_account_id: sheetTab,
+        p_status: "REAUTH_REQUIRED",
+        p_reason: "Google access expired",
+      })
+
+      const reauthorized = await call("integration_google_authorize", { p_business_id: businessId })
+      const afterReauth = await read(
+        `/rest/v1/integration_accounts?select=status,last_error&id=eq.${sheetTab}`
+      )
+      check("RECONNECTING GOOGLE ONCE REPAIRS EVERY SHEET WAITING FOR IT",
+        reauthorized.ok &&
+          afterReauth[0]?.status === "CONNECTED" &&
+          afterReauth[0]?.last_error === null,
+        JSON.stringify(afterReauth[0]))
+
+      const sheetJobs = await read(`/rest/v1/sync_jobs?select=id&integration_account_id=eq.${sheetTab}`)
+
+      const plantedBusiness = await servicePatch(
+        `/rest/v1/integrations?id=eq.${googleRow[0]?.id}`,
+        { credentials_encrypted: "business-level-sealed" }
+      )
+      const viaBusiness = await serviceCall("sync_job_context", { p_job_id: sheetJobs[0]?.id })
+      check("A SHEET WITH NO CREDENTIAL OF ITS OWN USES THE BUSINESS'S GOOGLE AUTHORIZATION",
+        plantedBusiness && viaBusiness.body?.[0]?.credentials_encrypted === "business-level-sealed",
+        brief(viaBusiness))
+
+      const plantedTab = await servicePatch(
+        `/rest/v1/integration_accounts?id=eq.${sheetTab}`,
+        { credentials_encrypted: "tab-level-sealed" }
+      )
+      const viaTab = await serviceCall("sync_job_context", { p_job_id: sheetJobs[0]?.id })
+      check("but a connection with a credential of its own still uses its own",
+        plantedTab && viaTab.body?.[0]?.credentials_encrypted === "tab-level-sealed",
+        brief(viaTab))
+    }
+  }
 } finally {
   section("Cleanup")
   await api(`/rest/v1/businesses?id=eq.${businessId}`, { method: "DELETE" })

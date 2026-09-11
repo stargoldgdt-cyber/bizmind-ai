@@ -176,11 +176,12 @@ check("the real providers are recognised even before they are built",
   isKnownProvider("SHOPIFY") && isKnownProvider("WOOCOMMERCE")
 )
 // This said "only the fixture connector ships today" until WooCommerce
-// landed. Inverted rather than deleted: the meaningful guarantee now is that
-// SHOPIFY is not registered, because a connector that appears in the registry
-// before it exists is one an owner could try to connect to nothing.
-check("the fixture and WooCommerce connectors ship",
-  registeredProviders().sort().join(",") === "FIXTURE,WOOCOMMERCE",
+// landed, then named those two until Google Sheets landed. The meaningful
+// guarantee is unchanged: SHOPIFY is not registered, because a connector that
+// appears in the registry before it exists is one an owner could try to
+// connect to nothing.
+check("the fixture, WooCommerce and Google Sheets connectors ship -- and nothing else",
+  registeredProviders().sort().join(",") === "FIXTURE,GOOGLE_SHEETS,WOOCOMMERCE",
   registeredProviders().join(",")
 )
 check("SHOPIFY IS NOT REGISTERED -- it is not built yet",

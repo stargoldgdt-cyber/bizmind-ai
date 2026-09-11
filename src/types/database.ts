@@ -110,9 +110,18 @@ export type MappingConfidence = "high" | "medium" | "low"
 
 /* ---- Integrations (migration 0012) --------------------------------------- */
 
-export type IntegrationProvider = "FIXTURE" | "WOOCOMMERCE" | "SHOPIFY"
+export type IntegrationProvider = "FIXTURE" | "WOOCOMMERCE" | "SHOPIFY" | "GOOGLE_SHEETS"
 
-export type IntegrationStatus = "CONNECTED" | "ERROR" | "DISCONNECTED"
+export type IntegrationStatus =
+  | "CONNECTED"
+  | "ERROR"
+  | "DISCONNECTED"
+  /** The owner switched sync off (migration 0019). Only the owner sets it. */
+  | "PAUSED"
+  /** Google access expired or was revoked. Nothing syncs until reconnected. */
+  | "REAUTH_REQUIRED"
+  /** A mapped column was renamed or removed. Writing stops rather than guessing. */
+  | "MAPPING_REVIEW_REQUIRED"
 
 export type SyncMode = "INITIAL" | "INCREMENTAL"
 
@@ -136,7 +145,7 @@ export type WebhookEventStatus =
   | "DEAD_LETTER"
   | "REJECTED"
 
-export type SyncResourceKey = "ORDERS" | "PRODUCTS" | "CUSTOMERS" | "INVENTORY"
+export type SyncResourceKey = "ORDERS" | "PRODUCTS" | "CUSTOMERS" | "INVENTORY" | "EXPENSES"
 
 /* ---- Automation (migration 0016) ----------------------------------------- */
 
@@ -1097,7 +1106,12 @@ export type Database = {
           provider: IntegrationProvider
           status?: IntegrationStatus
         }
-        Update: { status?: IntegrationStatus }
+        /**
+         * `credentials_encrypted` (migration 0022) can be SET by the one
+         * confined server-side writer but is never selectable -- the same
+         * asymmetry as integration_accounts.
+         */
+        Update: { status?: IntegrationStatus; credentials_encrypted?: string | null }
         Relationships: []
       }
 
@@ -1785,6 +1799,22 @@ export type Database = {
       webhook_event_replay: {
         Args: { p_event_id: string }
         Returns: Database["public"]["Tables"]["webhook_events"]["Row"]
+      }
+
+      /**
+       * Migration 0022. Owner or admin. Creates or refreshes the business's
+       * Google authorization row and reactivates any sheet that was waiting
+       * for Google to be reconnected. Never returns the credential.
+       */
+      integration_google_authorize: {
+        Args: { p_business_id: string }
+        Returns: Database["public"]["Tables"]["integrations"]["Row"]
+      }
+
+      /** Migration 0020. Owner or admin. Resuming only turns PAUSED back into CONNECTED. */
+      integration_account_pause: {
+        Args: { p_account_id: string; p_paused: boolean }
+        Returns: Database["public"]["Tables"]["integration_accounts"]["Row"]
       }
 
       /* ---- Automation (migration 0016) ---------------------------------

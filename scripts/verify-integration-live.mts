@@ -1847,6 +1847,225 @@ try {
       }
     }
   }
+
+  /* ---------------------------------------------------------------------- */
+  section("13. RECORD LINEAGE: WHICH IMPORT WROTE WHICH RECORD (0024)")
+
+  type Lineage = { batch_id: string | null; record_id: string; how: string; record_key: string | null }
+
+  const newBatch = async (fields: Record<string, unknown>) => {
+    const created = await attempt("/rest/v1/import_batches", {
+      method: "POST",
+      body: JSON.stringify({
+        business_id: businessId,
+        file_size_bytes: 0,
+        ...fields,
+      }),
+    })
+    const rows = parse(created.body)
+    return { ok: created.ok, id: Array.isArray(rows) ? (rows[0]?.id as string | undefined) : undefined, body: rows }
+  }
+
+  const lineageOf = async (query: string, asToken = token) =>
+    (await read(`/rest/v1/record_lineage?select=batch_id,record_id,how,record_key&${query}`, {}, asToken)) as Lineage[]
+
+  const LIN = `LIN${suffix}`
+  const order = (key: string, total: string) => ({
+    external_id: `${LIN}-${key}`,
+    placed_at: "2026-09-01T10:00:00Z",
+    status: "FULFILLED",
+    currency: "BDT",
+    subtotal: null,
+    discount_total: null,
+    tax_total: null,
+    shipping_total: null,
+    fee_total: null,
+    total,
+    items: [],
+  })
+
+  /* ---- an upload records what it wrote, as it runs ---------------------- */
+  const upload1 = await newBatch({
+    entity: "ORDERS", status: "READY", source: "WEBSITE",
+    file_name: `lineage-${suffix}-a.csv`, file_type: "csv",
+    lineage_status: "RECOVERED",
+  })
+  check("a new import starts RECORDED, whatever the request says",
+    upload1.ok && Array.isArray(upload1.body) && upload1.body[0]?.lineage_status === "RECORDED",
+    JSON.stringify(upload1.body).slice(0, 200))
+
+  const applied1 = upload1.id
+    ? await call("import_apply_orders", { p_batch_id: upload1.id, p_rows: [order("1", "100.00"), order("2", "200.00")] })
+    : null
+  const written1 = upload1.id ? await lineageOf(`batch_id=eq.${upload1.id}`) : []
+  check("AN IMPORT RECORDS EVERY RECORD IT CREATED",
+    applied1?.ok === true && written1.length === 2 && written1.every((l) => l.how === "CREATED"),
+    `${applied1 ? brief(applied1) : "no batch"} ${JSON.stringify(written1)}`)
+  check("with the order ID it was written under",
+    written1.some((l) => l.record_key === `${LIN}-1`) && written1.some((l) => l.record_key === `${LIN}-2`))
+
+  const orderRows = (await read(
+    `/rest/v1/orders?select=id,external_id&business_id=eq.${businessId}&external_id=in.(${LIN}-1,${LIN}-2)`
+  )) as { id: string; external_id: string }[]
+  const order1 = orderRows.find((o) => o.external_id === `${LIN}-1`)?.id
+  const order2 = orderRows.find((o) => o.external_id === `${LIN}-2`)?.id
+
+  /* ---- a second import of the same order makes it shared ---------------- */
+  const upload2 = await newBatch({
+    entity: "ORDERS", status: "READY", source: "WEBSITE",
+    file_name: `lineage-${suffix}-b.csv`, file_type: "csv",
+  })
+  if (upload2.id) {
+    await call("import_apply_orders", { p_batch_id: upload2.id, p_rows: [order("1", "150.00")] })
+  }
+  const history1 = order1 ? await lineageOf(`entity=eq.ORDER&record_id=eq.${order1}`) : []
+  check("A RE-IMPORT IS RECORDED AS AN UPDATE, SO THE RECORD NOW HAS TWO WRITERS",
+    history1.length === 2 &&
+      history1.some((l) => l.batch_id === upload1.id && l.how === "CREATED") &&
+      history1.some((l) => l.batch_id === upload2.id && l.how === "UPDATED"),
+    JSON.stringify(history1))
+
+  /* ---- a direct edit is recorded, and makes the record shared ----------- */
+  if (order2) {
+    await attempt(`/rest/v1/orders?id=eq.${order2}`, {
+      method: "PATCH",
+      body: JSON.stringify({ order_number: `N${suffix}` }),
+    })
+  }
+  const history2 = order2 ? await lineageOf(`entity=eq.ORDER&record_id=eq.${order2}`) : []
+  check("A DIRECT EDIT IS RECORDED -- no import can then withdraw that record",
+    history2.some((l) => l.how === "DIRECT" && l.batch_id === null), JSON.stringify(history2))
+
+  /* ---- nobody can forge history or withdraw by writing a column --------- */
+  const forged = order2
+    ? await attempt("/rest/v1/record_lineage", {
+        method: "POST",
+        body: JSON.stringify({
+          business_id: businessId, batch_id: upload1.id, entity: "ORDER",
+          record_id: order2, how: "CREATED",
+        }),
+      })
+    : null
+  check("A SIGNED-IN USER CANNOT WRITE LINEAGE", forged !== null && !forged.ok, String(forged?.status))
+
+  const withdrawByHand = order1
+    ? await attempt(`/rest/v1/orders?id=eq.${order1}`, {
+        method: "PATCH",
+        body: JSON.stringify({ withdrawn_at: new Date().toISOString() }),
+      })
+    : null
+  const stillCounted = order1 ? await read(`/rest/v1/orders?select=withdrawn_at&id=eq.${order1}`) : []
+  check("NOR WITHDRAW A RECORD BY WRITING ITS MARKER",
+    withdrawByHand !== null && !withdrawByHand.ok && stillCounted[0]?.withdrawn_at === null,
+    `${withdrawByHand?.status} ${JSON.stringify(stillCounted)}`)
+
+  const createdWithdrawn = await attempt("/rest/v1/expenses", {
+    method: "POST",
+    body: JSON.stringify({
+      business_id: businessId, amount: "1.00", currency: "BDT",
+      withdrawn_at: new Date().toISOString(),
+    }),
+  })
+  check("nor create a record already withdrawn", !createdWithdrawn.ok, String(createdWithdrawn.status))
+
+  const batchByHand = upload1.id
+    ? await attempt(`/rest/v1/import_batches?id=eq.${upload1.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ withdrawn_at: new Date().toISOString(), lineage_status: "NONE" }),
+      })
+    : null
+  check("NOR MARK AN IMPORT WITHDRAWN, OR CHANGE HOW WELL IT IS TRACED",
+    batchByHand !== null && !batchByHand.ok, String(batchByHand?.status))
+
+  const rivalView = upload1.id ? await lineageOf(`batch_id=eq.${upload1.id}`, otherToken) : []
+  check("ANOTHER BUSINESS CANNOT READ THIS ONE'S LINEAGE", rivalView.length === 0, JSON.stringify(rivalView))
+
+  /* ---- a sync records lineage the same way ------------------------------ */
+  const liveSheet = await read(
+    `/rest/v1/integration_accounts?select=id&business_id=eq.${businessId}` +
+      `&external_account_id=eq.livesheet-${suffix}-abcdefghij:5`
+  )
+  if (liveSheet.length === 0) {
+    skip("a sheet sync records lineage", "the section-12 sheet was not created")
+  } else {
+    const sheetBatches = await read(
+      `/rest/v1/import_batches?select=id&integration_account_id=eq.${liveSheet[0].id}`
+    )
+    const sheetLineage = sheetBatches.length
+      ? await lineageOf(`batch_id=in.(${sheetBatches.map((b: { id: string }) => b.id).join(",")})`)
+      : []
+    check("A SHEET SYNC RECORDS WHAT IT WROTE, THROUGH THE SAME CAPTURE",
+      sheetLineage.length > 0 && sheetLineage.every((l) => l.how === "CREATED" || l.how === "UPDATED"),
+      `${sheetBatches.length} batches, ${sheetLineage.length} lineage rows`)
+  }
+
+  /* ---- recovering lineage for imports made before it existed ------------ */
+  if (!HAS_SERVICE_KEY) {
+    skip("lineage is recovered for older imports", "SUPABASE_SERVICE_ROLE_KEY is not set")
+  } else {
+    const oldOrders = await newBatch({
+      entity: "ORDERS", status: "COMPLETED", source: "WEBSITE",
+      file_name: `lineage-${suffix}-old.csv`, file_type: "csv",
+      mapping: { external_id: "Order ID" },
+      raw_rows: [{ "Order ID": `${LIN}-1` }, { "Order ID": `  ${LIN}-2  ` }, { "Order ID": "" }],
+    })
+    const recovered = oldOrders.id
+      ? await serviceCall("record_lineage_recover_batch", { p_batch_id: oldOrders.id })
+      : null
+    const recoveredRows = oldOrders.id ? await lineageOf(`batch_id=eq.${oldOrders.id}`) : []
+    check("AN OLDER UPLOAD'S RECORDS ARE RECOVERED FROM THE ROWS IT KEPT -- matched exactly, after trimming",
+      recovered?.body === "RECOVERED" && recoveredRows.length === 2 &&
+        recoveredRows.every((l) => l.how === "RECOVERED"),
+      `${recovered ? brief(recovered) : "no batch"} ${JSON.stringify(recoveredRows)}`)
+
+    const oldExpenses = await newBatch({
+      entity: "EXPENSES", status: "COMPLETED", source: "OTHER",
+      file_name: `lineage-${suffix}-exp.csv`, file_type: "csv",
+      mapping: { external_id: "Ref", amount: "Amount" },
+      raw_rows: [{ Ref: `R${suffix}`, Amount: "5" }, { Amount: "6" }],
+    })
+    const incomplete = oldExpenses.id
+      ? await serviceCall("record_lineage_recover_batch", { p_batch_id: oldExpenses.id })
+      : null
+    check("AN EXPENSE IMPORT WITH A ROW WITHOUT A REFERENCE IS INCOMPLETE -- it can never be withdrawn",
+      incomplete?.body === "INCOMPLETE", incomplete ? brief(incomplete) : "no batch")
+
+    const oldSync = await newBatch({
+      entity: "ORDERS", status: "COMPLETED", source: "WEBSITE",
+      file_name: `sync:ORDERS`, file_type: "api",
+    })
+    const none = oldSync.id
+      ? await serviceCall("record_lineage_recover_batch", { p_batch_id: oldSync.id })
+      : null
+    check("an older sync kept no rows, so its lineage is NONE", none?.body === "NONE",
+      none ? brief(none) : "no batch")
+
+    const untouched = upload1.id
+      ? await serviceCall("record_lineage_recover_batch", { p_batch_id: upload1.id })
+      : null
+    const afterRetry = upload1.id ? await lineageOf(`batch_id=eq.${upload1.id}`) : []
+    check("lineage recorded as an import ran is never overwritten by a recovery",
+      untouched?.body === "RECORDED" && afterRetry.every((l) => l.how === "CREATED"),
+      untouched ? brief(untouched) : "no batch")
+
+    const userRecover = oldOrders.id
+      ? await call("record_lineage_recover_batch", { p_batch_id: oldOrders.id })
+      : null
+    check("a signed-in user cannot run a recovery",
+      userRecover !== null && !userRecover.ok && [401, 403, 404].includes(userRecover.status),
+      String(userRecover?.status))
+  }
+
+  /* ---- the invariant ----------------------------------------------------- */
+  const allOrders = (await read(`/rest/v1/orders?select=id&business_id=eq.${businessId}&limit=5000`)) as { id: string }[]
+  const traced = new Set(
+    ((await read(
+      `/rest/v1/record_lineage?select=record_id&business_id=eq.${businessId}&entity=eq.ORDER&limit=20000`
+    )) as { record_id: string }[]).map((l) => l.record_id)
+  )
+  const untraced = allOrders.filter((o) => !traced.has(o.id))
+  check("EVERY ORDER IN THIS BUSINESS HAS AT LEAST ONE LINE OF HISTORY",
+    allOrders.length > 0 && untraced.length === 0, `${untraced.length} of ${allOrders.length} without history`)
 } finally {
   section("Cleanup")
   await api(`/rest/v1/businesses?id=eq.${businessId}`, { method: "DELETE" })

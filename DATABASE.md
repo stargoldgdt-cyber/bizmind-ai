@@ -749,6 +749,37 @@ default, so every existing call still works. Their old signatures were dropped
 first — two overloads make every call by name ambiguous — and the migration
 checks that each function exists exactly once. All are `service_role` only.
 
+## 7h. Record lineage (0024)
+
+Every order, product and expense now carries a history of what wrote it —
+the foundation for withdrawing an import without touching anything another
+source also owns.
+
+| Piece | What it does |
+| --- | --- |
+| `record_lineage` | One row per record per batch that wrote it (`CREATED`, `UPDATED`, `RECOVERED`), plus `DIRECT` for an edit made outside any import and `UNTRACED` for a record whose origin cannot be proven. Members read it; **nobody writes it directly** — forged lineage could make another import's record look like this one's |
+| Capture | `import_load_batch()`, which every import, sync and webhook write already calls first, tags the transaction with its batch. Triggers on `orders`, `products` and `expenses` record each write. An untagged write is `DIRECT` (once per record, and only when business data changed) |
+| Withdrawal markers | `withdrawn_at`, `withdrawn_by_batch` on the three tables; `lineage_status`, `withdrawn_at`, `withdrawn_by`, `withdrawal_reason` on `import_batches`. **Nothing sets them yet.** Database triggers refuse any change except from the (coming) withdraw/restore functions; an import writing a record again clears them |
+| `lineage_status` | `RECORDED` (captured as it ran) · `RECOVERED` (rebuilt from its stored rows) · `INCOMPLETE` (some rows had no identity — an expense with no Reference) · `NONE` (kept no rows: syncs, webhooks). Only `RECORDED` and `RECOVERED` imports can ever be withdrawn |
+| `record_lineage_recover_batch()` | Rebuilds an older upload's lineage by exact key match (trimmed, same business and source). Never touches lineage recorded as an import ran. `service_role` only |
+
+**The rule withdrawal will follow:** a record is withdrawn only if every write
+to it came from the import being withdrawn, or from imports already withdrawn.
+Any other import, sync, webhook, direct edit or `UNTRACED` origin makes it
+shared, and it stays.
+
+**Imports made before 0024** were traced in the migration. Anything that could
+not be traced safely is `UNTRACED` — records no import claims, and records from
+a source that a row-less sync or webhook also wrote to. The migration refuses
+to install unless every existing record has at least one line of history.
+
+**No figure changes in 0024.** The analytics readers start excluding withdrawn
+records when they are rewritten for the channel dimension.
+
+A future migration that must touch these three tables in bulk should set
+`bizmind.lineage_writer = 'on'` for its transaction, or every record it touches
+will gain a `DIRECT` line and become non-withdrawable.
+
 ---
 
 ## 8. Regenerating types

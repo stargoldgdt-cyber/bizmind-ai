@@ -338,7 +338,7 @@ gaps. See [GOOGLE_SHEETS.md](GOOGLE_SHEETS.md) for the connector they serve.
 
 ```bash
 npm run test:integration-engine   # 77 assertions, no database, no network
-npm run test:integration-live     # 187 assertions, against the real database
+npm run test:integration-live     # 204 assertions, against the real database
 npm run verify:integrations       # both
 ```
 

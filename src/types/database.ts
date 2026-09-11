@@ -147,6 +147,9 @@ export type WebhookEventStatus =
 
 export type SyncResourceKey = "ORDERS" | "PRODUCTS" | "CUSTOMERS" | "INVENTORY" | "EXPENSES"
 
+/** Why a sync ran (migration 0019). Shown in a sheet's sync history. */
+export type SyncTrigger = "INITIAL" | "AUTOMATIC" | "MANUAL" | "RECONCILIATION"
+
 /* ---- Automation (migration 0016) ----------------------------------------- */
 
 /**
@@ -809,7 +812,8 @@ export type Database = {
           source: ChannelType | null
           channel_id: string | null
           file_name: string
-          file_type: "csv" | "xlsx"
+          /** "api" (migration 0018) for a batch a sync wrote. */
+          file_type: "csv" | "xlsx" | "api"
           file_size_bytes: number
           /** Detected column headings. */
           columns: Json
@@ -825,6 +829,9 @@ export type Database = {
           error: string | null
           updated_at: string
           committed_at: string | null
+          /** Migration 0020. Set when a sync wrote this batch; null for an upload. */
+          integration_account_id: string | null
+          sync_run_id: string | null
         }
         Insert: {
           business_id: string
@@ -1190,6 +1197,9 @@ export type Database = {
           locked_by: string | null
           last_error: string | null
           updated_at: string
+          /** Migration 0020. Why the next run will happen. */
+          next_trigger: SyncTrigger | null
+          rerun_requested: boolean
         }
         /** Written through `sync_enqueue()`. */
         Insert: never
@@ -1212,6 +1222,38 @@ export type Database = {
           cursor_before: string | null
           cursor_after: string | null
           error_summary: string | null
+          /** Migration 0020. Why this run happened, and what it wrote. */
+          trigger: SyncTrigger | null
+          rows_inserted: number | null
+          rows_updated: number | null
+          rows_unchanged: number | null
+          rows_rejected: number | null
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+
+      /**
+       * Migrations 0021 and 0023. One fingerprint per business record per
+       * connection. Members may read it; only the worker writes it.
+       */
+      integration_record_state: {
+        Row: {
+          id: string
+          business_id: string
+          integration_account_id: string
+          entity: string
+          business_key: string
+          content_hash: string
+          last_outcome: "APPLIED" | "REJECTED"
+          locator: Json
+          present: boolean
+          first_seen_at: string
+          last_seen_at: string
+          last_changed_at: string
+          last_seen_run_id: string | null
+          last_seen_pass: string | null
         }
         Insert: never
         Update: never

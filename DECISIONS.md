@@ -1254,3 +1254,36 @@ BizMind only ever sends a store's own credentials to the host its owner named,
 and never reflects a response body back to them.
 
 **Cost to change:** Low.
+
+---
+
+## 2026-09-11 — The Google Picker's browser key is the one API key in the browser
+
+**Decided (by the owner):** the Google Picker's browser API key,
+`NEXT_PUBLIC_GOOGLE_PICKER_API_KEY`, is sent to the browser. It is the single
+agreed exception to "no API keys in the frontend".
+
+**Why:** with the `drive.file` permission (approved decision 1), BizMind can
+open only files the owner picks in Google's own picker, and Google's picker
+does not run without a browser key — Google's sample says requests fail with
+"API developer key is invalid" otherwise. The alternative, pasting a link,
+would need permission to read every spreadsheet in the owner's Drive: a
+sensitive scope that needs Google's review and shows customers a stronger
+warning.
+
+**What keeps it safe:**
+
+- In Google Cloud the key is restricted to the **Google Picker API only**, and
+  to BizMind's own web addresses plus `https://docs.google.com/*`, where the
+  picker runs. Anywhere else Google refuses it.
+- On its own it reads nothing. Opening a file needs the owner's Google sign-in,
+  and the lasting authorisation (the refresh token) never leaves the server.
+- The picker's short-lived access token is held in memory while connecting and
+  sent only to BizMind's own server actions. It is never stored.
+
+A test fails the build if any other `NEXT_PUBLIC_GOOGLE_*` value appears, or if
+browser code mentions a refresh token, a stored credential or the client
+secret.
+
+**Cost to change:** Low. Swapping the key is an environment change; dropping
+the picker means revisiting the scope decision.

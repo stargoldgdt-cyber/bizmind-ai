@@ -34,14 +34,25 @@ const TIMEOUT_MS = 30_000
 /** Google's per-minute quotas refill each minute; waiting one is always safe. */
 const DEFAULT_RATE_LIMIT_WAIT_MS = 60_000
 
+/**
+ * `detail` is Google's HTTP status and machine-readable reason code -- for
+ * example "403 PERMISSION_DENIED SERVICE_DISABLED". Safe to log: it never
+ * holds a token, a message text, or anything from the spreadsheet.
+ */
 export type GoogleFailure =
-  | { kind: "rate_limited"; retryAfterMs: number; reason: string }
-  | { kind: "retryable_error"; reason: string }
+  | { kind: "rate_limited"; retryAfterMs: number; reason: string; detail?: string }
+  | { kind: "retryable_error"; reason: string; detail?: string }
   | {
       kind: "permanent_error"
       code?: "REAUTH_REQUIRED" | "SOURCE_GONE" | "ACCESS_DENIED"
       reason: string
+      detail?: string
     }
+
+/** Google says one of the APIs BizMind calls is switched off in its Cloud project. */
+export function isApiDisabled(failure: GoogleFailure): boolean {
+  return /SERVICE_DISABLED|accessNotConfigured/i.test(failure.detail ?? "")
+}
 
 export type GoogleResult<T> = { kind: "ok"; body: T } | GoogleFailure
 
@@ -283,6 +294,7 @@ export function classifyGoogleError(
   retryAfter: string | null
 ): GoogleFailure {
   const reason = googleErrorReason(body)
+  const detail = `${status} ${reason}`.replace(/\s+/g, " ").trim()
 
   const rateLimited =
     status === 429 ||
@@ -297,6 +309,7 @@ export function classifyGoogleError(
       kind: "rate_limited",
       retryAfterMs: seconds !== null ? seconds * 1000 : DEFAULT_RATE_LIMIT_WAIT_MS,
       reason: "Google asked BizMind to slow down.",
+      detail,
     }
   }
 
@@ -305,6 +318,20 @@ export function classifyGoogleError(
       kind: "permanent_error",
       code: "REAUTH_REQUIRED",
       reason: "Google access has expired or was revoked. Reconnect Google to resume syncing.",
+      detail,
+    }
+  }
+
+  // An API switched off in the Cloud project is not the owner's sheet, nor
+  // their access: it is the server's own Google setup, and no amount of
+  // re-sharing the sheet would fix it. So it is not reported as ACCESS_DENIED.
+  if (status === 403 && /SERVICE_DISABLED|accessNotConfigured/i.test(reason)) {
+    return {
+      kind: "permanent_error",
+      reason:
+        "A Google API that BizMind needs is switched off in its Google Cloud project. " +
+        "Turn on the Google Sheets API and Google Drive API there.",
+      detail,
     }
   }
 
@@ -315,6 +342,7 @@ export function classifyGoogleError(
       reason:
         "BizMind can no longer open this spreadsheet. It may have been unshared, " +
         "or opened with a different Google account.",
+      detail,
     }
   }
 
@@ -323,14 +351,15 @@ export function classifyGoogleError(
       kind: "permanent_error",
       code: "SOURCE_GONE",
       reason: "This spreadsheet no longer exists, or BizMind can no longer see it.",
+      detail,
     }
   }
 
   if (status === 408 || status >= 500) {
-    return { kind: "retryable_error", reason: `Google returned ${status}. It will be retried.` }
+    return { kind: "retryable_error", reason: `Google returned ${status}. It will be retried.`, detail }
   }
 
-  return { kind: "permanent_error", reason: `Google refused the request (${status}).` }
+  return { kind: "permanent_error", reason: `Google refused the request (${status}).`, detail }
 }
 
 /** Google's machine-readable error reason, from either of its error shapes. */

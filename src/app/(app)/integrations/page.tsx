@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import { redirect } from "next/navigation"
-import { CircleAlert, Plug } from "lucide-react"
+import { CircleAlert } from "lucide-react"
 
 import { AppShell } from "@/components/layout/app-shell"
 import { Badge } from "@/components/ui/badge"
@@ -12,12 +12,14 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { ONBOARDING_ROUTE } from "@/config/routes"
+import { getActiveBusiness, getUserBusinesses } from "@/features/businesses/queries"
+import { GoogleSheetsPanel } from "@/features/integrations/components/google-sheets-panel"
+import { getGoogleSetup, listSheetConnections } from "@/features/integrations/google-queries"
 import {
   listConnections,
   recentWebhookEvents,
   webhookHealth,
 } from "@/features/integrations/queries"
-import { getActiveBusiness, getUserBusinesses } from "@/features/businesses/queries"
 import { createClient, getCurrentUser } from "@/lib/supabase/server"
 
 export const metadata: Metadata = { title: "Integrations" }
@@ -25,16 +27,17 @@ export const metadata: Metadata = { title: "Integrations" }
 /**
  * Integrations.
  *
- * Deliberately small. The engine beneath it is the work; this page exists so
- * an owner can see that a store is connected, when it last synced, and whether
- * anything is wrong — which is the whole of what they need before a real
- * connector exists to configure.
+ * Where BizMind gets its data: Google Sheets first, because that is the
+ * connector an owner can use today, then any store connections and webhook
+ * health. An owner should be able to see that a source is connected, when it
+ * last worked, and whether anything is wrong -- without reading a log.
  */
-export default async function IntegrationsPage() {
-  const [user, businesses, activeBusiness] = await Promise.all([
+export default async function IntegrationsPage({ searchParams }: PageProps<"/integrations">) {
+  const [user, businesses, activeBusiness, params] = await Promise.all([
     getCurrentUser(),
     getUserBusinesses(),
     getActiveBusiness(),
+    searchParams,
   ])
 
   if (!activeBusiness) redirect(ONBOARDING_ROUTE)
@@ -46,11 +49,18 @@ export default async function IntegrationsPage() {
     .eq("id", user!.id)
     .maybeSingle()
 
-  const [connections, health, events] = await Promise.all([
+  const [connections, health, events, googleSetup, sheets] = await Promise.all([
     listConnections(),
     webhookHealth(),
     recentWebhookEvents(10),
+    getGoogleSetup(activeBusiness.id),
+    listSheetConnections(activeBusiness.id),
   ])
+
+  // Google Sheets tabs have their own section above.
+  const storeConnections = connections.filter((c) => c.provider !== "GOOGLE_SHEETS")
+  const outcome = typeof params.google === "string" ? params.google : null
+  const canManage = activeBusiness.role === "OWNER" || activeBusiness.role === "ADMIN"
 
   return (
     <AppShell
@@ -59,31 +69,35 @@ export default async function IntegrationsPage() {
       userEmail={user!.email ?? ""}
       userName={profile?.full_name ?? null}
     >
-      <div className="mx-auto max-w-7xl">
+      <div className="mx-auto max-w-7xl space-y-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Integrations</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Connected stores, when they last synced, and anything that needs
-            attention.
+            Where BizMind gets your data, when it last synced, and anything that needs attention.
           </p>
         </div>
 
-        {connections.length === 0 ? (
-          <Card className="mt-6 shadow-none">
-            <CardContent className="flex flex-col items-center gap-3 px-6 py-16 text-center">
-              <span className="flex size-11 items-center justify-center rounded-md bg-accent text-accent-foreground">
-                <Plug className="size-5" aria-hidden />
-              </span>
-              <p className="font-heading text-lg font-semibold">No stores connected</p>
-              <p className="max-w-md text-sm text-muted-foreground">
-                Shopify and WooCommerce connectors are not built yet. The engine
-                that will run them is, and it is tested.
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <section className="mt-6 space-y-4" aria-label="Connections">
-            {connections.map((connection) => (
+        <GoogleSheetsPanel
+          setup={googleSetup}
+          canManage={canManage}
+          businessCurrency={activeBusiness.currency}
+          sheets={sheets}
+          outcome={outcome}
+        />
+
+        <section className="space-y-4" aria-label="Store connections">
+          {storeConnections.length === 0 ? (
+            <Card className="shadow-none">
+              <CardHeader>
+                <CardTitle className="text-base">Online stores</CardTitle>
+                <CardDescription>
+                  No store is connected. Connecting Shopify or WooCommerce from this page is not
+                  available yet.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          ) : (
+            storeConnections.map((connection) => (
               <Card key={connection.accountId} className="shadow-none">
                 <CardHeader>
                   <div className="flex flex-wrap items-center gap-2">
@@ -142,11 +156,11 @@ export default async function IntegrationsPage() {
                   )}
                 </CardContent>
               </Card>
-            ))}
-          </section>
-        )}
+            ))
+          )}
+        </section>
 
-        <section className="mt-4" aria-label="Webhook deliveries">
+        <section aria-label="Webhook deliveries">
           <Card className="shadow-none">
             <CardHeader>
               <CardTitle className="text-base">Webhook deliveries</CardTitle>

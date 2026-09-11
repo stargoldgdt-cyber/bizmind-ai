@@ -926,6 +926,67 @@ check("a page that is all one order is not held back forever",
   big.kind === "page" ? String(big.nextCursor) : big.kind)
 
 /* ========================================================================== */
+section("10. THE CONNECT SCREEN")
+/* ========================================================================== */
+
+const pickerSource = readFileSync("src/features/integrations/google-picker.ts", "utf8")
+const wizardSource = readFileSync("src/features/integrations/components/sheet-connect-wizard.tsx", "utf8")
+
+check("the picker offers native Google Sheets files only",
+  pickerSource.includes("application/vnd.google-apps.spreadsheet"))
+const browserScopes = pickerSource.match(/https:\/\/www\.googleapis\.com\/auth\/[a-z.]+/g) ?? []
+check("THE BROWSER ASKS GOOGLE FOR drive.file AND NOTHING ELSE",
+  browserScopes.length > 0 && browserScopes.every((s) => s === GOOGLE_SCOPE_DRIVE_FILE),
+  browserScopes.join(", "))
+
+const browserFiles = sources.filter((f) => {
+  const code = readFileSync(f, "utf8")
+  return code.includes('"use client"') || normalised(f).endsWith("features/integrations/google-picker.ts")
+})
+const leaking = browserFiles.filter((f) =>
+  /refresh_token|credentials_encrypted|GOOGLE_CLIENT_SECRET|SERVICE_ROLE|BIZMIND_ENCRYPTION_KEY/.test(readFileSync(f, "utf8"))
+)
+check("NO BROWSER CODE MENTIONS A REFRESH TOKEN, A STORED CREDENTIAL OR A SERVER SECRET",
+  leaking.length === 0, leaking.map(normalised).join(", "))
+
+const publicGoogle = new Set(
+  sources.flatMap((f) => readFileSync(f, "utf8").match(/NEXT_PUBLIC_GOOGLE_[A-Z_]+/g) ?? [])
+)
+check("the only public Google settings are the project number and the picker's browser key",
+  [...publicGoogle].every((name) =>
+    name === "NEXT_PUBLIC_GOOGLE_PROJECT_NUMBER" || name === "NEXT_PUBLIC_GOOGLE_PICKER_API_KEY"),
+  [...publicGoogle].join(", "))
+
+check("THE BROWSER'S GOOGLE TOKEN IS NEVER WRITTEN TO STORAGE",
+  !/localStorage|sessionStorage|document\.cookie|indexedDB/.test(
+    (pickerSource + wizardSource).replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "")
+  ))
+check("the wizard never promises a speed",
+  !/instant|real[- ]time|immediately/i.test(wizardSource))
+
+const nextConfig = readFileSync("next.config.ts", "utf8")
+check("SERVER FUNCTION ARGUMENTS ARE NOT LOGGED -- the browser's Google token is one",
+  /serverFunctions:\s*false/.test(nextConfig))
+
+const disabled = classifyGoogleError(
+  403,
+  JSON.stringify({ error: { code: 403, status: "PERMISSION_DENIED", details: [{ reason: "SERVICE_DISABLED" }] } }),
+  null
+)
+check("A SWITCHED-OFF GOOGLE API IS NOT REPORTED AS 'NO ACCESS TO YOUR SHEET'",
+  disabled.kind === "permanent_error" && !("code" in disabled && disabled.code) &&
+    disabled.reason.includes("switched off"),
+  JSON.stringify(disabled))
+const denied = classifyGoogleError(
+  403,
+  JSON.stringify({ error: { code: 403, status: "PERMISSION_DENIED", message: "ya29.not-a-real-token" } }),
+  null
+)
+check("the reason code kept for the log carries Google's status and code, never its message",
+  denied.detail === "403 PERMISSION_DENIED" && !JSON.stringify(denied).includes("ya29"),
+  JSON.stringify(denied))
+
+/* ========================================================================== */
 
 console.log(`\n${"=".repeat(74)}`)
 console.log(` RESULT: ${passed} passed, ${failed} failed`)

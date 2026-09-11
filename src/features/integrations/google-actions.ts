@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/server"
 import {
   getSpreadsheet,
   getValues,
+  isApiDisabled,
   isSpreadsheetId,
   rowsRange,
   type GoogleFailure,
@@ -52,6 +53,16 @@ const previewSchema = pickSchema.extend({
 type Failure = { ok: false; error: string }
 
 function explain(failure: GoogleFailure): string {
+  // Google's status and reason code only -- never the token, never a message
+  // text. Without it, "API switched off" and "no access" look identical.
+  console.error("[google] a Google request failed:", failure.detail ?? failure.kind)
+
+  if (isApiDisabled(failure)) {
+    return (
+      "Google Sheets is not fully set up on this server: a Google API BizMind needs " +
+      "is switched off in its Google Cloud project."
+    )
+  }
   if (failure.kind === "rate_limited") {
     return "Google is busy right now. Wait a minute and try again."
   }
@@ -325,7 +336,7 @@ export async function connectGoogleSheetAction(
     console.error("[google] queuing the first import failed:", queueError.message)
     return {
       ok: false,
-      error: "The sheet is connected, but its first import could not start. Use Sync now to start it.",
+      error: "The sheet is saved, but its import could not start yet. Use Sync now in a moment.",
     }
   }
 
@@ -387,6 +398,46 @@ export async function syncGoogleSheetNowAction(rawInput: unknown): Promise<{ ok:
 
   startBackgroundSync()
   revalidatePath("/integrations")
+
+  return { ok: true }
+}
+
+const pauseSchema = z.object({ accountId: z.string().uuid(), paused: z.boolean() })
+
+/**
+ * Pause or resume one tab. Only the owner's choice can do either: the worker
+ * may never pause a connection, nor resume one (migration 0020). Resuming
+ * reads the sheet again straight away, so nothing edited meanwhile waits.
+ */
+export async function pauseGoogleSheetAction(rawInput: unknown): Promise<{ ok: true } | Failure> {
+  const business = await getActiveBusiness()
+  if (!business || (business.role !== "OWNER" && business.role !== "ADMIN")) {
+    return { ok: false, error: "Only an owner or admin can pause or resume a sheet." }
+  }
+
+  const parsed = pauseSchema.safeParse(rawInput)
+  if (!parsed.success) return { ok: false, error: "That sheet connection could not be found." }
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("integration_account_pause", {
+    p_account_id: parsed.data.accountId,
+    p_paused: parsed.data.paused,
+  })
+
+  if (error) {
+    return {
+      ok: false,
+      error: parsed.data.paused
+        ? "The sheet could not be paused."
+        : "The sheet could not be resumed. Only a paused sheet can be resumed.",
+    }
+  }
+
+  revalidatePath("/integrations")
+
+  if (!parsed.data.paused) {
+    return syncGoogleSheetNowAction({ accountId: parsed.data.accountId })
+  }
 
   return { ok: true }
 }

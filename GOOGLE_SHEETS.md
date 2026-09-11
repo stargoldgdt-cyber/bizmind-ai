@@ -1,9 +1,10 @@
 # Google Sheets
 
-**Steps 1–3 of 6 built: the database foundation, the Google sign-in, and
-applying a sheet's rows. Change notifications (step 4) and the connect screen
-(step 5) are not built yet, so no owner can connect a sheet from the app
-today.** This records the decisions made and what each step does.
+**Steps 1, 2, 3 and 5 of 6 built: the database foundation, the Google
+sign-in, applying a sheet's rows, and the connect screen. Change notifications
+(step 4) are not built, so a sheet is read when it is connected and when the
+owner presses Sync now — not automatically yet.** This records the decisions
+made and what each step does.
 
 Official documentation consulted 2026-09-11:
 [Drive push notifications](https://developers.google.com/workspace/drive/api/guides/push) ·
@@ -149,8 +150,8 @@ code: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`,
 `NEXT_PUBLIC_GOOGLE_PROJECT_NUMBER` (public by design — the Picker needs it),
 `GOOGLE_WEBHOOK_BASE_URL`, `CRON_SECRET`. See `.env.example`.
 
-**Step 3 (below) applies the rows.** Push notifications (step 4) and the
-connect screen (step 5) are still to come.
+**Step 3 (6b) applies the rows, and step 5 (6c) is the connect screen.** Push
+notifications (step 4) are still to come.
 
 ## 6b. What step 3 built — a sheet's rows into BizMind
 
@@ -192,6 +193,41 @@ Anything not finished in one run is picked up by the next. The background work
 uses the worker's privileged path: nothing it does is returned to the owner's
 request, and the worker takes no business id.
 
+## 6c. What step 5 built — the connect screen
+
+On **Integrations**, a Google Sheets section:
+
+1. **Connect Google** — the step-2 sign-in. Owner or admin only.
+2. **Add a sheet** — Google's own picker, showing native Google Sheets files
+   only. The browser gets a short-lived token from Google's script for this;
+   it is held in memory while connecting and never stored. The picker needs a
+   browser API key: see DECISIONS.md, 2026-09-11.
+3. **Choose the tab and what it holds** — orders, products or expenses.
+4. **Match columns** — the same fields, importance levels and warnings as an
+   upload. Suggestions come from the headings, and every one is shown for
+   checking. The worker's own checks run on the server before anything is
+   saved, so a missing Reference column on an expenses tab is refused here, not
+   a minute later.
+5. **Connect and import** — the first import starts at once, in the background.
+
+Each connected sheet shows its state in words and an icon (never colour
+alone), its last successful sync, what is running now, its recent syncs (why
+each ran; rows added, updated, unchanged and skipped), the latest row problems
+with their real sheet rows, and how many records are no longer in the sheet —
+with "nothing was deleted" said plainly.
+
+Actions: **Sync now**, **Pause / Resume**, **Change columns** (reads the sheet
+again with a fresh Google sign-in), and **Disconnect** (behind a confirmation;
+records already imported stay).
+
+While a sheet is syncing, the page refreshes itself every few seconds, for at
+most three minutes. It shows what is known — queued, running, rows written —
+never a percentage or a time estimate.
+
+**Not in this step:** automatic updates (step 4, and a schedule at deployment),
+and the "what does this column mean?" questions an upload asks about columns
+it does not map (see Known limits).
+
 ## 7. Known limits
 
 1. **While the Google app is in "Testing", refresh tokens expire after 7 days.**
@@ -211,6 +247,8 @@ request, and the worker takes no business id.
    an error. The same value fails an upload too. Fix the cell, then Sync now.
 8. Dates are read as Excel reads them: the sheet's time zone is not applied.
 9. One Google account per business (V1).
+10. A sheet's unmapped columns are not kept, so the upload's "what does this
+    column mean?" step is not offered for sheets yet.
 
 ## 8. Tests
 

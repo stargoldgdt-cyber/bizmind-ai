@@ -1,26 +1,30 @@
 import type { Metadata } from "next"
+import Link from "next/link"
 import { redirect } from "next/navigation"
-import { CircleAlert, Inbox } from "lucide-react"
+import { CircleAlert } from "lucide-react"
 
 import { AppShell } from "@/components/layout/app-shell"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ONBOARDING_ROUTE } from "@/config/routes"
 import { ChannelTable } from "@/features/analytics/components/channel-table"
+import { DataQuality } from "@/features/analytics/components/data-quality"
+import { EmptyDashboard } from "@/features/analytics/components/empty-dashboard"
 import { HealthCard } from "@/features/analytics/components/health-card"
 import { InsightList } from "@/features/analytics/components/insight-list"
 import { MetricCard } from "@/features/analytics/components/metric-card"
 import { PeriodNarrative } from "@/features/analytics/components/period-narrative"
 import { ProductTable } from "@/features/analytics/components/product-table"
 import { RangeSelector } from "@/features/analytics/components/range-selector"
+import { periodFromParams } from "@/features/analytics/page-context"
+import { businessHasAnyOrders } from "@/features/analytics/queries"
 import { getActiveBusiness, getUserBusinesses } from "@/features/businesses/queries"
+import { listAlerts, presentAlert } from "@/services/automation"
 import { formatMoney, formatNumber, formatPercent } from "@/lib/format"
 import {
-  DEFAULT_PERIOD,
   findComparison,
   getAnalytics,
-  isPeriodKey,
   METRICS,
-  resolvePeriod,
   type MetricComparison,
 } from "@/services/analytics"
 import { createClient, getCurrentUser } from "@/lib/supabase/server"
@@ -38,8 +42,9 @@ export const metadata: Metadata = {
  */
 export default async function DashboardPage(props: PageProps<"/dashboard">) {
   const searchParams = await props.searchParams
-  const rangeParam = Array.isArray(searchParams.range) ? searchParams.range[0] : searchParams.range
-  const period = resolvePeriod(isPeriodKey(rangeParam) ? rangeParam : DEFAULT_PERIOD)
+  // Shared resolver, so a custom range works identically on every page and no
+  // date arithmetic happens in a component.
+  const period = periodFromParams(searchParams)
 
   const [user, businesses, activeBusiness] = await Promise.all([
     getCurrentUser(),
@@ -57,7 +62,17 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
     .maybeSingle()
 
   // The business comes from the session, never from the request.
-  const analytics = await getAnalytics(activeBusiness.id, period, activeBusiness.currency)
+  // Fetched alongside the analytics, not after it: the empty state needs to
+  // know whether this business has EVER recorded an order, so it can tell a
+  // new owner apart from an established one having a quiet fortnight.
+  const [analytics, hasAnyData, openAlerts] = await Promise.all([
+    getAnalytics(activeBusiness.id, period, activeBusiness.currency),
+    businessHasAnyOrders(activeBusiness.id),
+    // Alerts are not period-scoped: something that needs attention needs it
+    // regardless of which window the owner happens to be looking at.
+    listAlerts(activeBusiness.id, { status: "OPEN", limit: 3 }),
+  ])
+
   const { current, comparisons, channels, products, health, insights, reconciliation } = analytics
   const currency = activeBusiness.currency
 
@@ -103,7 +118,10 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
               {period.label} · {period.comparisonLabel} · all figures in {currency}
             </p>
           </div>
-          <RangeSelector active={period.key} />
+          <RangeSelector
+            active={period.key}
+            customLabel={period.key === "custom" ? period.label : undefined}
+          />
         </div>
 
         {period.incomplete && hasSales && (
@@ -129,20 +147,48 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
         )}
 
         {!analytics.error && !hasSales ? (
-          <Card className="mt-6 shadow-none">
-            <CardContent className="flex flex-col items-center gap-3 px-6 py-16 text-center">
-              <span className="flex size-11 items-center justify-center rounded-md bg-accent text-accent-foreground">
-                <Inbox className="size-5" aria-hidden />
-              </span>
-              <p className="font-heading text-lg font-semibold">No sales in this period</p>
-              <p className="max-w-md text-sm text-muted-foreground">
-                Import a sales export to see revenue, true margin after fees, and
-                which channel actually earns you the most.
-              </p>
-            </CardContent>
-          </Card>
+          <EmptyDashboard hasAnyData={hasAnyData} periodLabel={period.label} />
         ) : (
           <>
+            {/*
+              Above every figure, because "something needs your attention" is a
+              different kind of statement from "here is your revenue" and
+              should not have to be scrolled to.
+            */}
+            {openAlerts.length > 0 && (
+              <section className="mt-6" aria-label="Needs attention">
+                <div className="overflow-hidden rounded-xl border border-warning/30 bg-warning-subtle">
+                  <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+                    <p className="text-sm font-medium text-warning-strong">
+                      {openAlerts.length === 1
+                        ? "One thing needs your attention"
+                        : `${openAlerts.length} things need your attention`}
+                    </p>
+                    <Button asChild size="sm" variant="outline" className="rounded-4xl">
+                      <Link href="/alerts">Open alerts</Link>
+                    </Button>
+                  </div>
+
+                  <ul className="border-t border-warning/25">
+                    {openAlerts.map((alert) => {
+                      const shown = presentAlert(alert, currency)
+                      return (
+                        <li
+                          key={alert.id}
+                          className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-warning/20 px-5 py-2.5 last:border-0"
+                        >
+                          <span className="text-sm">{alert.title}</span>
+                          <span className="font-mono text-xs tabular-nums text-warning-strong">
+                            {shown.metricLabel} {shown.value} · limit {shown.threshold}
+                          </span>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              </section>
+            )}
+
             <section className="mt-6" aria-label="Headline figures">
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <MetricCard
@@ -213,6 +259,15 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
 
             <section className="mt-8" aria-label="What this means">
               <PeriodNarrative key={period.key} range={period.key} />
+            </section>
+
+            {/*
+              Placed directly under the narrative, before the deeper tables.
+              An owner should learn how much of this they can rely on before
+              they start drawing conclusions from it, not after.
+            */}
+            <section className="mt-4" aria-label="Data quality">
+              <DataQuality current={current} />
             </section>
 
             <section className="mt-4" aria-label="Findings">

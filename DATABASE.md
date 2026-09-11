@@ -686,6 +686,44 @@ any of the three.
 
 ---
 
+## 7e. The integration engine, repaired and extended (0018–0021)
+
+**0018** — the sync write path never wrote a row: every sync and webhook batch
+used `file_type = 'api'`, which the column's check refused. Fixed, and synced
+orders now carry their connection's channel.
+
+**0019** — enum values only, applied alone: PostgreSQL will not use a new enum
+value inside the transaction that added it.
+
+**0020** — engine changes:
+
+| Change | Detail |
+| --- | --- |
+| `orders_number_key` | Now `(business_id, source, order_number)`. Order numbers repeat across sources, not within one. A pure relaxation |
+| `sync_jobs.resource` | Accepts `EXPENSES`; `sync_apply_expenses()` added |
+| `sync_jobs` | `next_trigger`, `rerun_requested` |
+| `sync_runs` | `trigger`, `rows_inserted`, `rows_updated`, `rows_unchanged`, `rows_rejected` |
+| `import_batches` | `integration_account_id`, `sync_run_id` — which connection and run a batch came from |
+| `sync_job_complete()` | New `p_has_more`. The old signature was dropped first, because two overloads make every call ambiguous |
+| `integration_account_connect()` | Creates a channel only when given a channel type |
+| `integration_account_pause()` | Owner or admin. Resuming only turns `PAUSED` back into `CONNECTED` |
+| `integration_account_set_state()` | Worker only. May never pause or disconnect |
+| `sync_enqueue_system()` | Session-less queueing. Declines for paused, broken or dead-lettered connections |
+
+**0021** — Google Sheets foundation:
+
+| Table | Holds | Signed-in users |
+| --- | --- | --- |
+| `integration_watch_channels` | Google change-notification channels, which expire within a day | Read every column **except** `token_encrypted`, which is granted column by column so it can never be reached |
+| `integration_record_state` | One fingerprint per business record per connection | Read only |
+
+Both have RLS enabled and forced. Nobody signed in can write to either: they are
+written only by service_role functions that take a job, account or channel id
+and derive the tenant from it. A record missing from its source is marked
+`present = false` — **never deleted**.
+
+---
+
 ## 8. Regenerating types
 
 `src/types/database.ts` is currently hand-written to match the migrations. Keep

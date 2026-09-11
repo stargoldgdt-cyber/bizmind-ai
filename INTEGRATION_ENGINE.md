@@ -274,11 +274,36 @@ concept has no business widening a production enum that analytics groups by.
 
 ---
 
+## 9a. What migration 0020 changed
+
+Building Google Sheets on this engine surfaced a fourth defect and several
+gaps. See [GOOGLE_SHEETS.md](GOOGLE_SHEETS.md) for the connector they serve.
+
+- **Pages continue.** `sync_job_complete()` used to mark a job `SUCCEEDED` even
+  when the connector said more pages remained, and the worker only claims
+  `QUEUED` or `RETRYING` jobs — so every resource stopped after page one. The
+  worker now passes `p_has_more`, and a page with more to come re-queues its
+  job at once.
+- **A running job is never stolen.** Queuing a job a worker held used to clear
+  its lease, so two workers could write at once. Now the request sets
+  `rerun_requested`, honoured the moment the running sync finishes. A full
+  re-import on top of a running pass is refused.
+- **`source` comes from the connection's channel**, falling back to the
+  provider. For WooCommerce and the fixture that is exactly the value it always
+  was, so no existing record moves.
+- **Paused, needs-reauthorisation and needs-mapping-review connections are
+  never claimed.** Only the owner pauses or disconnects; the worker records
+  what it found through `integration_account_set_state()` and may do nothing
+  else.
+- `EXPENSES` is a sync resource; every run records why it ran and how many rows
+  it inserted, updated, left unchanged or rejected; every batch records the
+  connection and run it came from.
+
 ## 10. Tests
 
 ```bash
 npm run test:integration-engine   # 75 assertions, no database, no network
-npm run test:integration-live     # 75 assertions, against the real database
+npm run test:integration-live     # 155 assertions, against the real database
 npm run verify:integrations       # both
 ```
 

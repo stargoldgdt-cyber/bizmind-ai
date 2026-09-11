@@ -277,12 +277,16 @@ async function runOneJob(job: JobRow): Promise<JobOutcome> {
     p_job_id: job.id,
     p_run_id: runId,
     p_status: status,
-    p_cursor: page.hasMore ? page.nextCursor : page.nextCursor,
+    p_cursor: page.nextCursor,
     p_records_fetched: records.length,
     p_records_applied: applied,
     p_records_skipped: skipped,
     p_error: null,
     p_retry_after_ms: null,
+    // Without this the engine stopped after page one of every resource: the
+    // job was marked SUCCEEDED and nothing re-queued it. With more to come,
+    // migration 0020 puts the job straight back in the queue at its cursor.
+    p_has_more: page.hasMore,
   })
 
   return status

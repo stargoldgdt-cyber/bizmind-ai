@@ -784,6 +784,701 @@ try {
     reconnectAfterRevoke.id === accountId && reconnectAfterRevoke.status === "CONNECTED"
   )
   check("with the same channel", reconnectAfterRevoke.channel_id === firstChannel)
+
+  /*
+   * Sections 9 and 10 cover migrations 0020 and 0021. Every call below goes
+   * through `call()`, which never throws, so the suite still runs to the end
+   * and reports against a database that does not have them yet.
+   */
+  const parse = (text: string) => {
+    try {
+      return text ? JSON.parse(text) : null
+    } catch {
+      return text
+    }
+  }
+
+  async function call(fn: string, args: unknown, asToken = token) {
+    const r = await tryRpc(fn, args, asToken)
+    return { ok: r.ok, status: r.status, body: parse(r.body) }
+  }
+
+  async function serviceCall(fn: string, args: unknown) {
+    const r = await serviceRpc(fn, args)
+    return { ok: r.ok, status: r.status, body: r.body }
+  }
+
+  const brief = (r: { status: number; body: unknown }) =>
+    `${r.status} ${JSON.stringify(r.body).slice(0, 180)}`
+
+  /**
+   * A read that reports instead of aborting. Sections 9 and 10 read columns and
+   * tables that 0020 and 0021 create; before those exist, a throwing read ends
+   * the whole suite before it can print a result.
+   */
+  async function read(path: string, init: RequestInit = {}, asToken = token) {
+    const r = await attempt(path, init, asToken)
+    const body = parse(r.body)
+    return r.ok && Array.isArray(body) ? body : []
+  }
+
+  /* ---------------------------------------------------------------------- */
+  section("9. ENGINE EXTENSIONS (0020)")
+
+  /* ---- 9a. Order numbers are unique per source, not per business -------- */
+  // A website export and an Amazon export both numbering from 1001 are two
+  // different orders. Before 0020 the second was refused with 23505, and
+  // because a page is written all-or-nothing, so was everything beside it.
+  async function importOrder(source: string, externalId: string, orderNumber: string) {
+    const created = await attempt("/rest/v1/import_batches", {
+      method: "POST",
+      body: JSON.stringify({
+        business_id: businessId,
+        entity: "ORDERS",
+        status: "DRAFT",
+        source,
+        file_name: `${source.toLowerCase()}.csv`,
+        file_type: "csv",
+        file_size_bytes: 0,
+        row_count: 1,
+      }),
+    })
+    const batch = parse(created.body)?.[0]
+    if (!created.ok || !batch) return { ok: false, status: created.status, body: created.body }
+
+    return call("import_apply_orders", {
+      p_batch_id: batch.id,
+      p_rows: [
+        {
+          external_id: externalId,
+          order_number: orderNumber,
+          placed_at: new Date().toISOString(),
+          status: "FULFILLED",
+          currency: "AED",
+          total: "90.0000",
+          items: [],
+        },
+      ],
+    })
+  }
+
+  const sharedNumber = `N-${suffix}`
+  const websiteFirst = await importOrder("WEBSITE", `WEB-${suffix}-1`, sharedNumber)
+  check("an order is imported from the website", websiteFirst.ok, brief(websiteFirst))
+
+  const amazonSame = await importOrder("AMAZON", `AMZ-${suffix}-1`, sharedNumber)
+  check("THE SAME ORDER NUMBER FROM A DIFFERENT SOURCE IS ACCEPTED",
+    amazonSame.ok, brief(amazonSame))
+
+  const websiteAgain = await importOrder("WEBSITE", `WEB-${suffix}-2`, sharedNumber)
+  check("but within one source an order number still cannot repeat",
+    !websiteAgain.ok && JSON.stringify(websiteAgain.body).includes("23505"),
+    brief(websiteAgain))
+
+  if (!HAS_SERVICE_KEY) {
+    for (const name of [
+      "a page with more to come re-queues its job",
+      "a leased job is not stolen by a new request",
+      "a paused connection is not synced",
+      "a connection needing reauthorisation is not synced",
+      "expenses can be synced",
+    ]) skip(name, "SUPABASE_SERVICE_ROLE_KEY is not set")
+  } else {
+    const STORE_C = `fixture-store-c-${suffix}`
+    const storeC = await call("integration_account_connect", {
+      p_business_id: businessId,
+      p_provider: "FIXTURE",
+      p_external_account_id: STORE_C,
+      p_display_name: "Store C",
+      p_channel_type: "OTHER",
+      p_metadata: {},
+    })
+    const accountC = storeC.body?.id as string
+    const workerId = `worker-${suffix}`
+
+    const claims = async (jobId: string) => {
+      const res = await serviceCall("sync_claim_jobs", {
+        p_worker_id: workerId,
+        p_limit: 200,
+        p_lease_seconds: 300,
+      })
+      return Array.isArray(res.body) && res.body.some((j: { id: string }) => j.id === jobId)
+    }
+
+    const readJob = async (jobId: string) =>
+      (await read(
+        `/rest/v1/sync_jobs?select=status,mode,cursor,locked_by,rerun_requested,next_trigger&id=eq.${jobId}`
+      ))[0]
+
+    const completion = (jobId: string, runId: string, cursor: string, hasMore: boolean) => ({
+      p_job_id: jobId,
+      p_run_id: runId,
+      p_status: "SUCCEEDED",
+      p_cursor: cursor,
+      p_records_fetched: 50,
+      p_records_applied: 50,
+      p_records_skipped: 0,
+      p_error: null,
+      p_retry_after_ms: null,
+      p_has_more: hasMore,
+      p_rows_inserted: 50,
+      p_rows_updated: 0,
+      p_rows_unchanged: 0,
+      p_rows_rejected: 0,
+    })
+
+    /* ---- 9b. Pages continue --------------------------------------------- */
+    // THE FOURTH DEFECT. sync_job_complete() used to mark a job SUCCEEDED even
+    // when the connector said more pages remained, and the worker only claims
+    // QUEUED or RETRYING jobs -- so the engine fetched the first page of any
+    // resource and then stopped for good.
+    const queued = await call("sync_enqueue", {
+      p_account_id: accountC,
+      p_resource: "PRODUCTS",
+      p_mode: "INITIAL",
+    })
+    const productsJob = queued.body?.id as string
+    check("an initial sync records why it is running",
+      queued.body?.next_trigger === "INITIAL", brief(queued))
+
+    check("the job can be claimed", await claims(productsJob))
+    const run1 = await serviceCall("sync_run_start", { p_job_id: productsJob })
+    check("the run records its trigger", run1.body?.trigger === "INITIAL", brief(run1))
+
+    const page1 = await serviceCall(
+      "sync_job_complete",
+      completion(productsJob, run1.body?.id, "page-2", true)
+    )
+    check("A PAGE WITH MORE TO COME RE-QUEUES ITS JOB, rather than stopping",
+      page1.ok && page1.body?.status === "QUEUED", brief(page1))
+    check("and keeps its place", page1.body?.cursor === "page-2")
+    check("and stays an initial backfill until the last page", page1.body?.mode === "INITIAL")
+    check("SO THE NEXT PAGE CAN ACTUALLY BE CLAIMED", await claims(productsJob))
+
+    const run2 = await serviceCall("sync_run_start", { p_job_id: productsJob })
+    const lastPage = await serviceCall(
+      "sync_job_complete",
+      completion(productsJob, run2.body?.id, "done", false)
+    )
+    check("the last page completes the pass",
+      lastPage.body?.status === "SUCCEEDED" && lastPage.body?.mode === "INCREMENTAL",
+      brief(lastPage))
+
+    const history = await read(
+      `/rest/v1/sync_runs?select=trigger,rows_inserted,rows_rejected&id=eq.${run1.body?.id}`
+    )
+    check("sync history records what the run did",
+      history[0]?.trigger === "INITIAL" && history[0]?.rows_inserted === 50,
+      JSON.stringify(history[0]))
+
+    /* ---- 9c. A running sync is not stolen ------------------------------- */
+    // Before 0020, queuing a job that a worker was mid-way through cleared its
+    // lease, so a second worker could claim it and both would write.
+    await call("sync_enqueue", { p_account_id: accountC, p_resource: "PRODUCTS", p_mode: "INCREMENTAL" })
+    check("claimed again for the lease test", await claims(productsJob))
+
+    const during = await serviceCall("sync_enqueue_system", {
+      p_account_id: accountC,
+      p_resource: "PRODUCTS",
+      p_trigger: "MANUAL",
+      p_delay_seconds: 0,
+    })
+    const leased = await readJob(productsJob)
+    check("A REQUEST DURING A RUNNING SYNC DOES NOT STEAL THE JOB",
+      during.ok && leased?.status === "RUNNING" && leased?.locked_by === workerId,
+      `${brief(during)} ${JSON.stringify(leased)}`)
+    check("it asks for a rerun instead", leased?.rerun_requested === true)
+
+    const reimportDuring = await call("sync_enqueue", {
+      p_account_id: accountC,
+      p_resource: "PRODUCTS",
+      p_mode: "INITIAL",
+    })
+    check("a full re-import cannot start on top of a running one",
+      !reimportDuring.ok, brief(reimportDuring))
+
+    const run3 = await serviceCall("sync_run_start", { p_job_id: productsJob })
+    const finished = await serviceCall(
+      "sync_job_complete",
+      completion(productsJob, run3.body?.id, "done", false)
+    )
+    check("WHEN IT FINISHES, THE REQUESTED RERUN IS QUEUED AT ONCE",
+      finished.body?.status === "QUEUED" && finished.body?.rerun_requested === false,
+      brief(finished))
+
+    /* ---- 9d. Pausing ---------------------------------------------------- */
+    const paused = await call("integration_account_pause", {
+      p_account_id: accountC,
+      p_paused: true,
+    })
+    check("an owner can pause a connection", paused.body?.status === "PAUSED", brief(paused))
+    check("and the pause does not hand back its secrets",
+      paused.body?.credentials_encrypted == null && paused.body?.webhook_secret_encrypted == null)
+    check("A PAUSED CONNECTION'S QUEUED WORK IS NOT CLAIMED", !(await claims(productsJob)))
+
+    const signalWhilePaused = await serviceCall("sync_enqueue_system", {
+      p_account_id: accountC,
+      p_resource: "PRODUCTS",
+      p_trigger: "AUTOMATIC",
+      p_delay_seconds: 0,
+    })
+    check("and a change signal queues nothing for it",
+      signalWhilePaused.ok && signalWhilePaused.body === null, brief(signalWhilePaused))
+
+    const rivalPause = await call(
+      "integration_account_pause",
+      { p_account_id: accountC, p_paused: false },
+      otherToken
+    )
+    check("ANOTHER BUSINESS CANNOT UNPAUSE THIS CONNECTION", !rivalPause.ok, brief(rivalPause))
+
+    const resumed = await call("integration_account_pause", {
+      p_account_id: accountC,
+      p_paused: false,
+    })
+    check("unpausing reconnects it", resumed.body?.status === "CONNECTED", brief(resumed))
+    check("and its queued work can be claimed again", await claims(productsJob))
+    const run4 = await serviceCall("sync_run_start", { p_job_id: productsJob })
+    await serviceCall("sync_job_complete", completion(productsJob, run4.body?.id, "done", false))
+
+    /* ---- 9e. A connection needing reauthorisation ----------------------- */
+    const reauth = await serviceCall("integration_account_set_state", {
+      p_account_id: accountC,
+      p_status: "REAUTH_REQUIRED",
+      p_reason: "Google access expired",
+    })
+    check("the worker can mark a connection as needing reauthorisation", reauth.ok, brief(reauth))
+
+    const seen = await read(
+      `/rest/v1/integration_accounts?select=status,last_error&id=eq.${accountC}`
+    )
+    check("and the owner can see why",
+      seen[0]?.status === "REAUTH_REQUIRED" && seen[0]?.last_error === "Google access expired",
+      JSON.stringify(seen[0]))
+
+    await call("sync_enqueue", { p_account_id: accountC, p_resource: "PRODUCTS", p_mode: "INCREMENTAL" })
+    check("NOTHING IS SYNCED UNTIL THEY RECONNECT", !(await claims(productsJob)))
+
+    await call("integration_account_pause", { p_account_id: accountC, p_paused: false })
+    const stillBroken = await read(
+      `/rest/v1/integration_accounts?select=status&id=eq.${accountC}`
+    )
+    check("unpausing does not paper over a broken connection",
+      stillBroken[0]?.status === "REAUTH_REQUIRED", JSON.stringify(stillBroken[0]))
+
+    const workerDisconnect = await serviceCall("integration_account_set_state", {
+      p_account_id: accountC,
+      p_status: "DISCONNECTED",
+      p_reason: "no",
+    })
+    check("the worker cannot disconnect a connection -- that is the owner's decision",
+      !workerDisconnect.ok, brief(workerDisconnect))
+
+    await serviceCall("integration_account_set_state", {
+      p_account_id: accountC,
+      p_status: "CONNECTED",
+      p_reason: null,
+    })
+
+    /* ---- 9f. Expenses --------------------------------------------------- */
+    const expensesQueued = await call("sync_enqueue", {
+      p_account_id: accountC,
+      p_resource: "EXPENSES",
+      p_mode: "INITIAL",
+    })
+    check("EXPENSES CAN NOW BE A SYNC RESOURCE",
+      expensesQueued.ok && expensesQueued.body?.resource === "EXPENSES", brief(expensesQueued))
+
+    const expenseRow = {
+      external_id: `EXP-${suffix}`,
+      incurred_at: new Date().toISOString(),
+      amount: "120.0000",
+      category: "Rent",
+      description: "Warehouse",
+      vendor: "Landlord",
+      currency: "AED",
+    }
+
+    const exp1 = await serviceCall("sync_apply_expenses", {
+      p_job_id: expensesQueued.body?.id,
+      p_rows: [expenseRow],
+    })
+    check("A SYNCED EXPENSE IS WRITTEN", exp1.ok && exp1.body?.expenses_created === 1, brief(exp1))
+
+    const exp2 = await serviceCall("sync_apply_expenses", {
+      p_job_id: expensesQueued.body?.id,
+      p_rows: [expenseRow],
+    })
+    check("and re-applying it updates rather than duplicates",
+      exp2.body?.expenses_updated === 1 && exp2.body?.expenses_created === 0, brief(exp2))
+
+    const expenseRows = await read(
+      `/rest/v1/expenses?select=id&business_id=eq.${businessId}&external_id=eq.EXP-${suffix}`
+    )
+    check("exactly one expense row", expenseRows.length === 1, String(expenseRows.length))
+  }
+
+  /* ---------------------------------------------------------------------- */
+  section("10. GOOGLE SHEETS FOUNDATION (0021)")
+
+  if (!HAS_SERVICE_KEY) {
+    for (const name of [
+      "a Google Sheets tab can be connected",
+      "watch channels resolve their tenant",
+      "a genuine change signal queues a sync",
+      "record state classifies new, changed and unchanged records",
+      "a missing record is reported, never deleted",
+    ]) skip(name, "SUPABASE_SERVICE_ROLE_KEY is not set")
+  } else {
+    const SHEET = `spreadsheet-${suffix}`
+    const ORDERS_TAB = `${SHEET}:0`
+
+    const sheet = await call("integration_account_connect", {
+      p_business_id: businessId,
+      p_provider: "GOOGLE_SHEETS",
+      p_external_account_id: ORDERS_TAB,
+      p_display_name: "Sales 2026 - Orders",
+      p_channel_type: "AMAZON",
+      p_metadata: { entity: "ORDERS", spreadsheet_id: SHEET, sheet_id: 0 },
+    })
+    check("A GOOGLE SHEETS TAB CAN BE CONNECTED", sheet.ok, brief(sheet))
+
+    if (sheet.ok) {
+      const sheetAccount = sheet.body.id as string
+
+      const sheetChannel = await read(
+        `/rest/v1/channels?select=type&id=eq.${sheet.body.channel_id}`
+      )
+      check("its orders are attributed to the channel the owner chose",
+        sheetChannel[0]?.type === "AMAZON", JSON.stringify(sheetChannel[0]))
+
+      /* ---- one tab, one business ------------------------------------- */
+      const rivalBusiness = await call("create_business", {
+        p_name: `Sheets rival ${suffix}`,
+        p_slug: `sheets-rival-${suffix}`,
+        p_currency: "AED",
+      }, otherToken)
+      const stolenTab = await call("integration_account_connect", {
+        p_business_id: rivalBusiness.body?.id ?? rivalId,
+        p_provider: "GOOGLE_SHEETS",
+        p_external_account_id: ORDERS_TAB,
+        p_display_name: "Not yours",
+        p_channel_type: "AMAZON",
+        p_metadata: { entity: "ORDERS" },
+      }, otherToken)
+      check("ONE TAB FEEDS ONE BUSINESS: another cannot connect it",
+        !stolenTab.ok && JSON.stringify(stolenTab.body).includes("different BizMind business"),
+        brief(stolenTab))
+      if (rivalBusiness.body?.id) {
+        await attempt(`/rest/v1/businesses?id=eq.${rivalBusiness.body.id}`, { method: "DELETE" }, otherToken)
+      }
+
+      /* ---- a products tab needs no sales channel ------------------------ */
+      const channelsBefore = await read(`/rest/v1/channels?select=id&business_id=eq.${businessId}`)
+      const productsTab = await call("integration_account_connect", {
+        p_business_id: businessId,
+        p_provider: "GOOGLE_SHEETS",
+        p_external_account_id: `${SHEET}:1`,
+        p_display_name: "Sales 2026 - Products",
+        p_channel_type: null,
+        p_metadata: { entity: "PRODUCTS", spreadsheet_id: SHEET, sheet_id: 1 },
+      })
+      const channelsAfter = await read(`/rest/v1/channels?select=id&business_id=eq.${businessId}`)
+      check("A PRODUCTS TAB CONNECTS WITHOUT INVENTING A SALES CHANNEL",
+        productsTab.ok && productsTab.body?.channel_id === null &&
+          channelsAfter.length === channelsBefore.length,
+        brief(productsTab))
+
+      /* ---- watch channels ---------------------------------------------- */
+      const channelId = `channel-${suffix}`
+      const inAnHour = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+
+      const registered = await serviceCall("watch_channel_register", {
+        p_account_id: sheetAccount,
+        p_channel_id: channelId,
+        p_resource_id: "resource-1",
+        p_token_encrypted: "v1.test-only.not-a-real-ciphertext",
+        p_expires_at: inAnHour,
+      })
+      check("a watch channel is registered", registered.ok, brief(registered))
+
+      const looked = await serviceCall("watch_channel_lookup", { p_channel_id: channelId })
+      check("THE TENANT IS RESOLVED FROM THE CHANNEL ROW",
+        looked.body?.[0]?.resolved_business_id === businessId &&
+          looked.body?.[0]?.account_id === sheetAccount,
+        brief(looked))
+
+      const lookedUnknown = await serviceCall("watch_channel_lookup", {
+        p_channel_id: `no-such-channel-${suffix}`,
+      })
+      check("an unknown channel resolves to nothing",
+        Array.isArray(lookedUnknown.body) && lookedUnknown.body.length === 0)
+
+      const tokenRead = await attempt(
+        `/rest/v1/integration_watch_channels?select=token_encrypted&channel_id=eq.${channelId}`
+      )
+      check("THE CHANNEL TOKEN IS UNREADABLE BY A SIGNED-IN USER", !tokenRead.ok,
+        `${tokenRead.status}`)
+
+      const expiryRead = await read(
+        `/rest/v1/integration_watch_channels?select=expires_at&channel_id=eq.${channelId}`
+      )
+      check("but its expiry is visible, so the page can show connection health",
+        expiryRead.length === 1)
+
+      const rivalChannels = await read(
+        `/rest/v1/integration_watch_channels?select=id&business_id=eq.${businessId}`,
+        {},
+        otherToken
+      )
+      check("another business sees none of these channels", rivalChannels.length === 0)
+
+      /* ---- notifications ----------------------------------------------- */
+      const handshake = await serviceCall("watch_event_ingest", {
+        p_channel_id: channelId,
+        p_message_number: "1",
+        p_resource_state: "sync",
+        p_changed: null,
+        p_raw: "{}",
+        p_token_valid: true,
+      })
+      check("Google's handshake is recorded", handshake.body?.[0]?.outcome === "ACCEPTED",
+        brief(handshake))
+
+      const jobsAfterHandshake = await read(
+        `/rest/v1/sync_jobs?select=id&integration_account_id=eq.${sheetAccount}`
+      )
+      check("and queues nothing, because nothing changed", jobsAfterHandshake.length === 0,
+        String(jobsAfterHandshake.length))
+
+      const changed = await serviceCall("watch_event_ingest", {
+        p_channel_id: channelId,
+        p_message_number: "2",
+        p_resource_state: "update",
+        p_changed: "content",
+        p_raw: "{}",
+        p_token_valid: true,
+      })
+      check("A GENUINE CHANGE SIGNAL IS ACCEPTED", changed.body?.[0]?.outcome === "ACCEPTED",
+        brief(changed))
+
+      const signalledJobs = await read(
+        `/rest/v1/sync_jobs?select=id,status,resource,next_trigger&integration_account_id=eq.${sheetAccount}`
+      )
+      check("AND QUEUES A SYNC OF THAT TAB, marked automatic",
+        signalledJobs.length === 1 &&
+          signalledJobs[0].status === "QUEUED" &&
+          signalledJobs[0].resource === "ORDERS" &&
+          signalledJobs[0].next_trigger === "AUTOMATIC",
+        JSON.stringify(signalledJobs))
+
+      const redelivered = await serviceCall("watch_event_ingest", {
+        p_channel_id: channelId,
+        p_message_number: "2",
+        p_resource_state: "update",
+        p_changed: "content",
+        p_raw: "{}",
+        p_token_valid: true,
+      })
+      check("a redelivery is recognised as a duplicate",
+        redelivered.body?.[0]?.outcome === "DUPLICATE", brief(redelivered))
+
+      const forgedSignal = await serviceCall("watch_event_ingest", {
+        p_channel_id: channelId,
+        p_message_number: "3",
+        p_resource_state: "update",
+        p_changed: "content",
+        p_raw: "{}",
+        p_token_valid: false,
+      })
+      check("A NOTIFICATION WITH THE WRONG TOKEN IS REJECTED",
+        forgedSignal.body?.[0]?.outcome === "REJECTED", brief(forgedSignal))
+
+      const rejectionAudit = await read(
+        `/rest/v1/audit_logs?select=id&business_id=eq.${businessId}&action=eq.integration.webhook.rejected`
+      )
+      check("and the rejection is audited", rejectionAudit.length >= 1)
+
+      const unknownSignal = await serviceCall("watch_event_ingest", {
+        p_channel_id: `no-such-channel-${suffix}`,
+        p_message_number: "1",
+        p_resource_state: "update",
+        p_changed: "content",
+        p_raw: "{}",
+        p_token_valid: true,
+      })
+      check("a notification for an unknown channel writes nothing",
+        unknownSignal.body?.[0]?.outcome === "UNKNOWN_CHANNEL", brief(unknownSignal))
+
+      /* ---- renewal ------------------------------------------------------ */
+      const dueBefore = await serviceCall("watch_renewals_due", {
+        p_within_seconds: 7200,
+        p_limit: 500,
+      })
+      check("a channel expiring within the window is due for renewal",
+        Array.isArray(dueBefore.body) &&
+          dueBefore.body.some((r: { account_id: string }) => r.account_id === sheetAccount),
+        brief(dueBefore))
+
+      const stopped = await serviceCall("watch_channel_stop", { p_channel_id: channelId })
+      check("a channel can be stopped", stopped.body === true, brief(stopped))
+
+      const lookedStopped = await serviceCall("watch_channel_lookup", { p_channel_id: channelId })
+      check("and a stopped channel no longer resolves to anyone",
+        Array.isArray(lookedStopped.body) && lookedStopped.body.length === 0)
+
+      /* ---- record state ------------------------------------------------- */
+      const sheetJob = signalledJobs[0]?.id as string
+
+      const first = await serviceCall("sync_record_state_classify", {
+        p_job_id: sheetJob,
+        p_items: [
+          { key: "ORD-1", hash: "h1" },
+          { key: "ORD-2", hash: "h2" },
+        ],
+      })
+      check("RECORDS NEVER SEEN BEFORE ARE NEW",
+        JSON.stringify(first.body?.new) === JSON.stringify(["ORD-1", "ORD-2"]) &&
+          first.body?.unchanged === 0,
+        brief(first))
+
+      const committed = await serviceCall("sync_record_state_commit", {
+        p_job_id: sheetJob,
+        p_run_id: null,
+        p_items: [
+          { key: "ORD-1", hash: "h1", outcome: "APPLIED", locator: { row: 2 } },
+          { key: "ORD-2", hash: "h2", outcome: "REJECTED", locator: { row: 3 } },
+        ],
+      })
+      check("their fingerprints are recorded after applying", committed.body === 2, brief(committed))
+
+      const second = await serviceCall("sync_record_state_classify", {
+        p_job_id: sheetJob,
+        p_items: [
+          { key: "ORD-1", hash: "h1" },
+          { key: "ORD-2", hash: "h2-edited" },
+          { key: "ORD-3", hash: "h3" },
+        ],
+      })
+      check("AN UNCHANGED RECORD IS SKIPPED, NOT REWRITTEN",
+        second.body?.unchanged === 1, brief(second))
+      check("an edited record is recognised as changed",
+        JSON.stringify(second.body?.changed) === JSON.stringify(["ORD-2"]))
+      check("and a new one as new",
+        JSON.stringify(second.body?.new) === JSON.stringify(["ORD-3"]))
+
+      const ownState = await read(
+        `/rest/v1/integration_record_state?select=business_key,last_outcome&integration_account_id=eq.${sheetAccount}`
+      )
+      check("the owner can read their record state", ownState.length === 2,
+        String(ownState.length))
+      check("including which rows could not be imported",
+        ownState.some((r: { last_outcome: string }) => r.last_outcome === "REJECTED"))
+
+      const rivalState = await read(
+        `/rest/v1/integration_record_state?select=id&business_id=eq.${businessId}`,
+        {},
+        otherToken
+      )
+      check("another business sees none of it", rivalState.length === 0)
+
+      const nothingOlder = await serviceCall("sync_record_state_mark_missing", {
+        p_job_id: sheetJob,
+        p_pass_started_at: "1970-01-01T00:00:00Z",
+      })
+      check("nothing is missing when every record was seen", nothingOlder.body === 0,
+        brief(nothingOlder))
+
+      const allUnseen = await serviceCall("sync_record_state_mark_missing", {
+        p_job_id: sheetJob,
+        p_pass_started_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      })
+      check("records not seen in a pass are reported missing", allUnseen.body === 2,
+        brief(allUnseen))
+
+      const stillThere = await read(
+        `/rest/v1/integration_record_state?select=id,present&integration_account_id=eq.${sheetAccount}`
+      )
+      check("A MISSING RECORD IS MARKED, NEVER DELETED",
+        stillThere.length === 2 &&
+          stillThere.every((r: { present: boolean }) => r.present === false),
+        JSON.stringify(stillThere))
+
+      await serviceCall("sync_record_state_commit", {
+        p_job_id: sheetJob,
+        p_run_id: null,
+        p_items: [{ key: "ORD-1", hash: "h1", outcome: null, locator: { row: 2 } }],
+      })
+      const reappeared = await serviceCall("sync_record_state_mark_missing", {
+        p_job_id: sheetJob,
+        p_pass_started_at: "1970-01-01T00:00:00Z",
+      })
+      check("and a record that reappears is present again", reappeared.body === 1,
+        brief(reappeared))
+
+      /* ---- reconciliation ----------------------------------------------- */
+      await call("sync_enqueue", {
+        p_account_id: sheetAccount,
+        p_resource: "ORDERS",
+        p_mode: "INCREMENTAL",
+      })
+      const reconcileClaim = await serviceCall("sync_claim_jobs", {
+        p_worker_id: `reconcile-${suffix}`,
+        p_limit: 200,
+        p_lease_seconds: 300,
+      })
+      check("the sheet's job can be claimed",
+        Array.isArray(reconcileClaim.body) &&
+          reconcileClaim.body.some((j: { id: string }) => j.id === sheetJob))
+      const reconcileRun = await serviceCall("sync_run_start", { p_job_id: sheetJob })
+      await serviceCall("sync_job_complete", {
+        p_job_id: sheetJob,
+        p_run_id: reconcileRun.body?.id,
+        p_status: "SUCCEEDED",
+        p_cursor: "synced",
+        p_records_fetched: 0,
+        p_records_applied: 0,
+        p_records_skipped: 0,
+        p_error: null,
+        p_retry_after_ms: null,
+        p_has_more: false,
+      })
+
+      const reconciled = await serviceCall("sync_reconcile_due", {
+        p_interval_minutes: 0,
+        p_limit: 500,
+      })
+      const afterReconcile = await read(
+        `/rest/v1/sync_jobs?select=status,next_trigger&id=eq.${sheetJob}`
+      )
+      check("THE SAFETY NET RE-QUEUES A QUIET SHEET, marked as reconciliation",
+        reconciled.ok &&
+          afterReconcile[0]?.status === "QUEUED" &&
+          afterReconcile[0]?.next_trigger === "RECONCILIATION",
+        `${brief(reconciled)} ${JSON.stringify(afterReconcile[0])}`)
+    }
+  }
+
+  /* ---- none of the new session-less functions is reachable by a user ---- */
+  for (const [fn, args] of [
+    ["sync_enqueue_system", { p_account_id: accountId, p_resource: "ORDERS", p_trigger: "MANUAL", p_delay_seconds: 0 }],
+    ["integration_account_set_state", { p_account_id: accountId, p_status: "CONNECTED", p_reason: null }],
+    ["sync_apply_expenses", { p_job_id: accountId, p_rows: [] }],
+    ["sync_record_state_classify", { p_job_id: accountId, p_items: [] }],
+    ["sync_record_state_commit", { p_job_id: accountId, p_run_id: null, p_items: [] }],
+    ["sync_record_state_mark_missing", { p_job_id: accountId, p_pass_started_at: "1970-01-01T00:00:00Z" }],
+    ["watch_channel_register", { p_account_id: accountId, p_channel_id: "x", p_resource_id: "x", p_token_encrypted: "x", p_expires_at: "2099-01-01T00:00:00Z" }],
+    ["watch_channel_lookup", { p_channel_id: "x" }],
+    ["watch_event_ingest", { p_channel_id: "x", p_message_number: "1", p_resource_state: "update", p_changed: null, p_raw: "{}", p_token_valid: true }],
+    ["watch_channel_stop", { p_channel_id: "x" }],
+    ["watch_renewals_due", { p_within_seconds: 1, p_limit: 1 }],
+    ["sync_reconcile_due", { p_interval_minutes: 1, p_limit: 1 }],
+  ] as const) {
+    const reached = await call(fn, args)
+    check(`a signed-in user cannot call ${fn}()`,
+      !reached.ok && [401, 403, 404].includes(reached.status),
+      String(reached.status))
+  }
 } finally {
   section("Cleanup")
   await api(`/rest/v1/businesses?id=eq.${businessId}`, { method: "DELETE" })

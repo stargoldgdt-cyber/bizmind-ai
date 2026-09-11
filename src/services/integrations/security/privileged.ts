@@ -55,6 +55,22 @@ const TRUSTED_FUNCTIONS = [
   "sync_run_start",
   "sync_job_complete",
   /**
+   * Google Sheets (migrations 0020, 0021, 0023). Each takes a JOB or ACCOUNT
+   * id and derives the business from that row.
+   *
+   * `sync_reconcile_due` takes no id at all: like `automation_claim_due` below
+   * it answers a question with no per-business form ("which sheets have gone
+   * quiet?") and returns only a count, queuing each sheet through the account
+   * row's own business.
+   */
+  "sync_apply_expenses",
+  "sync_record_state_classify",
+  "sync_record_state_commit",
+  "sync_record_state_mark_missing",
+  "sync_record_issues",
+  "integration_account_set_state",
+  "sync_reconcile_due",
+  /**
    * Automation (migration 0016).
    *
    * `automation_claim_due` is the one function here that deliberately reads

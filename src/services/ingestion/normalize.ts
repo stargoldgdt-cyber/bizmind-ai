@@ -1,3 +1,5 @@
+import { isExactNumber, plainDecimal } from "@/lib/json-exact"
+
 import type { ImportOptions } from "./contracts"
 
 /**
@@ -38,6 +40,22 @@ export function normalizeDecimal(
   options: { allowNegative?: boolean } = {}
 ): ParseResult<string> {
   if (raw === null || raw === undefined) return fail("no value")
+
+  // A Google Sheets number: its exact digits, already unambiguous. It must
+  // never reach the separator handling below -- read with a comma decimal
+  // setting, "1234.56" would lose its point there and become 123456.
+  if (isExactNumber(raw)) {
+    let exact: string
+    try {
+      exact = plainDecimal(raw)
+    } catch {
+      return fail(`"${raw.text}" is too large or too small to be a real value`)
+    }
+    if (!options.allowNegative && exact.startsWith("-") && /[1-9]/.test(exact)) {
+      return fail("must not be negative")
+    }
+    return ok(exact)
+  }
 
   // A spreadsheet cell may already be a real number.
   if (typeof raw === "number") {
@@ -143,6 +161,16 @@ export function normalizeDate(
     return ok(excelSerialToIso(raw))
   }
 
+  // Google Sheets sends a date as the same serial number Excel uses, so it is
+  // read the same way. Past 31 December 9999 it is not a date at all.
+  if (isExactNumber(raw)) {
+    const serial = Number(raw.text)
+    if (!Number.isFinite(serial) || serial < 0 || serial > 2958465) {
+      return fail(`"${raw.text}" is not a date`)
+    }
+    return ok(excelSerialToIso(serial))
+  }
+
   const text = String(raw).trim()
   if (text === "") return fail("no value")
 
@@ -240,6 +268,16 @@ function excelSerialToIso(serial: number): string {
 
 export function normalizeText(raw: unknown): string | null {
   if (raw === null || raw === undefined) return null
+
+  // An exact number is written out in full: an order ID of 1e3 is "1000".
+  if (isExactNumber(raw)) {
+    try {
+      return plainDecimal(raw)
+    } catch {
+      return raw.text
+    }
+  }
+
   const text = String(raw).trim()
   return text === "" ? null : text
 }

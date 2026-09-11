@@ -732,6 +732,23 @@ and derive the tenant from it. A record missing from its source is marked
 | `sync_job_context()` | Returns the connection's own credential, or the business's when it has none |
 | `integration_google_authorize()` | Owner or admin. Creates or refreshes the business's Google row, turns every `REAUTH_REQUIRED` sheet back to `CONNECTED`, writes an audit entry, and returns the row **with the credential blanked** |
 
+## 7g. Applying a spreadsheet's rows (0023)
+
+| Change | Detail |
+| --- | --- |
+| `sync_job_context()` | Also returns `business_currency`. Dropped and recreated: a new result column is a return-type change |
+| `integration_record_state.last_seen_pass` | Which read-through last saw each record — an opaque id from the connector's cursor, compared for equality only. No clock is involved, so the app's and the database's clocks never have to agree |
+| `sync_record_state_classify()` | New `p_pass_id`. Also returns `repeated`: records already seen earlier in this pass at a different place in the sheet |
+| `sync_record_state_commit()` | New `p_pass_id`, stored on each record |
+| `sync_record_state_mark_missing()` | New `p_pass_id`: "missing" means "not seen by that pass". The start-time form still works |
+| `sync_record_issues()` | Records a sync page's row problems in `import_issues`. Takes a job id; a batch it is given must belong to that connection. With no batch (every changed row refused) it creates one marked `FAILED` |
+| `sync_job_complete()` | **Fix.** Since 0012 it ignored a `DEAD_LETTER` from the worker and retried anyway — up to seven attempts over hours, for failures retrying cannot fix. It is now final |
+
+The three record-state functions each gained a trailing parameter with a
+default, so every existing call still works. Their old signatures were dropped
+first — two overloads make every call by name ambiguous — and the migration
+checks that each function exists exactly once. All are `service_role` only.
+
 ---
 
 ## 8. Regenerating types

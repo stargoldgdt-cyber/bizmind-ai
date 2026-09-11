@@ -23,7 +23,7 @@ process.env.GOOGLE_REDIRECT_URI = "http://localhost:3000/api/v1/integrations/goo
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join } from "node:path"
 
-import { ExactNumber, isExactNumber, parseExactJson } from "../src/lib/json-exact"
+import { ExactNumber, isExactNumber, parseExactJson, plainDecimal } from "../src/lib/json-exact"
 import { getConnector, registeredProviders } from "../src/services/integrations"
 import {
   createGoogleSheetsConnector,
@@ -50,6 +50,13 @@ import {
   headingsFrom,
   recordsFrom,
 } from "../src/services/integrations/connectors/google-sheets/table"
+import type { NormalizedExpense, NormalizedOrder } from "../src/services/ingestion/contracts"
+import { normalizeDate, normalizeDecimal, normalizeText } from "../src/services/ingestion/normalize"
+import {
+  prepareTabularPage,
+  readSheetSettings,
+  type SheetSettings,
+} from "../src/services/integrations/sync/tabular"
 
 let passed = 0
 let failed = 0
@@ -223,6 +230,24 @@ const ordersContext = (credentials: Record<string, string> = { refresh_token: "f
 })
 
 const NOW = Date.parse("2026-09-11T12:00:00Z")
+
+/**
+ * A cursor's v / row / pv, exactly -- and whether it carries a pass id. The id
+ * is random, so its presence is checked, not its value.
+ */
+function sameCursor(
+  raw: string | null | undefined,
+  expected: { v: string | null; row: number | null; pv: string | null },
+  pass: "running" | "none"
+): boolean {
+  const c = decodeCursor(raw ?? null)
+  return (
+    c.v === expected.v &&
+    c.row === expected.row &&
+    c.pv === expected.pv &&
+    (pass === "running" ? typeof c.pid === "string" && c.pid.length > 0 : c.pid === null)
+  )
+}
 
 /* ========================================================================== */
 section("1. A NUMBER KEEPS ITS EXACT DIGITS")
@@ -443,7 +468,7 @@ if (page1.kind === "page") {
   check("A BLANK GAP ACROSS THE PAGE BOUNDARY DOES NOT END THE PASS",
     page1.hasMore === true)
   check("the cursor carries the next row and the version the pass started at",
-    JSON.stringify(decodeCursor(page1.nextCursor)) === JSON.stringify({ v: null, row: 1002, pv: "10" }),
+    sameCursor(page1.nextCursor, { v: null, row: 1002, pv: "10" }, "running"),
     page1.nextCursor ?? "")
 }
 
@@ -464,7 +489,7 @@ const total = [page1, page2, page3].reduce(
 check("EVERY ONE OF THE 2,484 NON-BLANK ROWS WAS READ", total === 2484, String(total))
 check("and the pass remembers the version it started at",
   page3.kind === "page" &&
-    JSON.stringify(decodeCursor(page3.nextCursor)) === JSON.stringify({ v: "10", row: null, pv: null }))
+    sameCursor(page3.nextCursor, { v: "10", row: null, pv: null }, "none"))
 
 check("ONE ACCESS TOKEN SERVED ALL THREE PAGES", google.calls.token === 1, String(google.calls.token))
 check("and Drive was asked for the version once, at the start", google.calls.drive === 1,
@@ -547,7 +572,7 @@ const badMeta = await connector.fetchPage({
 check("a connection with a bad spreadsheet id reads nothing", badMeta.kind === "permanent_error")
 
 check("an unreadable cursor restarts the pass rather than skipping ahead",
-  JSON.stringify(decodeCursor("{not json")) === JSON.stringify({ v: null, row: null, pv: null }))
+  sameCursor("{not json", { v: null, row: null, pv: null }, "none"))
 
 /* ---- the browser's token, while connecting -------------------------------- */
 const browserGoogle = fakeGoogle({ grids: [ordersGrid()], version: () => "1" })
@@ -667,6 +692,238 @@ const loggedLines = callbackSource.split("\n").filter((line) => line.includes("c
 check("the callback never logs a token",
   loggedLines.every((line) => !/refreshToken|accessToken|exchange\b/.test(line)),
   loggedLines.join(" | "))
+
+/* ========================================================================== */
+section("9. A SHEET'S ROWS, THROUGH THE UPLOAD'S OWN CHECKS")
+/* ========================================================================== */
+
+const n = (text: string) => new ExactNumber(text)
+const throwsOn = (fn: () => unknown) => {
+  try {
+    fn()
+    return false
+  } catch {
+    return true
+  }
+}
+
+/* ---- exact numbers, written out ------------------------------------------- */
+check("an exponent is written out exactly: 1.5e3 is 1500", plainDecimal(n("1.5e3")) === "1500")
+check("and -2.5E-3 is -0.0025", plainDecimal(n("-2.5E-3")) === "-0.0025")
+check("digits without an exponent are left exactly as sent",
+  plainDecimal(n("12345678901234567.89")) === "12345678901234567.89")
+check("an absurd exponent is refused, never expanded", throwsOn(() => plainDecimal(n("1e5000"))))
+
+const commaMoney = normalizeDecimal(n("1234.56"), ",")
+check("A SHEET NUMBER READ WITH COMMA DECIMALS KEEPS ITS POINT: 1234.56, NOT 123456",
+  commaMoney.ok && commaMoney.value === "1234.56", JSON.stringify(commaMoney))
+const typed = normalizeDecimal("1.234,56", ",")
+check("the same figure typed as TEXT still follows the chosen format",
+  typed.ok && typed.value === "1234.56", JSON.stringify(typed))
+check("a negative sheet number is refused where negatives are not allowed",
+  !normalizeDecimal(n("-5"), ".").ok)
+const negative = normalizeDecimal(n("-5"), ".", { allowNegative: true })
+check("and kept where they are", negative.ok && negative.value === "-5")
+
+const sheetDate = normalizeDate(n("46000"), "auto")
+const excelDate = normalizeDate(46000, "auto")
+check("A SHEET DATE IS READ EXACTLY AS THE SAME DATE FROM EXCEL",
+  sheetDate.ok && excelDate.ok && sheetDate.value === excelDate.value, JSON.stringify(sheetDate))
+check("a number that cannot be a date is refused, not wrapped around",
+  !normalizeDate(n("99999999"), "auto").ok)
+check("a numeric order ID reads as its digits", normalizeText(n("1.001e3")) === "1001")
+
+/* ---- the owner's choices, against the sheet as it is now ------------------ */
+const ORDER_MAPPING = {
+  external_id: "Order ID",
+  placed_at: "Order date",
+  total: "Order total",
+  sku: "SKU",
+  quantity: "Qty",
+  unit_cost: "Unit cost",
+}
+const ORDER_HEADERS = ["Order ID", "Order date", "Order total", "SKU", "Qty", "Unit cost"]
+const orderChoices = { entity: "ORDERS", mapping: ORDER_MAPPING, date_format: "auto", decimal_separator: "." }
+
+function settingsFor(choices: Record<string, unknown>, headers: string[]): SheetSettings {
+  const result = readSheetSettings(choices, headers)
+  if (!result.ok) throw new Error(`fixture settings must fit: ${result.reason}`)
+  return result.settings
+}
+
+check("a mapping that fits the sheet is accepted", readSheetSettings(orderChoices, ORDER_HEADERS).ok)
+const droppedColumn = readSheetSettings(orderChoices, ORDER_HEADERS.filter((h) => h !== "Unit cost"))
+check("A CHOSEN COLUMN THAT HAS LEFT THE SHEET NEEDS A REVIEW, NOT A GUESS",
+  !droppedColumn.ok && droppedColumn.reason.includes("Unit cost"),
+  droppedColumn.ok ? "accepted" : droppedColumn.reason)
+check("an unchosen required column needs a review",
+  !readSheetSettings(
+    { ...orderChoices, mapping: { external_id: "Order ID", placed_at: "Order date" } },
+    ORDER_HEADERS
+  ).ok)
+const noReference = readSheetSettings(
+  { entity: "EXPENSES", mapping: { incurred_at: "Date", amount: "Amount" }, date_format: "auto", decimal_separator: "." },
+  ["Date", "Amount"]
+)
+check("A SYNCED EXPENSES TAB WITHOUT A REFERENCE COLUMN IS REFUSED",
+  !noReference.ok && noReference.reason.includes("Reference"))
+check("no choices at all need a review", !readSheetSettings({ entity: "ORDERS" }).ok)
+
+/* ---- records: grouped, checked, all or nothing ---------------------------- */
+const orderSettings = settingsFor(orderChoices, ORDER_HEADERS)
+const ord1Rows = [
+  { "Order ID": "ORD-1", "Order date": n("46000"), "Order total": n("150.00"), SKU: "A", Qty: n("1"), "Unit cost": n("40.10") },
+  { "Order ID": "ORD-1", "Order date": n("46000"), "Order total": n("150.00"), SKU: "B", Qty: n("2"), "Unit cost": n("20.00") },
+]
+const prepared = prepareTabularPage({
+  settings: orderSettings,
+  businessCurrency: "BDT",
+  records: [
+    ...ord1Rows,
+    { "Order date": n("46000"), "Order total": n("9.00"), SKU: "C", Qty: n("1") },
+    { "Order ID": "ORD-2", "Order date": n("46001"), "Order total": n("80.00"), SKU: "D", Qty: n("1"), "Unit cost": n("30.00") },
+    { "Order ID": "ORD-2", "Order date": n("46001"), "Order total": n("80.00"), SKU: "E", Qty: "lots", "Unit cost": n("5.00") },
+    { "Order ID": "ORD-3", "Order date": n("46002"), "Order total": n("12345678901234567.89"), SKU: "F", Qty: n("1") },
+  ],
+  rowNumbers: [1502, 1503, 1504, 1510, 1511, 1512],
+})
+const byKey = new Map(prepared.records.map((r) => [r.key, r]))
+const ord1 = byKey.get("ORD-1")?.row as NormalizedOrder | null | undefined
+const ord3 = byKey.get("ORD-3")?.row as NormalizedOrder | null | undefined
+
+check("rows become one record per order",
+  prepared.records.length === 3 && ["ORD-1", "ORD-2", "ORD-3"].every((k) => byKey.has(k)))
+check("an order's lines stay together", ord1?.items.length === 2)
+check("its figures keep their exact digits",
+  ord1?.total === "150.00" && ord1?.items[0].unit_cost === "40.10")
+check("A ROW WITHOUT AN ORDER ID IS SKIPPED, AND REPORTED AT ITS REAL SHEET ROW",
+  prepared.unkeyedRows === 1 && prepared.issues.some((e) => e.key === null && e.issue.rowNumber === 1504))
+check("AN ORDER WITH ONE BAD ROW IS NOT WRITTEN AT ALL -- never with fewer lines",
+  byKey.get("ORD-2")?.row === null)
+check("the bad row is reported at sheet row 1511, not at its place on the page",
+  prepared.issues.some((e) => e.key === "ORD-2" && e.issue.field === "quantity" && e.issue.rowNumber === 1511))
+check("and the owner is told what BizMind already holds is unchanged",
+  prepared.issues.some((e) => e.key === "ORD-2" && e.issue.message.includes("unchanged")))
+check("a total with more digits than a double holds is written exactly",
+  ord3?.total === "12345678901234567.89", String(ord3?.total))
+check("A BLANK UNIT COST STAYS BLANK -- never zero", ord3?.items[0].unit_cost === null)
+check("each record says where it was found",
+  JSON.stringify(byKey.get("ORD-1")?.locator) === JSON.stringify({ rows: [1502, 1503] }))
+
+const moved = prepareTabularPage({
+  settings: orderSettings,
+  businessCurrency: "BDT",
+  records: ord1Rows,
+  rowNumbers: [7, 8],
+})
+check("THE SAME CONTENT HAS THE SAME FINGERPRINT, WHEREVER IT SITS IN THE SHEET",
+  moved.records[0].hash === byKey.get("ORD-1")?.hash)
+const edited = prepareTabularPage({
+  settings: orderSettings,
+  businessCurrency: "BDT",
+  records: [ord1Rows[0], { ...ord1Rows[1], "Unit cost": n("20.01") }],
+  rowNumbers: [1502, 1503],
+})
+check("ONE CHANGED CELL CHANGES THE FINGERPRINT", edited.records[0].hash !== byKey.get("ORD-1")?.hash)
+check("a refused order has a fingerprint too, so it is reported again only when it changes",
+  /^[0-9a-f]{64}$/.test(byKey.get("ORD-2")?.hash ?? ""))
+
+const usdSettings = settingsFor(
+  { ...orderChoices, mapping: { ...ORDER_MAPPING, currency: "Currency" } },
+  [...ORDER_HEADERS, "Currency"]
+)
+const usd = prepareTabularPage({
+  settings: usdSettings,
+  businessCurrency: "BDT",
+  records: [{ ...ord1Rows[0], Currency: "USD" }],
+  rowNumbers: [2],
+})
+check("A ROW IN ANOTHER CURRENCY IS REFUSED, NOT CONVERTED",
+  usd.records[0]?.row === null && usd.issues.some((e) => e.issue.message.includes("does not convert")))
+
+const expenseSettings = settingsFor(
+  {
+    entity: "EXPENSES",
+    mapping: { incurred_at: "Date", amount: "Amount", external_id: "Ref" },
+    date_format: "auto",
+    decimal_separator: ",",
+  },
+  ["Date", "Amount", "Ref"]
+)
+const expenses = prepareTabularPage({
+  settings: expenseSettings,
+  businessCurrency: "BDT",
+  records: [
+    { Date: n("46000"), Amount: n("2500.75"), Ref: "INV-1" },
+    { Date: n("46000"), Amount: "1.234,50", Ref: "INV-2" },
+    { Date: n("46000"), Amount: n("99") },
+  ],
+  rowNumbers: [2, 3, 4],
+})
+const amountOf = (key: string) =>
+  (expenses.records.find((r) => r.key === key)?.row as NormalizedExpense | null | undefined)?.amount
+check("an expense from a number cell is exact, even with comma decimals", amountOf("INV-1") === "2500.75")
+check("and one typed as text follows the chosen format", amountOf("INV-2") === "1234.50")
+check("AN EXPENSE WITHOUT A REFERENCE IS SKIPPED, NEVER ADDED BLIND",
+  expenses.unkeyedRows === 1 &&
+    expenses.issues.some((e) => e.key === null && e.issue.rowNumber === 4 && e.issue.message.includes("Reference")))
+
+/* ---- a page never ends inside an order ------------------------------------ */
+const idRows = (ids: string[]): FixtureCell[][] => [
+  ["Order ID", "Order date", "Order total"],
+  ...ids.map((id): FixtureCell[] => [id, new Raw("46000"), new Raw("10")]),
+]
+const pagingGoogle = fakeGoogle({
+  grids: [
+    { title: "Grouped", sheetId: 9, rowCount: 9, rows: idRows(["A", "A", "B", "C", "C", "C", "D", "E"]) },
+    { title: "One", sheetId: 11, rowCount: 20, rows: idRows(Array.from({ length: 12 }, () => "BIG")) },
+  ],
+  version: () => "3",
+})
+const paging = createGoogleSheetsConnector({
+  fetch: pagingGoogle.fetchImpl,
+  config: googleOAuthConfig,
+  pageRows: 5,
+  now: () => NOW,
+})
+const tabContext = (sheetId: number) => ({
+  externalAccountId: `${SHEET}:${sheetId}`,
+  credentials: { refresh_token: "fixture-refresh" },
+  metadata: { spreadsheet_id: SHEET, sheet_id: sheetId, entity: "ORDERS", mapping: { external_id: "Order ID" } },
+})
+
+const g1 = await paging.fetchPage({ context: tabContext(9), resource: "ORDERS", mode: "INITIAL", cursor: null })
+check("A PAGE NEVER ENDS INSIDE AN ORDER: the order starting on row 5 is held back",
+  g1.kind === "page" && g1.records.length === 3 &&
+    sameCursor(g1.nextCursor, { v: null, row: 5, pv: "3" }, "running"),
+  g1.kind === "page" ? `${g1.records.length} records, ${g1.nextCursor}` : g1.kind)
+const g2 = g1.kind === "page"
+  ? await paging.fetchPage({ context: tabContext(9), resource: "ORDERS", mode: "INITIAL", cursor: g1.nextCursor })
+  : g1
+check("and the next page starts on it, with all three of its rows",
+  g2.kind === "page" && g2.records.filter((r) => r["Order ID"] === "C").length === 3 &&
+    JSON.stringify(g2.table?.rowNumbers) === JSON.stringify([5, 6, 7, 8, 9]),
+  g2.kind === "page" ? JSON.stringify(g2.table?.rowNumbers) : g2.kind)
+check("BOTH PAGES OF ONE PASS CARRY THE SAME PASS ID",
+  g1.kind === "page" && g2.kind === "page" && typeof g1.table?.passId === "string" &&
+    g1.table?.passId === g2.table?.passId)
+check("and the pass ends with no pass id left in the cursor",
+  g2.kind === "page" && sameCursor(g2.nextCursor, { v: "3", row: null, pv: null }, "none"))
+const g3 = await paging.fetchPage({
+  context: tabContext(9),
+  resource: "ORDERS",
+  mode: "INITIAL",
+  cursor: g2.kind === "page" ? g2.nextCursor : null,
+})
+check("THE NEXT PASS GETS A NEW PASS ID",
+  g1.kind === "page" && g3.kind === "page" && typeof g3.table?.passId === "string" &&
+    g3.table?.passId !== g1.table?.passId)
+
+const big = await paging.fetchPage({ context: tabContext(11), resource: "ORDERS", mode: "INITIAL", cursor: null })
+check("a page that is all one order is not held back forever",
+  big.kind === "page" && big.records.length === 5 &&
+    sameCursor(big.nextCursor, { v: null, row: 7, pv: "3" }, "running"),
+  big.kind === "page" ? String(big.nextCursor) : big.kind)
 
 /* ========================================================================== */
 

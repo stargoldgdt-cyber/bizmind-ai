@@ -83,6 +83,13 @@ export type FetchResult =
         headers: string[]
         /** The sheet row each record came from. Lineage only, never an identity. */
         rowNumbers: number[]
+        /**
+         * Which read-through of the source this page belongs to: the same on
+         * every page of one pass, new on the next. Lets the worker tell "seen
+         * earlier in THIS pass" from "seen last time" without trusting two
+         * clocks to agree.
+         */
+        passId?: string
       }
       /** Opaque checkpoint. Written only after these records are applied. */
       nextCursor: string | null

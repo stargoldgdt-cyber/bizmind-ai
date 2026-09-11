@@ -1579,6 +1579,274 @@ try {
         brief(viaTab))
     }
   }
+
+  /* ---------------------------------------------------------------------- */
+  section("12. A SHEET'S ROWS, THROUGH THE UPLOAD'S OWN CHECKS (0023)")
+
+  // The REAL worker writes these pages into the real database. Only Google is
+  // absent: each page is handed to it as the connector would produce it.
+  if (!HAS_SERVICE_KEY) {
+    for (const name of [
+      "the worker is told the business's currency",
+      "a spreadsheet page is written through the upload's own checks",
+      "an unchanged sheet writes nothing",
+      "a changed cell updates only its order",
+      "an order split across one pass is refused, never half-applied",
+      "a record gone from a finished pass is marked, never deleted",
+      "a sheet whose columns changed waits for its owner",
+      "a DEAD_LETTER from the worker is final",
+    ]) skip(name, "SUPABASE_SERVICE_ROLE_KEY is not set")
+  } else {
+    // The worker reads its configuration from the environment, as it does in
+    // the app. Handed to it here, for this process only.
+    process.env.NEXT_PUBLIC_SUPABASE_URL ??= SUPABASE_URL ?? ""
+    process.env.SUPABASE_SERVICE_ROLE_KEY ??= SERVICE_KEY
+
+    type SheetJob = import("../src/services/integrations/sync/worker").JobRow
+    type SheetContext = import("../src/services/integrations/sync/worker").ContextRow
+    const { applyTabularPage } = await import("../src/services/integrations/sync/worker")
+    const { ExactNumber } = await import("../src/lib/json-exact")
+    const n = (text: string) => new ExactNumber(text)
+
+    const HEADERS = ["Order ID", "Order date", "Order total", "SKU", "Qty", "Unit cost"]
+    const MAPPING = {
+      external_id: "Order ID", placed_at: "Order date", total: "Order total",
+      sku: "SKU", quantity: "Qty", unit_cost: "Unit cost",
+    }
+    const LIVE_SHEET = `livesheet-${suffix}-abcdefghij`
+    const orderId = (k: string) => `S${suffix}-${k}`
+    const line = (order: string, sku: string, qty: unknown, cost: unknown, total = "1234.56") => {
+      const row: Record<string, unknown> = {
+        "Order ID": orderId(order), "Order date": n("46000"), "Order total": n(total), SKU: sku, Qty: qty,
+      }
+      if (cost !== undefined) row["Unit cost"] = cost
+      return row
+    }
+    const connectArgs = {
+      p_business_id: businessId,
+      p_provider: "GOOGLE_SHEETS",
+      p_external_account_id: `${LIVE_SHEET}:5`,
+      p_display_name: `Live sheet ${suffix}`,
+      p_channel_type: "WEBSITE",
+      p_metadata: {
+        entity: "ORDERS", spreadsheet_id: LIVE_SHEET, sheet_id: 5, mapping: MAPPING,
+        date_format: "auto", decimal_separator: ",",
+      },
+    }
+
+    const liveTab = await call("integration_account_connect", connectArgs)
+    const tabId = liveTab.body?.id as string | undefined
+    check("an orders tab is connected with the owner's column choices", liveTab.ok && !!tabId, brief(liveTab))
+
+    /** Queue, claim, start, then one page through the real worker. */
+    const claimJob = async () => {
+      await call("sync_enqueue", { p_account_id: tabId, p_resource: "ORDERS", p_mode: "INCREMENTAL" })
+      const claimed = await serviceCall("sync_claim_jobs", {
+        p_worker_id: `sheet-${suffix}`, p_limit: 200, p_lease_seconds: 300,
+      })
+      const job = (Array.isArray(claimed.body) ? claimed.body : [])
+        .find((j: SheetJob) => j.integration_account_id === tabId) as SheetJob | undefined
+      if (!job) return null
+      const started = await serviceCall("sync_run_start", { p_job_id: job.id })
+      const runId = (Array.isArray(started.body) ? started.body[0]?.id : started.body?.id) as string | undefined
+      return { job, runId }
+    }
+
+    const runPage = async (page: {
+      records: Record<string, unknown>[]
+      rows: number[]
+      passId: string
+      hasMore: boolean
+      headers?: string[]
+    }) => {
+      const claim = await claimJob()
+      if (!claim) return { outcome: "NOT_CLAIMED", jobId: undefined, context: undefined }
+      const contexts = await serviceCall("sync_job_context", { p_job_id: claim.job.id })
+      const context = (contexts.body as SheetContext[])[0]
+      const outcome = await applyTabularPage(claim.job, claim.runId, context, {
+        kind: "page",
+        records: page.records,
+        nextCursor: JSON.stringify({ v: null, row: null, pv: null, pid: null }),
+        hasMore: page.hasMore,
+        table: { headers: page.headers ?? HEADERS, rowNumbers: page.rows, passId: page.passId },
+      })
+      return { outcome: outcome as string, jobId: claim.job.id, context }
+    }
+
+    const orderOf = async (k: string) =>
+      (await read(
+        `/rest/v1/orders?select=id,total::text&business_id=eq.${businessId}` +
+          `&external_id=eq.${encodeURIComponent(orderId(k))}`
+      ))[0] as { id: string; total: string } | undefined
+    const linesOf = async (order: { id: string } | undefined) =>
+      order
+        ? (await read(`/rest/v1/order_items?select=sku,unit_cost::text&order_id=eq.${order.id}&order=sku`))
+            .map((i: { sku: string; unit_cost: string | null }) => `${i.sku}:${i.unit_cost}`).join(",")
+        : ""
+    const batchesOfTab = async () =>
+      (await read(`/rest/v1/import_batches?select=id&integration_account_id=eq.${tabId}`)) as { id: string }[]
+    const issuesOfTab = async () => {
+      const batches = await batchesOfTab()
+      if (batches.length === 0) return [] as { row_number: number; field: string | null; message: string }[]
+      return (await read(
+        `/rest/v1/import_issues?select=row_number,field,message` +
+          `&batch_id=in.(${batches.map((b) => b.id).join(",")})&order=row_number`
+      )) as { row_number: number; field: string | null; message: string }[]
+    }
+    const lastRun = async (jobId: string | undefined) =>
+      (await read(
+        `/rest/v1/sync_runs?select=rows_inserted,rows_updated,rows_unchanged,rows_rejected` +
+          `&job_id=eq.${jobId}&order=started_at.desc&limit=1`
+      ))[0] as { rows_inserted: number; rows_updated: number; rows_unchanged: number; rows_rejected: number } | undefined
+
+    if (tabId) {
+      /* ---- pass 1, page 1 --------------------------------------------- */
+      const PASS_1 = `pass-1-${suffix}`
+      const first = await runPage({
+        records: [
+          line("1", "A", n("1"), n("100.10")),
+          line("1", "B", n("2"), n("50")),
+          line("2", "C", "lots", n("5"), "80"),
+          { "Order date": n("46000"), "Order total": n("5") },
+        ],
+        rows: [2, 3, 4, 5],
+        passId: PASS_1,
+        hasMore: true,
+      })
+
+      check("the worker is told the business's currency",
+        /^[A-Z]{3}$/.test(first.context?.business_currency ?? ""), String(first.context?.business_currency))
+      check("a page with a refused row is PARTIAL, not FAILED", first.outcome === "PARTIAL", first.outcome)
+
+      const o1 = await orderOf("1")
+      check("A SPREADSHEET PAGE IS WRITTEN THROUGH THE UPLOAD'S OWN CHECKS", o1 !== undefined)
+      check("ITS FIGURE IS EXACT UNDER COMMA DECIMALS: 1234.56, NOT 123456",
+        o1?.total === "1234.5600", String(o1?.total))
+      check("and both of its lines, with their exact costs",
+        (await linesOf(o1)) === "A:100.1000,B:50.0000", await linesOf(o1))
+      check("an order whose only row is unreadable is not written", (await orderOf("2")) === undefined)
+
+      const issues1 = await issuesOfTab()
+      check("EACH PROBLEM IS REPORTED AT ITS REAL SHEET ROW, WHERE AN UPLOAD'S WOULD BE",
+        issues1.some((i) => i.row_number === 4 && i.field === "quantity") &&
+          issues1.some((i) => i.row_number === 5 && i.field === "external_id"),
+        JSON.stringify(issues1))
+
+      /* ---- pass 1, page 2: order 1 again, far down the sheet ---------- */
+      const second = await runPage({
+        records: [line("3", "D", n("1"), n("10"), "20"), line("1", "Z", n("1"), n("1"))],
+        rows: [1002, 1500],
+        passId: PASS_1,
+        hasMore: false,
+      })
+      check("AN ORDER MET AGAIN LATER IN THE SAME PASS IS REFUSED -- ITS LINES ARE NOT REPLACED",
+        second.outcome === "PARTIAL" && (await linesOf(await orderOf("1"))) === "A:100.1000,B:50.0000",
+        `${second.outcome} ${await linesOf(await orderOf("1"))}`)
+      check("and the owner is told to keep an order's rows together",
+        (await issuesOfTab()).some((i) => i.row_number === 1500 && i.message.includes("higher up")))
+      check("the rest of that page is written", (await orderOf("3")) !== undefined)
+
+      /* ---- pass 2: nothing changed; the bad row was deleted ----------- */
+      const batchesBefore = (await batchesOfTab()).length
+      const third = await runPage({
+        records: [
+          line("1", "A", n("1"), n("100.10")),
+          line("1", "B", n("2"), n("50")),
+          line("3", "D", n("1"), n("10"), "20"),
+        ],
+        rows: [2, 3, 4],
+        passId: `pass-2-${suffix}`,
+        hasMore: false,
+      })
+      const batchesAfter = (await batchesOfTab()).length
+      const quietRun = await lastRun(third.jobId)
+      check("AN UNCHANGED SHEET WRITES NOTHING: no new import, no row touched",
+        third.outcome === "SUCCEEDED" && batchesAfter === batchesBefore &&
+          quietRun?.rows_unchanged === 2 && quietRun?.rows_inserted === 0 && quietRun?.rows_updated === 0,
+        `${third.outcome} batches ${batchesBefore}->${batchesAfter} ${JSON.stringify(quietRun)}`)
+
+      const state = (await read(
+        `/rest/v1/integration_record_state?select=business_key,present&integration_account_id=eq.${tabId}`
+      )) as { business_key: string; present: boolean }[]
+      check("A RECORD GONE FROM A FINISHED PASS IS MARKED, NEVER DELETED",
+        state.some((s) => s.business_key === orderId("2") && s.present === false) &&
+          state.some((s) => s.business_key === orderId("1") && s.present === true),
+        JSON.stringify(state))
+      check("and nothing in BizMind was deleted with it",
+        (await orderOf("1")) !== undefined && (await orderOf("3")) !== undefined)
+
+      /* ---- pass 3: one cell changed ----------------------------------- */
+      const fourth = await runPage({
+        records: [
+          line("1", "A", n("1"), n("100.20")),
+          line("1", "B", n("2"), n("50")),
+          line("3", "D", n("1"), n("10"), "20"),
+        ],
+        rows: [2, 3, 4],
+        passId: `pass-3-${suffix}`,
+        hasMore: false,
+      })
+      const editRun = await lastRun(fourth.jobId)
+      check("A CHANGED CELL UPDATES ONLY ITS ORDER",
+        fourth.outcome === "SUCCEEDED" && (await linesOf(await orderOf("1"))) === "A:100.2000,B:50.0000" &&
+          editRun?.rows_updated === 1 && editRun?.rows_unchanged === 1,
+        `${fourth.outcome} ${await linesOf(await orderOf("1"))} ${JSON.stringify(editRun)}`)
+
+      /* ---- a chosen column disappears --------------------------------- */
+      const fifth = await runPage({
+        records: [line("1", "A", n("1"), undefined)],
+        rows: [2],
+        passId: `pass-4-${suffix}`,
+        hasMore: false,
+        headers: HEADERS.filter((h) => h !== "Unit cost"),
+      })
+      const parkedTab = await read(`/rest/v1/integration_accounts?select=status&id=eq.${tabId}`)
+      const parkedJob = await read(`/rest/v1/sync_jobs?select=status&id=eq.${fifth.jobId}`)
+      check("A SHEET WHOSE COLUMNS CHANGED WAITS FOR ITS OWNER -- NOT A DEAD LETTER",
+        fifth.outcome === "RETRYING" && parkedTab[0]?.status === "MAPPING_REVIEW_REQUIRED" &&
+          parkedJob[0]?.status === "RETRYING",
+        `${fifth.outcome} ${JSON.stringify(parkedTab[0])} ${JSON.stringify(parkedJob[0])}`)
+      check("and the order it would have changed is untouched",
+        (await linesOf(await orderOf("1"))) === "A:100.2000,B:50.0000")
+
+      const reconnected = await call("integration_account_connect", connectArgs)
+      check("confirming the columns again turns the sheet back on",
+        reconnected.ok && reconnected.body?.status === "CONNECTED", brief(reconnected))
+
+      /* ---- DEAD_LETTER, and who may record problems --------------------- */
+      const final = await claimJob()
+      if (!final) {
+        check("the reconnected sheet's job can be claimed", false)
+      } else {
+        const direct = await call("sync_record_issues", { p_job_id: final.job.id, p_batch_id: null, p_issues: [] })
+        check("a signed-in user cannot call sync_record_issues()",
+          !direct.ok && [401, 403, 404].includes(direct.status), String(direct.status))
+
+        const foreign = (await read(
+          `/rest/v1/import_batches?select=id&business_id=eq.${businessId}` +
+            `&or=(integration_account_id.is.null,integration_account_id.neq.${tabId})&limit=1`
+        )) as { id: string }[]
+        if (foreign.length === 0) {
+          skip("a job cannot attach problems to another connection's import", "no other import exists in this test")
+        } else {
+          const hijack = await serviceCall("sync_record_issues", {
+            p_job_id: final.job.id, p_batch_id: foreign[0].id,
+            p_issues: [{ row_number: 1, severity: "ERROR", message: "planted" }],
+          })
+          check("A JOB CANNOT ATTACH PROBLEMS TO ANOTHER CONNECTION'S IMPORT", !hijack.ok, brief(hijack))
+        }
+
+        const dead = await serviceCall("sync_job_complete", {
+          p_job_id: final.job.id, p_run_id: final.runId, p_status: "DEAD_LETTER", p_cursor: null,
+          p_records_fetched: 0, p_records_applied: 0, p_records_skipped: 0,
+          p_error: "The spreadsheet was deleted.",
+        })
+        check("A DEAD_LETTER FROM THE WORKER IS FINAL -- not retried for hours",
+          dead.body?.status === "DEAD_LETTER" && dead.body?.attempts < dead.body?.max_attempts,
+          brief(dead))
+      }
+    }
+  }
 } finally {
   section("Cleanup")
   await api(`/rest/v1/businesses?id=eq.${businessId}`, { method: "DELETE" })

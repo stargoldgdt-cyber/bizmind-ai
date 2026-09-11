@@ -309,11 +309,36 @@ gaps. See [GOOGLE_SHEETS.md](GOOGLE_SHEETS.md) for the connector they serve.
   it inserted, updated, left unchanged or rejected; every batch records the
   connection and run it came from.
 
+## 9b. What migration 0023 changed
+
+- **A DEAD_LETTER from the worker is final.** `sync_job_complete()` used to
+  retry a permanent failure until its attempts ran out, whatever the worker
+  said — despite the worker's own comment promising "straight to the state a
+  person can see". Now it goes straight there.
+- **Waiting for a person is not a failure.** When a connector reports
+  `REAUTH_REQUIRED` or `MAPPING_REVIEW_REQUIRED`, the worker sets the
+  connection to that state and parks the job (`RETRYING`, attempt refunded)
+  instead of dead-lettering it. The connection's state keeps it from being
+  claimed; the owner's fix turns the connection back to `CONNECTED` and the job
+  continues. A dead letter would need a second rescue that nothing performs.
+- **Expenses are written by `sync_apply_expenses()`.** The worker chose its
+  apply function with a two-way test, so an expenses page would have gone to
+  `sync_apply_orders()`. It now chooses among all three.
+- **Table-shaped pages** (a spreadsheet) are prepared by `sync/tabular.ts` and
+  applied by `applyTabularPage()`. See GOOGLE_SHEETS.md, section 6b.
+- **`drainSyncQueue()`** keeps claiming until the queue is empty or a time
+  budget is spent. Used by the scheduled route and straight after an owner
+  connects a sheet or asks for a sync.
+- The trusted allowlist gains `sync_apply_expenses`, the three record-state
+  functions, `sync_record_issues`, `integration_account_set_state` and
+  `sync_reconcile_due`. Each derives its tenant from a job or account row;
+  `sync_reconcile_due` takes no id and returns only a count.
+
 ## 10. Tests
 
 ```bash
 npm run test:integration-engine   # 77 assertions, no database, no network
-npm run test:integration-live     # 166 assertions, against the real database
+npm run test:integration-live     # 187 assertions, against the real database
 npm run verify:integrations       # both
 ```
 

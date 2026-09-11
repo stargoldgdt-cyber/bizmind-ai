@@ -1100,6 +1100,9 @@ export type Database = {
           status: IntegrationStatus
           created_by: string | null
           updated_at: string
+          /** Migration 0022. Who connected Google for this business, and when. */
+          authorized_by: string | null
+          authorized_at: string | null
         }
         Insert: {
           business_id: string
@@ -1775,7 +1778,8 @@ export type Database = {
           p_provider: IntegrationProvider
           p_external_account_id: string
           p_display_name: string | null
-          p_channel_type: ChannelType
+          /** Null for a products or expenses sheet: not a sales channel (0020). */
+          p_channel_type: ChannelType | null
           p_metadata?: Json
         }
         Returns: Database["public"]["Tables"]["integration_accounts"]["Row"]

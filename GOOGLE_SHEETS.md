@@ -1,8 +1,9 @@
 # Google Sheets
 
-**Foundation built — step 1 of 6. There is no Google connector yet, and nothing
-in BizMind talks to Google.** This records the decisions already made and what
-the database now does, so the connector is built against a settled design.
+**Steps 1–3 of 6 built: the database foundation, the Google sign-in, and
+applying a sheet's rows. Change notifications (step 4) and the connect screen
+(step 5) are not built yet, so no owner can connect a sheet from the app
+today.** This records the decisions made and what each step does.
 
 Official documentation consulted 2026-09-11:
 [Drive push notifications](https://developers.google.com/workspace/drive/api/guides/push) ·
@@ -148,9 +149,48 @@ code: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`,
 `NEXT_PUBLIC_GOOGLE_PROJECT_NUMBER` (public by design — the Picker needs it),
 `GOOGLE_WEBHOOK_BASE_URL`, `CRON_SECRET`. See `.env.example`.
 
-**Not built yet:** the worker step that applies a sheet's rows (step 3), push
-notifications (step 4), and the connect screen (step 5). Until then nothing
-syncs from Google.
+**Step 3 (below) applies the rows.** Push notifications (step 4) and the
+connect screen (step 5) are still to come.
+
+## 6b. What step 3 built — a sheet's rows into BizMind
+
+A sheet's rows go through **the same checks as an Excel upload**: the same
+`validate()`, the same date and number rules, the same apply functions. There
+is one mapping engine, not one per source. On top of that, a live sheet follows
+these rules (`sync/tabular.ts`, `applyTabularPage()` in `sync/worker.ts`):
+
+| Rule | Why |
+| --- | --- |
+| **Every record needs an identity** — Order ID, SKU or Reference | A sheet is read again and again, and row numbers move whenever someone sorts or inserts. A row without one is reported and skipped, never given an invented key |
+| **An expenses tab must have a Reference column** | Otherwise an edited expense would be counted as a second one (approved decision 3) |
+| **All or nothing per record** | If any row of an order has a problem, the order is not written at all and BizMind keeps the version it already has. Writing only the good lines would quietly change cost of goods |
+| **Only changes are written** | Each record has a fingerprint. A pass after one edit writes only that edit; an unchanged sheet writes nothing |
+| **A page never ends inside an order** | Applying an order replaces its lines, so a page boundary inside an order would drop half of it. The page stops before that order and the next page starts on it |
+| **An order split across the sheet is refused** | If one order's rows are far apart and read in separate pages, the later part is refused and reported — never allowed to replace the earlier part's lines |
+| **Gone from the sheet = marked, not deleted** | A record missing from a finished pass is marked "no longer in the sheet". Nothing in BizMind is deleted |
+| **Exact numbers** | A number cell keeps Google's exact digits and never goes through the thousands/decimal separator rules — with a comma-decimal setting, `1234.56` would otherwise become `123456`. Dates arrive as the same serial number Excel uses and are read the same way |
+| **Other currencies are refused** | As in an upload. Nothing is converted |
+
+Problems are recorded in `import_issues` at the **real sheet row**, where an
+upload's problems go. A problem is reported when its record is new or changed,
+not again on every pass while nobody has touched the row.
+
+**Waiting for a person is not a failure.** If Google needs reconnecting, or a
+chosen column has left the sheet, the connection shows `REAUTH_REQUIRED` or
+`MAPPING_REVIEW_REQUIRED` and its job waits. Reconnecting Google, or confirming
+the columns again, turns it back on and the job simply continues.
+
+**When syncing runs:**
+
+| Trigger | What happens |
+| --- | --- |
+| Connecting a tab | The first import starts straight after the owner's request, in the background (`after()`), for up to 50 seconds |
+| "Sync now" | The same, for one tab |
+| The schedule | `/api/v1/integrations/sync/run`, protected by `CRON_SECRET`. Queues every sheet quiet for 15 minutes (the safety net for missed notifications), then works through the queue for up to 45 seconds. **No schedule is set up yet** — that is part of deployment |
+
+Anything not finished in one run is picked up by the next. The background work
+uses the worker's privileged path: nothing it does is returned to the owner's
+request, and the worker takes no business id.
 
 ## 7. Known limits
 
@@ -163,6 +203,14 @@ syncs from Google.
 4. Sheets stores numbers as binary doubles. BizMind will import Google's exact
    stored digits, which can differ from the rounded value a cell displays.
 5. Google allows 100 refresh tokens per account per OAuth client.
+6. Money is stored to 4 decimal places, as for uploads: a cell holding a
+   formula's floating-point residue such as `0.30000000000000004` is stored as
+   `0.3000`.
+7. A figure too large for the database (more than 16 digits before the point)
+   makes its whole page fail, and after repeated failures the sheet stops with
+   an error. The same value fails an upload too. Fix the cell, then Sync now.
+8. Dates are read as Excel reads them: the sheet's time zone is not applied.
+9. One Google account per business (V1).
 
 ## 8. Tests
 
@@ -179,7 +227,18 @@ refused, another business cannot connect Google on this one's behalf,
 reconnecting repairs every sheet waiting for it, and the worker falls back to
 the business's sign-in only when a connection has none of its own.
 
-`npm run test:google-sheets` — 88 assertions, no network, no database. It runs
+`npm run test:integration-live`, section 12 (migration 0023): the REAL worker
+writes pages into the real database, with only Google absent. It proves the
+worker is told the business's currency; a figure stays exact under comma
+decimals; each problem is reported at its real sheet row; an order whose only
+row is unreadable is not written; an order met again later in the same pass
+is refused and its lines are not replaced; an unchanged sheet writes nothing;
+one changed cell updates only its order; a record gone from a finished pass
+is marked, never deleted; a sheet whose columns changed waits for its owner
+and comes back when they are confirmed; a job cannot attach problems to
+another connection's import; and a DEAD_LETTER from the worker is final.
+
+`npm run test:google-sheets` — 127 assertions, no network, no database. It runs
 against a **clearly labelled fake Google** (`fakeGoogle`), kept separate from
 the real integration: consent URL, code exchange and its failures, token
 refresh, sealed state (wrong user, wrong business, expired, tampered), range

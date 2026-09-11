@@ -50,6 +50,42 @@ export function isExactNumber(value: unknown): value is ExactNumber {
   return value instanceof ExactNumber
 }
 
+/**
+ * An ExactNumber written out in full: "1.5e3" becomes "1500" and "-2.5E-3"
+ * becomes "-0.0025". Only the text is moved around -- no double is ever made,
+ * so nothing is rounded.
+ *
+ * Needed because a JSON number may use exponent form, and neither the
+ * database's numeric parser nor a person reading an order ID should meet
+ * "1e3". Exponents beyond 1000 are refused: no spreadsheet value is that
+ * large, and expanding one would build a string of a thousand zeros.
+ */
+export function plainDecimal(value: ExactNumber): string {
+  const match = /^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(value.text)
+  if (!match) throw new TypeError(`Not a JSON number: ${value.text}`)
+
+  const [, sign, whole, fraction = "", exponentText] = match
+  if (exponentText === undefined) return value.text
+
+  const exponent = Number.parseInt(exponentText, 10)
+  if (Math.abs(exponent) > 1000) throw new RangeError(`Exponent out of range: ${value.text}`)
+
+  let digits = whole + fraction
+  // Where the decimal point falls within `digits`.
+  let point = whole.length + exponent
+
+  if (point <= 0) {
+    digits = "0".repeat(1 - point) + digits
+    point = 1
+  } else if (point > digits.length) {
+    digits = digits + "0".repeat(point - digits.length)
+  }
+
+  const integerPart = digits.slice(0, point).replace(/^0+(?=\d)/, "")
+  const fractionPart = digits.slice(point)
+  return `${sign}${integerPart}${fractionPart ? `.${fractionPart}` : ""}`
+}
+
 export class LossyJsonError extends Error {
   constructor() {
     super(

@@ -1,8 +1,10 @@
 import "server-only"
 
-import { createHash } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 
 import { signaturesMatch } from "@/lib/crypto"
+import type { RawRecord } from "@/services/ingestion/contracts"
+import { normalizeText } from "@/services/ingestion/normalize"
 import type {
   Connector,
   ConnectorContext,
@@ -38,6 +40,8 @@ import { headingsFrom, recordsFrom } from "./table"
  *      of rows, in a single request.
  *   3. When the pass finishes, remember the version it STARTED at. An edit
  *      made while it was running therefore still counts as a change next time.
+ *   4. An orders tab is never cut inside an order: a page that would end
+ *      part-way through one stops before it, and the next page starts on it.
  *
  * "More pages?" is decided by the tab's row count, not by a short page.
  * Google omits trailing empty rows, so a block of blank rows spanning a page
@@ -59,6 +63,8 @@ type SheetsMetadata = {
   spreadsheetId: string
   sheetId: number
   entity: Entity
+  /** The heading holding the order ID, so a page never ends inside an order. */
+  groupColumn: string | null
 }
 
 /**
@@ -68,10 +74,16 @@ type SheetsMetadata = {
  *   v   the Drive version of the last COMPLETED pass
  *   row the next row to read, while a pass is under way
  *   pv  the version the current pass started at
+ *   pid the current pass's id: random, the same on every page of one pass
  */
-export type SheetsCursor = { v: string | null; row: number | null; pv: string | null }
+export type SheetsCursor = {
+  v: string | null
+  row: number | null
+  pv: string | null
+  pid: string | null
+}
 
-const EMPTY_CURSOR: SheetsCursor = { v: null, row: null, pv: null }
+const EMPTY_CURSOR: SheetsCursor = { v: null, row: null, pv: null, pid: null }
 
 export function decodeCursor(raw: string | null): SheetsCursor {
   if (!raw) return EMPTY_CURSOR
@@ -81,11 +93,19 @@ export function decodeCursor(raw: string | null): SheetsCursor {
     if (parsed === null || typeof parsed !== "object") return EMPTY_CURSOR
     const c = parsed as Record<string, unknown>
 
-    return {
+    const cursor: SheetsCursor = {
       v: typeof c.v === "string" ? c.v : null,
       row: typeof c.row === "number" && Number.isInteger(c.row) && c.row >= 2 ? c.row : null,
       pv: typeof c.pv === "string" ? c.pv : null,
+      pid: typeof c.pid === "string" && c.pid.length > 0 && c.pid.length <= 64 ? c.pid : null,
     }
+
+    // A pass under way without its id cannot say which records it has already
+    // seen, so it starts again from the top. Re-reading is harmless; a wrong
+    // "no longer in the sheet" report is not.
+    if (cursor.row !== null && cursor.pid === null) return { ...EMPTY_CURSOR, v: cursor.v }
+
+    return cursor
   } catch {
     // An unreadable cursor restarts the pass. Reading a page twice is harmless
     // -- writes are idempotent -- whereas skipping one is not.
@@ -102,7 +122,38 @@ function readMetadata(metadata: Record<string, unknown>): SheetsMetadata | null 
   if (typeof sheetId !== "number" || !Number.isInteger(sheetId) || sheetId < 0) return null
   if (!entity) return null
 
-  return { spreadsheetId, sheetId, entity }
+  // Only an orders tab groups rows: the lines of one order share its ID.
+  const mapping = metadata.mapping
+  const orderIdColumn =
+    entity === "ORDERS" && mapping !== null && typeof mapping === "object"
+      ? (mapping as Record<string, unknown>).external_id
+      : undefined
+  const groupColumn =
+    typeof orderIdColumn === "string" && orderIdColumn.trim() !== "" ? orderIdColumn : null
+
+  return { spreadsheetId, sheetId, entity, groupColumn }
+}
+
+/**
+ * Where the last run of rows sharing one order ID begins, so it can be held
+ * back for the next page.
+ *
+ * Returns `records.length` -- hold nothing back -- when the last row has no ID,
+ * or when the whole page is one order: holding that back would never make
+ * progress. The worker then reports the order as split rather than writing
+ * half of it.
+ */
+function trailingGroupStart(records: readonly RawRecord[], column: string): number {
+  const last = records.length - 1
+  if (last < 0) return records.length
+
+  const key = normalizeText(records[last][column])
+  if (key === null) return records.length
+
+  let start = last
+  while (start > 0 && normalizeText(records[start - 1][column]) === key) start -= 1
+
+  return start === 0 ? records.length : start
 }
 
 type Dependencies = {
@@ -233,6 +284,7 @@ export function createGoogleSheetsConnector(deps: Dependencies = {}): Connector 
 
       const position = decodeCursor(cursor)
       let passVersion = position.pv
+      let passId = position.pid
       let firstRow = position.row ?? 2
 
       // A new pass: has anything changed since the last one finished?
@@ -253,6 +305,7 @@ export function createGoogleSheetsConnector(deps: Dependencies = {}): Connector 
         }
 
         passVersion = file.body.version
+        passId = randomUUID()
         firstRow = 2
       }
 
@@ -292,19 +345,40 @@ export function createGoogleSheetsConnector(deps: Dependencies = {}): Connector 
         }
       }
 
-      const { records, rowNumbers } = recordsFrom(headers, values.body[1] ?? [], firstRow)
+      const read = recordsFrom(headers, values.body[1] ?? [], firstRow)
+      let records = read.records
+      let rowNumbers = read.rowNumbers
+      let nextRow = lastRow + 1
       const hasMore = lastRow < tab.rowCount
 
+      // The rows of one order usually sit together. If this page ends in the
+      // middle of an order, the rest of its lines are on the next page -- and
+      // applying an order REPLACES its lines, so the next page would silently
+      // drop the ones read here. Hold that last order back and start the next
+      // page on its first row, so every order arrives whole.
+      if (hasMore && meta.groupColumn) {
+        const cut = trailingGroupStart(records, meta.groupColumn)
+        if (cut < records.length) {
+          nextRow = rowNumbers[cut]
+          records = records.slice(0, cut)
+          rowNumbers = rowNumbers.slice(0, cut)
+        }
+      }
+
       const next: SheetsCursor = hasMore
-        ? { v: position.v, row: lastRow + 1, pv: passVersion }
-        : { v: passVersion, row: null, pv: null }
+        ? { v: position.v, row: nextRow, pv: passVersion, pid: passId }
+        : { v: passVersion, row: null, pv: null, pid: null }
 
       return {
         kind: "page",
         records,
         nextCursor: JSON.stringify(next),
         hasMore,
-        table: { headers: headers.filter((heading) => heading !== ""), rowNumbers },
+        table: {
+          headers: headers.filter((heading) => heading !== ""),
+          rowNumbers,
+          passId: passId ?? undefined,
+        },
       }
     },
 

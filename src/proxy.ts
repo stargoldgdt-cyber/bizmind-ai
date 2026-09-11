@@ -112,8 +112,11 @@ export const config = {
    * service carries no session, so the auth round trip buys nothing. Its
    * authentication is a shared secret compared in constant time, and it
    * refuses every request when that secret is not configured.
+   *
+   * The scheduled sync route (`api/v1/integrations/sync/run`) is excluded for
+   * the same reason and protected the same way.
    */
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/v1/webhooks|api/v1/automation/run|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff2?)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/v1/webhooks|api/v1/automation/run|api/v1/integrations/sync/run|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff2?)$).*)",
   ],
 }

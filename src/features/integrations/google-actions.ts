@@ -1,8 +1,11 @@
 "use server"
 
+import { revalidatePath } from "next/cache"
+import { after } from "next/server"
 import { z } from "zod"
 
 import { getActiveBusiness } from "@/features/businesses/queries"
+import { createClient } from "@/lib/supabase/server"
 import {
   getSpreadsheet,
   getValues,
@@ -15,6 +18,8 @@ import {
   headingsFrom,
   recordsFrom,
 } from "@/services/integrations/connectors/google-sheets/table"
+import { drainSyncQueue } from "@/services/integrations/sync/drain"
+import { missingRecommended, readSheetSettings } from "@/services/integrations/sync/tabular"
 
 /**
  * Choosing a sheet: listing a spreadsheet's tabs and previewing one.
@@ -147,4 +152,241 @@ export async function previewGoogleTabAction(
     headers: headers.filter((heading) => heading !== ""),
     rows: records.map(displayRecord),
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Connecting a tab, and syncing it on request                                */
+/* -------------------------------------------------------------------------- */
+
+const CHANNEL_TYPES = [
+  "WEBSITE",
+  "SHOPIFY",
+  "WOOCOMMERCE",
+  "AMAZON",
+  "DARAZ",
+  "EBAY",
+  "FACEBOOK",
+  "INSTAGRAM",
+  "POS",
+  "MANUAL",
+  "OTHER",
+] as const
+
+const connectSchema = previewSchema.extend({
+  entity: z.enum(["ORDERS", "PRODUCTS", "EXPENSES"]),
+  /** BizMind field -> the sheet's own heading. */
+  mapping: z.record(z.string().max(64), z.string().max(256)),
+  dateFormat: z.enum(["auto", "DMY", "MDY", "YMD"]),
+  decimalSeparator: z.enum([".", ","]),
+  /** The sales channel an orders tab represents. Not asked for other tabs. */
+  channelType: z.enum(CHANNEL_TYPES).nullable(),
+  acknowledgedWarnings: z.boolean(),
+})
+
+const syncNowSchema = z.object({ accountId: z.string().uuid() })
+
+/** How long the import runs straight after a request, before the schedule takes over. */
+const BACKGROUND_SYNC_BUDGET_MS = 50_000
+
+/**
+ * Runs the sync worker AFTER the response has been sent, so the owner sees
+ * the import begin instead of waiting for it.
+ *
+ * This is background work -- the case CLAUDE.md allows the worker's privileged
+ * path for. Nothing it does is returned to this request, and the worker takes
+ * no business id: it claims whatever is due, derives each job's business from
+ * the job, and writes only through the functions that resolve their own
+ * tenant.
+ */
+function startBackgroundSync() {
+  after(async () => {
+    try {
+      await drainSyncQueue({ budgetMs: BACKGROUND_SYNC_BUDGET_MS })
+    } catch (error) {
+      console.error("[google] background sync failed:", error instanceof Error ? error.name : "unknown")
+    }
+  })
+}
+
+/**
+ * Connects one tab and starts its first import.
+ *
+ * Every check the worker will make on every page is made here first, against
+ * the sheet as it stands, so a mistake is shown to the owner now instead of
+ * parking the sheet a minute later.
+ */
+export async function connectGoogleSheetAction(
+  rawInput: unknown
+): Promise<{ ok: true; accountId: string } | Failure> {
+  const business = await getActiveBusiness()
+  if (!business || (business.role !== "OWNER" && business.role !== "ADMIN")) {
+    return { ok: false, error: "Only an owner or admin can connect a spreadsheet." }
+  }
+
+  const parsed = connectSchema.safeParse(rawInput)
+  if (!parsed.success) return { ok: false, error: "The connection details are not valid." }
+  const input = parsed.data
+
+  if (input.entity === "ORDERS" && !input.channelType) {
+    return {
+      ok: false,
+      error: "Choose which sales channel these orders come from. Channel profit depends on it.",
+    }
+  }
+
+  const supabase = await createClient()
+
+  // The worker reads the sheet with the business's own Google sign-in, so
+  // there must be one. The browser's token lasts about an hour.
+  const { data: google } = await supabase
+    .from("integrations")
+    .select("authorized_at")
+    .eq("business_id", business.id)
+    .eq("provider", "GOOGLE_SHEETS")
+    .maybeSingle()
+
+  if (!google?.authorized_at) {
+    return { ok: false, error: "Connect your Google account first, then choose the spreadsheet." }
+  }
+
+  const sheet = await getSpreadsheet(input.accessToken, input.spreadsheetId, fetch)
+  if (sheet.kind !== "ok") return { ok: false, error: explain(sheet) }
+
+  const tab = sheet.body.tabs.find((t) => t.sheetId === input.sheetId)
+  if (!tab) return { ok: false, error: "That tab no longer exists in the spreadsheet." }
+
+  const values = await getValues(
+    input.accessToken,
+    input.spreadsheetId,
+    [rowsRange(tab.title, 1, 1)],
+    fetch
+  )
+  if (values.kind !== "ok") return { ok: false, error: explain(values) }
+
+  const headers = headingsFrom(values.body[0]?.[0] ?? []).filter((heading) => heading !== "")
+
+  const fit = readSheetSettings(
+    {
+      entity: input.entity,
+      mapping: input.mapping,
+      date_format: input.dateFormat,
+      decimal_separator: input.decimalSeparator,
+    },
+    headers
+  )
+  if (!fit.ok) return { ok: false, error: fit.reason }
+
+  const unchosen = missingRecommended(input.entity, fit.settings.mapping)
+  if (unchosen.length > 0 && !input.acknowledgedWarnings) {
+    return {
+      ok: false,
+      error:
+        `Some recommended columns are not chosen: ${unchosen.map((f) => f.label).join(", ")}. ` +
+        `Confirm you understand which figures will be incomplete.`,
+    }
+  }
+
+  const { data: account, error } = await supabase.rpc("integration_account_connect", {
+    p_business_id: business.id,
+    p_provider: "GOOGLE_SHEETS",
+    p_external_account_id: `${input.spreadsheetId}:${input.sheetId}`,
+    p_display_name: `${sheet.body.title} — ${tab.title}`,
+    p_channel_type: input.entity === "ORDERS" ? input.channelType : null,
+    p_metadata: {
+      spreadsheet_id: input.spreadsheetId,
+      sheet_id: input.sheetId,
+      entity: input.entity,
+      mapping: fit.settings.mapping,
+      date_format: input.dateFormat,
+      decimal_separator: input.decimalSeparator,
+      spreadsheet_name: sheet.body.title,
+      sheet_title: tab.title,
+    },
+  })
+
+  if (error || !account) {
+    if (error?.message.includes("different BizMind business")) {
+      return {
+        ok: false,
+        error: "That tab is already connected to a different BizMind business. Disconnect it there first.",
+      }
+    }
+    console.error("[google] connecting a sheet failed:", error?.message ?? "no row")
+    return { ok: false, error: "The sheet could not be connected. Try again." }
+  }
+
+  const { error: queueError } = await supabase.rpc("sync_enqueue", {
+    p_account_id: account.id,
+    p_resource: input.entity,
+    p_mode: "INITIAL",
+  })
+
+  if (queueError) {
+    console.error("[google] queuing the first import failed:", queueError.message)
+    return {
+      ok: false,
+      error: "The sheet is connected, but its first import could not start. Use Sync now to start it.",
+    }
+  }
+
+  startBackgroundSync()
+  revalidatePath("/integrations")
+
+  return { ok: true, accountId: account.id }
+}
+
+/** "Sync now": reads the tab again and writes whatever changed. */
+export async function syncGoogleSheetNowAction(rawInput: unknown): Promise<{ ok: true } | Failure> {
+  const business = await getActiveBusiness()
+  if (!business || (business.role !== "OWNER" && business.role !== "ADMIN")) {
+    return { ok: false, error: "Only an owner or admin can start a sync." }
+  }
+
+  const parsed = syncNowSchema.safeParse(rawInput)
+  if (!parsed.success) return { ok: false, error: "That sheet connection could not be found." }
+
+  const supabase = await createClient()
+
+  // RLS scopes this to the caller's businesses; the filters narrow it to this
+  // business's Google Sheets connections.
+  const { data: account } = await supabase
+    .from("integration_accounts")
+    .select("id, status, metadata")
+    .eq("id", parsed.data.accountId)
+    .eq("business_id", business.id)
+    .eq("provider", "GOOGLE_SHEETS")
+    .maybeSingle()
+
+  if (!account) return { ok: false, error: "That sheet connection could not be found." }
+
+  const blocked: Partial<Record<string, string>> = {
+    PAUSED: "This sheet is paused. Resume it to sync.",
+    DISCONNECTED: "This sheet has been disconnected.",
+    REAUTH_REQUIRED: "Reconnect your Google account first.",
+    MAPPING_REVIEW_REQUIRED: "This sheet's columns have changed. Review its column choices first.",
+  }
+  const reason = blocked[account.status]
+  if (reason) return { ok: false, error: reason }
+
+  const metadata = (account.metadata ?? {}) as Record<string, unknown>
+  const entity = metadata.entity
+  if (entity !== "ORDERS" && entity !== "PRODUCTS" && entity !== "EXPENSES") {
+    return { ok: false, error: "This sheet's column choices are missing. Review the connection." }
+  }
+
+  const { error } = await supabase.rpc("sync_enqueue", {
+    p_account_id: account.id,
+    p_resource: entity,
+    p_mode: "INCREMENTAL",
+  })
+
+  if (error) {
+    console.error("[google] queuing a sync failed:", error.message)
+    return { ok: false, error: "The sync could not start. Try again in a moment." }
+  }
+
+  startBackgroundSync()
+  revalidatePath("/integrations")
+
+  return { ok: true }
 }

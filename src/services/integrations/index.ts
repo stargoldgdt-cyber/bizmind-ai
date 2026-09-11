@@ -35,3 +35,4 @@ export {
 export { receiveWebhook, type ReceiveOutcome } from "./webhooks/receive"
 export { processWebhookEvents } from "./webhooks/process"
 export { runSyncWorker, type WorkerResult } from "./sync/worker"
+export { drainSyncQueue } from "./sync/drain"

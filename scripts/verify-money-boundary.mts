@@ -456,6 +456,8 @@ try {
     products: [],
     health: {
       score: null, status: "unknown", dimensionsScored: 0, dimensionsTotal: 6,
+      dimensionsLowConfidence: 0, confidence: "low",
+      confidenceNote: "Nothing could be measured yet.",
       summary: "Not enough data.", dimensions: [],
     },
     insights: [],

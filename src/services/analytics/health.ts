@@ -52,12 +52,31 @@ export type HealthDimension = {
   supporting: SupportingMetric[]
 }
 
+/**
+ * How much of the business the score actually saw.
+ *
+ *   high     every dimension measured, on inputs it can rely on
+ *   limited  something was unmeasurable, or measured on incomplete inputs
+ *   low      half the business could not be judged at all
+ *
+ * The headline number carries this with it. A 72 from four of six dimensions,
+ * two of them built on incomplete costs, is not the same statement as a 72
+ * from six, and showing them identically is how an incomplete business comes
+ * to look healthy.
+ */
+export type HealthConfidence = "high" | "limited" | "low"
+
 export type BusinessHealth = {
   score: number | null
   status: HealthStatus
   /** How many of the six dimensions could be measured at all. */
   dimensionsScored: number
   dimensionsTotal: number
+  /** Measured, but on inputs that make the result unreliable. */
+  dimensionsLowConfidence: number
+  confidence: HealthConfidence
+  /** The confidence, in the owner's language. Always present. */
+  confidenceNote: string
   summary: string
   dimensions: HealthDimension[]
 }
@@ -479,6 +498,33 @@ export function calculateHealth(input: HealthInputs): BusinessHealth {
   ]
 
   const scored = dimensions.filter((d): d is HealthDimension & { score: number } => d.score !== null)
+  const lowConfidence = scored.filter((d) => d.confidence === "low").length
+  const unmeasured = dimensions.length - scored.length
+
+  // Half the business unjudged, or half of what was judged unreliable, is a
+  // score to treat as an indication rather than a measurement.
+  const confidence: HealthConfidence =
+    scored.length * 2 <= dimensions.length || lowConfidence * 2 >= scored.length
+      ? "low"
+      : unmeasured > 0 || lowConfidence > 0
+        ? "limited"
+        : "high"
+
+  const notes: string[] = []
+  if (unmeasured > 0) {
+    notes.push(
+      `${unmeasured} of ${dimensions.length} areas could not be measured and are left out of the score`
+    )
+  }
+  if (lowConfidence > 0) {
+    notes.push(
+      `${lowConfidence} ${lowConfidence === 1 ? "area is" : "areas are"} measured on incomplete data`
+    )
+  }
+  const confidenceNote =
+    notes.length === 0
+      ? "Every area was measured on complete data."
+      : `${notes.join(", and ")}.`
 
   if (scored.length === 0) {
     return {
@@ -486,6 +532,10 @@ export function calculateHealth(input: HealthInputs): BusinessHealth {
       status: "unknown",
       dimensionsScored: 0,
       dimensionsTotal: dimensions.length,
+      dimensionsLowConfidence: 0,
+      confidence: "low",
+      confidenceNote:
+        "Nothing could be measured yet, so there is no score to trust or doubt.",
       summary:
         "There is not enough data yet to score this business. Import sales, costs and expenses to begin.",
       dimensions,
@@ -500,6 +550,9 @@ export function calculateHealth(input: HealthInputs): BusinessHealth {
     status: statusFor(score),
     dimensionsScored: scored.length,
     dimensionsTotal: dimensions.length,
+    dimensionsLowConfidence: lowConfidence,
+    confidence,
+    confidenceNote,
     summary:
       scored.length < dimensions.length
         ? `Scored on ${scored.length} of ${dimensions.length} areas — the rest do not have enough data yet. Weakest area: ${weakest.label}.`

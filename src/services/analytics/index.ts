@@ -6,11 +6,16 @@ import { calculateHealth, type BusinessHealth } from "./health"
 import { generateInsights, type Insight } from "./insights"
 import type { ResolvedPeriod } from "./periods"
 import type {
+  ChangeDriver,
+  ChannelComparison,
   ChannelPerformance,
+  DataQuality,
   Financials,
   HealthInputs,
   MetricComparison,
   ProductPerformance,
+  QualityIssue,
+  QualityOrder,
   Reconciliation,
 } from "./types"
 
@@ -252,6 +257,121 @@ export async function getAnalytics(
     insights,
     error: null,
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* The deeper reads (migration 0026)                                          */
+/* -------------------------------------------------------------------------- */
+/*
+ * Separate calls rather than more of the bundle above: a dashboard section
+ * that fails should leave the rest of the page standing, and not every page
+ * needs all of them. Each returns an empty result on failure and says so in
+ * the server log -- never a zero that reads like a measurement.
+ */
+
+/** Every channel against the previous period, with its share of the whole. */
+export async function getChannelComparison(
+  businessId: string,
+  period: ResolvedPeriod
+): Promise<ChannelComparison[]> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase.rpc("analytics_channel_compare", {
+    p_business_id: businessId,
+    p_from: period.from,
+    p_to: period.to,
+    p_prev_from: period.previousFrom,
+    p_prev_to: period.previousTo,
+  })
+
+  if (error) {
+    console.error("[analytics] channel comparison failed", error.message)
+    return []
+  }
+
+  return (data as ChannelComparison[]) ?? []
+}
+
+/** What moved revenue and gross profit: which channels, which products. */
+export async function getChangeDrivers(
+  businessId: string,
+  period: ResolvedPeriod,
+  options: { limit?: number; scope?: AnalyticsScope } = {}
+): Promise<ChangeDriver[]> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase.rpc("analytics_change_drivers", {
+    p_business_id: businessId,
+    p_from: period.from,
+    p_to: period.to,
+    p_prev_from: period.previousFrom,
+    p_prev_to: period.previousTo,
+    p_limit: options.limit ?? 5,
+    ...channelArgs(options.scope ?? ALL_CHANNELS),
+  })
+
+  if (error) {
+    console.error("[analytics] change drivers failed", error.message)
+    return []
+  }
+
+  return (data as ChangeDriver[]) ?? []
+}
+
+/** What is recorded and what is not, counted. */
+export async function getDataQuality(
+  businessId: string,
+  period: ResolvedPeriod,
+  options: { scope?: AnalyticsScope } = {}
+): Promise<DataQuality | null> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase.rpc("analytics_data_quality", {
+    p_business_id: businessId,
+    p_from: period.from,
+    p_to: period.to,
+    ...channelArgs(options.scope ?? ALL_CHANNELS),
+  })
+
+  if (error) {
+    console.error("[analytics] data quality failed", error.message)
+    return null
+  }
+
+  return first(data as DataQuality[]) ?? null
+}
+
+/**
+ * The orders behind one gap, paged in the database.
+ *
+ * `matched_count` on each row is how many orders match in total, so a page of
+ * fifty can say what it is a page of.
+ */
+export async function listQualityOrders(
+  businessId: string,
+  period: ResolvedPeriod,
+  issue: QualityIssue,
+  options: { limit?: number; offset?: number; scope?: AnalyticsScope } = {}
+): Promise<{ rows: QualityOrder[]; matchedCount: number }> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase.rpc("analytics_quality_orders", {
+    p_business_id: businessId,
+    p_from: period.from,
+    p_to: period.to,
+    p_issue: issue,
+    p_limit: options.limit ?? 50,
+    p_offset: options.offset ?? 0,
+    ...channelArgs(options.scope ?? ALL_CHANNELS),
+  })
+
+  if (error) {
+    console.error("[analytics] quality orders failed", error.message)
+    return { rows: [], matchedCount: 0 }
+  }
+
+  const rows = (data as QualityOrder[]) ?? []
+  return { rows, matchedCount: rows[0]?.matched_count ?? 0 }
 }
 
 /** Looks up one comparison without the caller reaching into the array. */

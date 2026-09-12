@@ -256,6 +256,12 @@ export function buildFactSheet(input: FactSheetInput): FactSheet {
         input.health.dimensionsTotal
       )}`,
     },
+    {
+      key: "health_confidence",
+      label: "How far the health score can be trusted",
+      display: input.health.confidence,
+      caveat: input.health.confidenceNote,
+    },
     ...input.health.dimensions.map((dimension) => ({
       key: "health_dimension",
       label: dimension.label,

@@ -440,6 +440,184 @@ try {
   check("and this business's channel id, used on the other business, matches nothing there either",
     eq(ownWithOurs.revenue, 0))
 
+  /* ---------------------------------------------------------------------- */
+  section("6. EACH CHANNEL AGAINST THE PERIOD BEFORE (0026)")
+
+  type ChannelRow = {
+    channel_name: string
+    revenue: string
+    revenue_share: string | null
+    profit_share: string | null
+    gross_profit: string
+    previous_revenue: string
+    previous_orders: number
+    previous_gross_margin: string | null
+    revenue_change: string
+    revenue_change_pct: string | null
+    orders_change_pct: string | null
+    profit_change: string
+    margin_change_pts: string | null
+    direction: string
+  }
+
+  const comparison = (await rpc("analytics_channel_compare", {
+    ...window,
+    p_prev_from: PREV_FROM,
+    p_prev_to: PREV_TO,
+  })) as ChannelRow[]
+
+  const cAmazon = comparison.find((c) => c.channel_name === "Amazon")
+  const cWebsite = comparison.find((c) => c.channel_name === "Website")
+  const cNone = comparison.find((c) => c.channel_name === "Unattributed")
+
+  check("AMAZON'S SHARE OF REVENUE IS 50.79% AND OF PROFIT 39.22%",
+    eq(cAmazon?.revenue_share, 50.79) && eq(cAmazon?.profit_share, 39.22),
+    `${cAmazon?.revenue_share} / ${cAmazon?.profit_share}`)
+  check("the shares add up to 100",
+    comparison.reduce((sum, c) => sum + Number(c.revenue_share ?? 0), 0) === 100,
+    String(comparison.reduce((sum, c) => sum + Number(c.revenue_share ?? 0), 0)))
+  check("AMAZON GREW: 1600 against 500, +1100, +220.00%, orders +100.00%",
+    eq(cAmazon?.previous_revenue, 500) && eq(cAmazon?.revenue_change, 1100) &&
+      eq(cAmazon?.revenue_change_pct, 220) && eq(cAmazon?.orders_change_pct, 100) &&
+      cAmazon?.direction === "up",
+    JSON.stringify(cAmazon))
+  check("ITS MARGIN IS REPORTED IN POINTS, NOT PERCENT: 30.00 to 37.50 is +7.50",
+    eq(cAmazon?.previous_gross_margin, 30) && eq(cAmazon?.margin_change_pts, 7.5),
+    `${cAmazon?.previous_gross_margin} -> ${cAmazon?.margin_change_pts}`)
+  check("and its profit rose 450", eq(cAmazon?.profit_change, 450), String(cAmazon?.profit_change))
+  check("A CHANNEL WITH NO PREVIOUS PERIOD IS 'new', NOT A FAKE PERCENTAGE",
+    cWebsite?.direction === "new" && cWebsite?.revenue_change_pct === null &&
+      cNone?.direction === "new",
+    `${cWebsite?.direction} / ${cWebsite?.revenue_change_pct}`)
+
+  /* ---------------------------------------------------------------------- */
+  section("7. WHAT CHANGED, AND WHAT MOVED IT")
+
+  type Driver = {
+    driver_kind: string
+    driver_key: string
+    driver_label: string
+    metric: string
+    change_amount: string
+    share_of_change: string | null
+    direction: string
+    incomplete: boolean
+  }
+
+  const drivers = (await rpc("analytics_change_drivers", {
+    ...window,
+    p_prev_from: PREV_FROM,
+    p_prev_to: PREV_TO,
+    p_limit: 5,
+  })) as Driver[]
+
+  const channelRevenue = drivers.filter((d) => d.driver_kind === "CHANNEL" && d.metric === "revenue")
+  const productRevenue = drivers.filter((d) => d.driver_kind === "PRODUCT" && d.metric === "revenue")
+
+  check("THE BIGGEST REVENUE DRIVER IS THE WEBSITE, +1300 of the +2650 moved (49.06%)",
+    channelRevenue[0]?.driver_label === "Website" &&
+      eq(channelRevenue[0]?.change_amount, 1300) && eq(channelRevenue[0]?.share_of_change, 49.06),
+    JSON.stringify(channelRevenue[0]))
+  check("with Amazon next at +1100 (41.51%)",
+    channelRevenue[1]?.driver_label === "Amazon" && eq(channelRevenue[1]?.share_of_change, 41.51),
+    JSON.stringify(channelRevenue[1]))
+  check("the channel shares of the change add up to 100",
+    channelRevenue.reduce((sum, d) => sum + Number(d.share_of_change ?? 0), 0) === 100)
+  check("THE BIGGEST PRODUCT DRIVER IS P1, +800",
+    productRevenue[0]?.driver_label === "Blue Shirt" && eq(productRevenue[0]?.change_amount, 800),
+    JSON.stringify(productRevenue[0]))
+  check("A PRODUCT WITH NO KNOWN VALUE IN EITHER PERIOD IS NOT CLAIMED AS A DRIVER",
+    productRevenue.every((d) => d.driver_label !== "Red Mug"),
+    productRevenue.map((d) => d.driver_label).join(", "))
+  check("every driver says which way it moved",
+    drivers.every((d) => ["up", "down", "flat"].includes(d.direction)))
+
+  /* ---------------------------------------------------------------------- */
+  section("8. DATA QUALITY, COUNTED -- AND THE ORDERS BEHIND IT")
+
+  type Quality = {
+    orders_count: number
+    items_total: number
+    items_with_cost: number
+    items_without_cost: number
+    cost_coverage: string | null
+    orders_with_fee: number
+    orders_without_fee: number
+    fee_coverage: string | null
+    orders_without_channel: number
+    channel_coverage: string | null
+    orders_without_customer: number
+    customer_coverage: string | null
+    items_identified: number
+    items_without_identity: number
+    identity_coverage: string | null
+    items_value_known: number
+    items_value_derived: number
+    items_value_unknown: number
+    value_coverage: string | null
+    products_missing_cost: number
+    first_order_at: string | null
+    last_order_at: string | null
+    days_in_period: number
+    days_with_orders: number
+  }
+
+  const [quality] = (await rpc("analytics_data_quality", window)) as Quality[]
+
+  check("COST: 5 of 6 lines costed, 83.33%",
+    quality.items_with_cost === 5 && quality.items_without_cost === 1 &&
+      eq(quality.cost_coverage, 83.33),
+    JSON.stringify([quality.items_with_cost, quality.cost_coverage]))
+  check("FEES: 1 of 5 orders has none recorded, 80.00% covered",
+    quality.orders_without_fee === 1 && eq(quality.fee_coverage, 80))
+  check("CHANNEL: 1 order is unattributed, 80.00% covered",
+    quality.orders_without_channel === 1 && eq(quality.channel_coverage, 80))
+  check("CUSTOMER: none of the 5 orders has a customer, 0.00% covered",
+    quality.orders_without_customer === 5 && eq(quality.customer_coverage, 0))
+  check("PRODUCT IDENTITY: 1 line has no SKU, product or name",
+    quality.items_without_identity === 1 && eq(quality.identity_coverage, 83.33))
+  check("LINE VALUE: 5 known (1 of them calculated), 1 unknown",
+    quality.items_value_known === 5 && quality.items_value_derived === 1 &&
+      quality.items_value_unknown === 1 && eq(quality.value_coverage, 83.33),
+    JSON.stringify([quality.items_value_known, quality.items_value_derived, quality.items_value_unknown]))
+  check("1 product has sales with no recorded cost", quality.products_missing_cost === 1,
+    String(quality.products_missing_cost))
+  check("DATE COVERAGE: 5 days of the 31 had orders",
+    quality.days_with_orders === 5 && quality.days_in_period === 31,
+    `${quality.days_with_orders} / ${quality.days_in_period}`)
+  check("and the first and last order in the period are dated",
+    quality.first_order_at !== null && quality.last_order_at !== null)
+
+  const [amazonQuality] = (await rpc("analytics_data_quality", inAmazon)) as Quality[]
+  check("DATA QUALITY FOLLOWS THE CHANNEL: Amazon's 2 orders, fully costed, half its fees known",
+    amazonQuality.orders_count === 2 && eq(amazonQuality.cost_coverage, 100) &&
+      eq(amazonQuality.fee_coverage, 50) && amazonQuality.items_value_derived === 1,
+    JSON.stringify([amazonQuality.orders_count, amazonQuality.cost_coverage, amazonQuality.fee_coverage]))
+
+  type GapOrder = { order_number: string | null; matched_count: number; items_without_cost: number }
+
+  const noFee = (await rpc("analytics_quality_orders", { ...window, p_issue: "NO_FEE" })) as GapOrder[]
+  check("THE GAP CAN BE OPENED: the one order with no recorded fee is A2",
+    noFee.length === 1 && noFee[0].order_number === `A2-${suffix}` && noFee[0].matched_count === 1,
+    JSON.stringify(noFee))
+
+  const missingCost = (await rpc("analytics_quality_orders", { ...window, p_issue: "MISSING_COST" })) as GapOrder[]
+  check("and the order with an uncosted line is W2",
+    missingCost.length === 1 && missingCost[0].order_number === `W2-${suffix}` &&
+      missingCost[0].items_without_cost === 1,
+    JSON.stringify(missingCost))
+
+  const unknownValue = (await rpc("analytics_quality_orders", { ...window, p_issue: "UNKNOWN_VALUE" })) as GapOrder[]
+  check("and the order whose line has no value at all is W1",
+    unknownValue.length === 1 && unknownValue[0].order_number === `W1-${suffix}`,
+    JSON.stringify(unknownValue))
+
+  const rivalQuality = (await rpc("analytics_data_quality", window, otherToken)) as Quality[]
+  check("ANOTHER BUSINESS SEES NO DATA QUALITY FOR THIS ONE",
+    rivalQuality[0].orders_count === 0 && rivalQuality[0].items_total === 0)
+  const rivalGaps = (await rpc("analytics_quality_orders", { ...window, p_issue: "NO_FEE" }, otherToken)) as GapOrder[]
+  check("nor the orders behind its gaps", rivalGaps.length === 0)
+
   const anonymous = await fetch(`${SUPABASE_URL}/rest/v1/rpc/analytics_financials`, {
     method: "POST",
     headers: { apikey: ANON_KEY, "Content-Type": "application/json" },

@@ -196,6 +196,10 @@ const health: BusinessHealth = {
   status: "watch",
   dimensionsScored: 4,
   dimensionsTotal: 6,
+  dimensionsLowConfidence: 1,
+  confidence: "limited",
+  confidenceNote:
+    "2 of 6 areas could not be measured and are left out of the score, and 1 area is measured on incomplete data.",
   summary: "Growing, but the margin is under pressure.",
   dimensions: [],
 }

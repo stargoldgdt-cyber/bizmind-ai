@@ -216,6 +216,119 @@ export type HealthInputs = {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Channel comparison, change drivers, data quality (migration 0026)          */
+/* -------------------------------------------------------------------------- */
+
+export type ChangeDirection = "up" | "down" | "flat" | "new" | "gone"
+
+/** One channel, measured against the period before it. */
+export type ChannelComparison = {
+  channel_id: string | null
+  channel_name: string
+  channel_type: string
+  revenue: Money
+  /** Share of this period's revenue. */
+  revenue_share: Ratio
+  orders_count: number
+  units_sold: Money
+  avg_order_value: Ratio
+  cogs: Money
+  fees: Money
+  gross_profit: Money
+  gross_margin: Ratio
+  /** Share of the gross profit the business actually made. NULL when it made none. */
+  profit_share: Ratio
+  cost_coverage: Ratio
+  fee_coverage: Ratio
+  previous_revenue: Money
+  previous_orders: number
+  previous_gross_margin: Ratio
+  revenue_change: Money
+  revenue_change_pct: Ratio
+  orders_change_pct: Ratio
+  profit_change: Money
+  /** Margin moves in POINTS, never percent: 40% to 30% is ten points down. */
+  margin_change_pts: Ratio
+  direction: ChangeDirection
+}
+
+/** What moved a figure: one channel or one product, for one metric. */
+export type ChangeDriver = {
+  driver_kind: "CHANNEL" | "PRODUCT"
+  driver_key: string
+  driver_label: string
+  metric: "revenue" | "gross_profit"
+  current_value: Money
+  previous_value: Money
+  change_amount: Money
+  /** Share of the total movement of its own kind. */
+  share_of_change: Ratio
+  direction: "up" | "down" | "flat"
+  /** Some of this driver's lines have no recorded value. */
+  incomplete: boolean
+}
+
+/**
+ * What is recorded and what is not, counted.
+ *
+ * Every dimension is a pair plus a share, so "95.3% cost coverage" can always
+ * be stated as "10 of 233 lines have no cost". A coverage with nothing to
+ * measure is NULL, never 100%.
+ */
+export type DataQuality = {
+  orders_count: number
+  items_total: number
+  items_with_cost: number
+  items_without_cost: number
+  cost_coverage: Ratio
+  orders_with_fee: number
+  orders_without_fee: number
+  fee_coverage: Ratio
+  orders_with_channel: number
+  orders_without_channel: number
+  channel_coverage: Ratio
+  orders_with_customer: number
+  orders_without_customer: number
+  customer_coverage: Ratio
+  items_identified: number
+  items_without_identity: number
+  identity_coverage: Ratio
+  items_value_known: number
+  items_value_derived: number
+  items_value_unknown: number
+  value_coverage: Ratio
+  products_missing_cost: number
+  first_order_at: string | null
+  last_order_at: string | null
+  days_in_period: number
+  days_with_orders: number
+  days_since_last_order: number | null
+}
+
+/** A gap that can be opened to see the orders behind it. */
+export type QualityIssue =
+  | "NO_FEE"
+  | "NO_CHANNEL"
+  | "NO_CUSTOMER"
+  | "MISSING_COST"
+  | "UNKNOWN_VALUE"
+  | "NO_LINES"
+
+export type QualityOrder = {
+  order_id: string
+  order_number: string | null
+  placed_at: string
+  channel_name: string | null
+  total: Money
+  fee_total: Money | null
+  items_total: number
+  items_without_cost: number
+  items_value_unknown: number
+  /** How many orders match this gap in total, for paging. */
+  matched_count: number
+}
+
+/* -------------------------------------------------------------------------- */
 /* Metric registry — a view of the canonical vocabulary                       */
 /* -------------------------------------------------------------------------- */
 

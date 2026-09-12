@@ -1872,6 +1872,61 @@ export type Database = {
         Returns: Database["public"]["Tables"]["integration_accounts"]["Row"]
       }
 
+      /* ---- Channel comparison, drivers, data quality (0026) -------------
+       * Their row shapes live in `src/services/analytics/types.ts`, where the
+       * service reads them. Typing the columns twice is how two definitions of
+       * one figure start to drift. */
+
+      analytics_channel_compare: {
+        Args: {
+          p_business_id: string
+          p_from: string
+          p_to: string
+          p_prev_from: string
+          p_prev_to: string
+        }
+        Returns: Record<string, unknown>[]
+      }
+
+      analytics_change_drivers: {
+        Args: {
+          p_business_id: string
+          p_from: string
+          p_to: string
+          p_prev_from: string
+          p_prev_to: string
+          p_limit?: number
+          p_channel_id?: string | null
+          p_no_channel?: boolean
+        }
+        Returns: Record<string, unknown>[]
+      }
+
+      analytics_data_quality: {
+        Args: {
+          p_business_id: string
+          p_from: string
+          p_to: string
+          p_channel_id?: string | null
+          p_no_channel?: boolean
+        }
+        Returns: Record<string, unknown>[]
+      }
+
+      analytics_quality_orders: {
+        Args: {
+          p_business_id: string
+          p_from: string
+          p_to: string
+          p_issue: string
+          p_limit?: number
+          p_offset?: number
+          p_channel_id?: string | null
+          p_no_channel?: boolean
+        }
+        Returns: Record<string, unknown>[]
+      }
+
       /* ---- Automation (migration 0016) ---------------------------------
        * `automation_claim_due` is absent on purpose. It reads rules across
        * every business, is granted to service_role alone, and is reached only

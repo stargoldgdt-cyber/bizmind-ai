@@ -166,6 +166,10 @@ const current: Financials = {
   cost_gap: "25.00",
   fee_gap: "37.50",
   refund_rate: "0.00",
+  line_revenue_derived: "0.0000",
+  items_value_derived: 0,
+  items_value_unknown: 0,
+  channel_scoped: false,
 }
 
 const comparisons: MetricComparison[] = [

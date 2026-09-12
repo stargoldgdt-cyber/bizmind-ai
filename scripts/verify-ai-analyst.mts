@@ -87,6 +87,10 @@ const FINANCIALS: Financials = {
   cost_gap: "25.00",
   fee_gap: "37.50",
   refund_rate: "0.00",
+  line_revenue_derived: "0.0000",
+  items_value_derived: 0,
+  items_value_unknown: 0,
+  channel_scoped: false,
 }
 
 const COMPARISONS: MetricComparison[] = [
@@ -131,8 +135,15 @@ const CHANNELS: ChannelPerformance[] = [
 
 const PRODUCTS: ProductPerformance[] = [
   {
+    product_key: "sku:W-2001",
+    product_id: null,
     sku: "W-2001",
     product_name: "Widget Pro",
+    name_source: "ORDER_LINE",
+    revenue_derived: "0.0000",
+    items_measured: 2,
+    items_value_derived: 0,
+    items_value_unknown: 0,
     revenue: "5100.0000",
     units_sold: "6.0000",
     cogs: "2400.0000",

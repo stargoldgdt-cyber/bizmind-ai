@@ -1570,7 +1570,7 @@ export type Database = {
        * NULL rather than 0 or infinity. */
 
       analytics_financials: {
-        Args: { p_business_id: string; p_from: string; p_to: string }
+        Args: { p_business_id: string; p_from: string; p_to: string; p_channel_id?: string | null; p_no_channel?: boolean }
         Returns: {
           revenue: Numeric
           cogs: Numeric
@@ -1607,6 +1607,8 @@ export type Database = {
           p_to: string
           p_prev_from: string
           p_prev_to: string
+          p_channel_id?: string | null
+          p_no_channel?: boolean
         }
         Returns: {
           metric: string
@@ -1619,7 +1621,7 @@ export type Database = {
       }
 
       analytics_channels: {
-        Args: { p_business_id: string; p_from: string; p_to: string }
+        Args: { p_business_id: string; p_from: string; p_to: string; p_channel_id?: string | null; p_no_channel?: boolean }
         Returns: {
           channel_id: string | null
           channel_name: string
@@ -1647,7 +1649,14 @@ export type Database = {
       }
 
       analytics_products: {
-        Args: { p_business_id: string; p_from: string; p_to: string; p_limit?: number }
+        Args: {
+          p_business_id: string
+          p_from: string
+          p_to: string
+          p_limit?: number
+          p_channel_id?: string | null
+          p_no_channel?: boolean
+        }
         Returns: {
           sku: string
           product_name: string
@@ -1665,7 +1674,7 @@ export type Database = {
       }
 
       analytics_reconciliation: {
-        Args: { p_business_id: string; p_from: string; p_to: string }
+        Args: { p_business_id: string; p_from: string; p_to: string; p_channel_id?: string | null; p_no_channel?: boolean }
         Returns: {
           order_revenue: Numeric
           channel_revenue: Numeric

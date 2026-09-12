@@ -1,4 +1,4 @@
-import { TriangleAlert } from "lucide-react"
+import { Calculator, TriangleAlert } from "lucide-react"
 
 import {
   Table,
@@ -56,20 +56,42 @@ export function ProductTable({
           {shown.map((product) => {
             const coverage = product.cost_coverage === null ? null : Number(product.cost_coverage)
             const incomplete = coverage !== null && coverage < 100
+            const secondary =
+              product.name_source === "NONE"
+                ? "No SKU or name on these lines"
+                : product.name_source === "SKU"
+                  ? "No product name recorded"
+                  : product.sku
 
             return (
-              <TableRow key={product.sku}>
+              <TableRow key={product.product_key}>
                 <TableCell className="max-w-64">
                   <span className="block truncate font-medium">{product.product_name}</span>
-                  <span className="block truncate font-mono text-[11px] text-muted-foreground">
-                    {product.sku}
-                  </span>
+                  {secondary && (
+                    <span className="block truncate font-mono text-[11px] text-muted-foreground">
+                      {secondary}
+                    </span>
+                  )}
                 </TableCell>
                 <TableCell className="text-right font-mono text-xs tabular-nums">
                   {formatNumber(product.units_sold, 2)}
                 </TableCell>
                 <TableCell className="text-right font-mono text-xs tabular-nums">
-                  {formatMoney(product.revenue, currency)}
+                  <span className="inline-flex items-center justify-end gap-1">
+                    {product.items_value_derived > 0 && (
+                      <Calculator
+                        className="size-3 text-muted-foreground"
+                        aria-label={`Includes ${formatMoney(product.revenue_derived, currency)} calculated as quantity × unit price, because the source gave no line total`}
+                      />
+                    )}
+                    {product.items_value_unknown > 0 && (
+                      <TriangleAlert
+                        className="size-3 text-warning-strong"
+                        aria-label={`${product.items_value_unknown} of this product's lines have no recorded value and are left out`}
+                      />
+                    )}
+                    {formatMoney(product.revenue, currency)}
+                  </span>
                 </TableCell>
                 <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">
                   {formatMoney(product.cogs, currency)}

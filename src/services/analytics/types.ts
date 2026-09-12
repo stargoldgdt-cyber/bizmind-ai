@@ -54,8 +54,13 @@ export type Financials = {
   fees: Money
   gross_profit: Money
   gross_margin: Ratio
-  expenses: Money
-  net_profit: Money
+  /**
+   * Whole-business. NULL under a channel filter: BizMind has no per-channel
+   * expense data and never invents an allocation (migration 0025).
+   */
+  expenses: Money | null
+  /** Whole-business, like expenses. NULL under a channel filter. */
+  net_profit: Money | null
   net_margin: Ratio
   orders_count: number
   units_sold: Money
@@ -92,6 +97,21 @@ export type Financials = {
    * database should have produced.
    */
   refund_rate: Ratio
+  /**
+   * Order-line value BizMind CALCULATED as quantity x unit price, because the
+   * source gave a unit price but no line total. Part of line_revenue, and
+   * reported on its own so it is never taken for a figure the source supplied.
+   */
+  line_revenue_derived: Money
+  /** Lines whose value was calculated rather than supplied. */
+  items_value_derived: number
+  /**
+   * Lines with neither a line total nor a unit price. Their value is unknown,
+   * so they are left out of line revenue rather than counted as zero.
+   */
+  items_value_unknown: number
+  /** True when the figures cover one channel, or orders with no channel. */
+  channel_scoped: boolean
 }
 
 export type MetricDirection = "up" | "down" | "flat" | "unknown"
@@ -125,18 +145,38 @@ export type ChannelPerformance = {
   fee_coverage: Ratio
 }
 
+/** Where a product's name came from. There is no "(unnamed)". */
+export type ProductNameSource = "CATALOGUE" | "ORDER_LINE" | "SKU" | "NONE"
+
 export type ProductPerformance = {
-  sku: string
+  /** Stable row key: the SKU, else the linked product, else the name, else "unidentified". */
+  product_key: string
+  product_id: string | null
+  sku: string | null
+  /** What to call it. Always set; `name_source` says how BizMind knows. */
   product_name: string
-  revenue: Money
+  name_source: ProductNameSource
+  /**
+   * Line revenue over the lines whose value is known (supplied or calculated).
+   * NULL when no line's value is known -- never zero.
+   */
+  revenue: Money | null
+  /** The part of revenue calculated as quantity x unit price. */
+  revenue_derived: Money
   units_sold: Money
+  /** Cost of the measured lines only. */
   cogs: Money
-  /** An ALLOCATION of order-level fees by line revenue, not a measured charge. */
+  /** An ALLOCATION of order-level fees by line value, not a measured charge. */
   fees_allocated: Money
-  gross_profit: Money
+  /** NULL when revenue is. */
+  gross_profit: Money | null
   gross_margin: Ratio
   orders_count: number
   items_total: number
+  /** Lines with a known value -- what revenue, cost and profit are measured over. */
+  items_measured: number
+  items_value_derived: number
+  items_value_unknown: number
   items_with_cost: number
   cost_coverage: Ratio
 }

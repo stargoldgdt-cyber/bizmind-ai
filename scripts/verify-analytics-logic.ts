@@ -248,6 +248,10 @@ function financials(overrides: Partial<Financials> = {}): Financials {
     cost_gap: null,
     fee_gap: null,
     refund_rate: null,
+    line_revenue_derived: "0",
+    items_value_derived: 0,
+    items_value_unknown: 0,
+    channel_scoped: false,
     ...overrides,
   }
 }
@@ -433,9 +437,12 @@ const lowMargin = generateInsights(
     current: financials({ revenue: "10000", gross_margin: "50", cost_coverage: "100", items_total: 5, items_with_cost: 5 }),
     products: [
       {
+        product_key: "sku:LOSS-1", product_id: null, name_source: "ORDER_LINE",
         sku: "LOSS-1", product_name: "Loss Leader", revenue: "1000", units_sold: "5",
+        revenue_derived: "0",
         cogs: "1200", fees_allocated: "0", gross_profit: "-200", gross_margin: "-20",
         orders_count: 3, items_total: 3, items_with_cost: 3, cost_coverage: "100",
+        items_measured: 3, items_value_derived: 0, items_value_unknown: 0,
       },
     ],
   })
@@ -449,9 +456,12 @@ const unknownCost = generateInsights(
     current: financials({ revenue: "10000", gross_margin: "50", cost_coverage: "100", items_total: 5, items_with_cost: 5 }),
     products: [
       {
+        product_key: "sku:PARTIAL-1", product_id: null, name_source: "ORDER_LINE",
         sku: "PARTIAL-1", product_name: "Partly Costed", revenue: "1000", units_sold: "5",
+        revenue_derived: "0",
         cogs: "100", fees_allocated: "0", gross_profit: "900", gross_margin: "90",
         orders_count: 3, items_total: 3, items_with_cost: 1, cost_coverage: "33.33",
+        items_measured: 3, items_value_derived: 0, items_value_unknown: 0,
       },
     ],
   })

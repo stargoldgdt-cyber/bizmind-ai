@@ -30,9 +30,38 @@ import type {
  * tenant gets zeros and empty sets rather than data.
  */
 
+/**
+ * Which orders the figures cover (migration 0025).
+ *
+ * Every figure follows it -- revenue, cost, fees, products, the comparison --
+ * except Business Health, which is a whole-business view, and the channel
+ * table, which always lists every channel so the chosen one can be seen
+ * against the rest.
+ */
+export type AnalyticsScope =
+  | { kind: "all" }
+  | { kind: "channel"; channelId: string }
+  | { kind: "unattributed" }
+
+const ALL_CHANNELS: AnalyticsScope = { kind: "all" }
+
+/** The SQL arguments for a scope. The database does the filtering. */
+function channelArgs(scope: AnalyticsScope): { p_channel_id?: string; p_no_channel?: boolean } {
+  if (scope.kind === "channel") return { p_channel_id: scope.channelId }
+  if (scope.kind === "unattributed") return { p_no_channel: true }
+  return {}
+}
+
 export type AnalyticsBundle = {
   period: ResolvedPeriod
   currency: string
+  scope: AnalyticsScope
+  /**
+   * The unfiltered figures, present only under a channel filter -- so net
+   * profit can be shown for the whole business, labelled as such, rather than
+   * split across channels.
+   */
+  businessWide: Financials | null
   current: Financials
   previous: Financials
   comparisons: MetricComparison[]
@@ -72,6 +101,10 @@ const EMPTY_FINANCIALS: Financials = {
   cost_gap: null,
   fee_gap: null,
   refund_rate: null,
+  line_revenue_derived: "0",
+  items_value_derived: 0,
+  items_value_unknown: 0,
+  channel_scoped: false,
 }
 
 const EMPTY_RECONCILIATION: Reconciliation = {
@@ -94,16 +127,22 @@ export async function getAnalytics(
   businessId: string,
   period: ResolvedPeriod,
   currency: string,
-  options: { productLimit?: number } = {}
+  options: { productLimit?: number; scope?: AnalyticsScope } = {}
 ): Promise<AnalyticsBundle> {
   const supabase = await createClient()
 
-  const current = { p_business_id: businessId, p_from: period.from, p_to: period.to }
-  const previous = {
+  const scope = options.scope ?? ALL_CHANNELS
+  const scoped = scope.kind !== "all"
+  const filter = channelArgs(scope)
+
+  const whole = { p_business_id: businessId, p_from: period.from, p_to: period.to }
+  const previousWhole = {
     p_business_id: businessId,
     p_from: period.previousFrom,
     p_to: period.previousTo,
   }
+  const current = { ...whole, ...filter }
+  const previous = { ...previousWhole, ...filter }
 
   const [
     currentResult,
@@ -114,6 +153,7 @@ export async function getAnalytics(
     productResult,
     reconciliationResult,
     healthResult,
+    businessWideResult,
   ] = await Promise.all([
     supabase.rpc("analytics_financials", current),
     supabase.rpc("analytics_financials", previous),
@@ -123,11 +163,14 @@ export async function getAnalytics(
       p_to: period.to,
       p_prev_from: period.previousFrom,
       p_prev_to: period.previousTo,
+      ...filter,
     }),
-    supabase.rpc("analytics_channels", current),
-    supabase.rpc("analytics_channels", previous),
+    // Every channel, always: the chosen one is shown against the rest.
+    supabase.rpc("analytics_channels", whole),
+    supabase.rpc("analytics_channels", previousWhole),
     supabase.rpc("analytics_products", { ...current, p_limit: options.productLimit ?? 50 }),
     supabase.rpc("analytics_reconciliation", current),
+    // Whole-business by nature: stock, payments and customers are not per channel.
     supabase.rpc("analytics_health_inputs", {
       p_business_id: businessId,
       p_from: period.from,
@@ -135,6 +178,8 @@ export async function getAnalytics(
       p_prev_from: period.previousFrom,
       p_prev_to: period.previousTo,
     }),
+    // Net profit is whole-business. Under a channel filter it is read unfiltered.
+    scoped ? supabase.rpc("analytics_financials", whole) : null,
   ])
 
   const failure =
@@ -145,7 +190,8 @@ export async function getAnalytics(
     previousChannelResult.error ??
     productResult.error ??
     reconciliationResult.error ??
-    healthResult.error
+    healthResult.error ??
+    businessWideResult?.error
 
   if (failure) {
     // A failed calculation is reported as such. Returning zeros would let an
@@ -153,6 +199,8 @@ export async function getAnalytics(
     return {
       period,
       currency,
+      scope,
+      businessWide: null,
       current: EMPTY_FINANCIALS,
       previous: EMPTY_FINANCIALS,
       comparisons: [],
@@ -185,9 +233,15 @@ export async function getAnalytics(
     periodLabel: period.label,
   })
 
+  const businessWide = businessWideResult
+    ? (first(businessWideResult.data as Financials[]) ?? null)
+    : null
+
   return {
     period,
     currency,
+    scope,
+    businessWide,
     current: currentFinancials,
     previous: previousFinancials,
     comparisons,

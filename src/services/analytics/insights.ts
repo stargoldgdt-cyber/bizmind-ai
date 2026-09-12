@@ -56,6 +56,11 @@ function num(value: Ratio | string | number | null | undefined): number | null {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+/** A product as an owner knows it: its name, and its SKU when that adds anything. */
+function productLabel(p: ProductPerformance): string {
+  return p.sku && p.sku !== p.product_name ? `${p.product_name} (${p.sku})` : p.product_name
+}
+
 /** Ordering for display: the most serious first. */
 const SEVERITY_RANK: Record<InsightSeverity, number> = {
   critical: 0,
@@ -315,7 +320,13 @@ function lowMarginProducts(ctx: Context): Insight | null {
       const coverage = num(p.cost_coverage)
       // Only judge products whose costs are fully known — otherwise the low
       // margin might be a data gap rather than a pricing problem.
-      return margin !== null && coverage === 100 && isPositiveMoney(p.revenue) && margin < overall - 15
+      return (
+        margin !== null &&
+        coverage === 100 &&
+        p.revenue !== null &&
+        isPositiveMoney(p.revenue) &&
+        margin < overall - 15
+      )
     })
     .sort((a, b) => (num(a.gross_margin) ?? 0) - (num(b.gross_margin) ?? 0))
     .slice(0, 3)
@@ -329,13 +340,13 @@ function lowMarginProducts(ctx: Context): Insight | null {
     severity: (num(worst.gross_margin) ?? 0) < 0 ? "critical" : "warning",
     title:
       (num(worst.gross_margin) ?? 0) < 0
-        ? `${worst.product_name} is selling at a loss`
+        ? `${productLabel(worst)} is selling at a loss`
         : `${candidates.length} product${candidates.length === 1 ? "" : "s"} well below your average margin`,
     summary:
-      `Your overall margin is ${overall}%. ${worst.product_name} (${worst.sku}) is earning ` +
+      `Your overall margin is ${overall}%. ${productLabel(worst)} is earning ` +
       `${worst.gross_margin}% across ${worst.orders_count} order${worst.orders_count === 1 ? "" : "s"}.`,
     supportingMetrics: candidates.map((p) => ({
-      label: `${p.product_name} (${p.sku})`,
+      label: productLabel(p),
       value: p.gross_margin ?? "—",
       format: "percent" as const,
     })),
@@ -364,7 +375,7 @@ function productsMissingCost(ctx: Context): Insight | null {
       `These products show a profit that is higher than reality, because some or all ` +
       `of their sales have no cost recorded against them.`,
     supportingMetrics: missing.slice(0, 5).map((p) => ({
-      label: `${p.product_name} (${p.sku})`,
+      label: productLabel(p),
       value: p.cost_coverage ?? "—",
       format: "percent" as const,
     })),

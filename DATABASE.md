@@ -780,6 +780,27 @@ A future migration that must touch these three tables in bulk should set
 `bizmind.lineage_writer = 'on'` for its transaction, or every record it touches
 will gain a `DIRECT` line and become non-withdrawable.
 
+## 7i. Analytics foundation (0025)
+
+Four changes to the same functions, made once:
+
+| Change | Detail |
+| --- | --- |
+| **Channel is a dimension** | `analytics_counted_orders()` takes `p_channel_id` (one channel) or `p_no_channel` (orders with no channel), and financials, channels, products, the comparison and reconciliation all pass it through. Three-argument calls still work: the new parameters default to "every channel" |
+| **Expenses stay whole-business** | Under a channel filter `expenses`, `net_profit` and `net_margin` are NULL and `channel_scoped` is true. There is no per-channel expense data, so nothing is allocated. The dashboard reads net profit unfiltered and labels it "Whole business" |
+| **Withdrawn records stop counting** | Every reader excludes orders, expenses, products (and their stock) whose `withdrawn_at` is set. Nothing sets it yet |
+| **Products identified honestly** | Grouped by SKU, then linked product, then name; lines with none form one row, "Lines with no product identity". Named from the catalogue, then the order line, then the SKU; `name_source` says which. `product_key` is the stable row key. "(unnamed)" and the merged "(no SKU)" row are gone |
+| **A blank line total is not zero** | A line's value is its line total, or CALCULATED as quantity x unit price, or unknown. Calculated value is reported separately (`line_revenue_derived`, `revenue_derived`, `items_value_derived`); the stored line is not changed. Unknown lines are left out of line revenue and product profit (`items_value_unknown`) instead of counting as zero. Headline revenue, cost of goods and channel figures are unaffected |
+
+Business Health stays whole-business: stock, payments and customers are not
+per channel.
+
+The migration refuses to install unless every public analytics function has
+exactly one signature and its grant, money is still text, and for existing
+businesses the revenue of each channel plus orders with no channel adds up to
+the whole. `npm run test:analytics-foundation` holds every figure to a
+hand-worked dataset.
+
 ---
 
 ## 8. Regenerating types

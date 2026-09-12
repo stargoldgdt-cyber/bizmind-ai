@@ -22,6 +22,7 @@
     "test:automation": "node --import tsx --conditions react-server scripts/verify-automation.mts",
     "test:automation-live": "node --import tsx --conditions react-server scripts/verify-automation-live.mts",
     "test:analytics-data": "node --import tsx scripts/verify-analytics-data.mts",
+    "test:analytics-foundation": "node --import tsx scripts/verify-analytics-foundation.mts",
     "test:costs": "node --import tsx scripts/verify-cost-stability.mts",
     "test:source-truth": "node --import tsx scripts/verify-source-truth.mts",
     "test:mapping-data": "node --import tsx scripts/verify-mapping-profiles.mts",

@@ -21,6 +21,7 @@
  */
 
 import { formatMoney, formatNumber, formatPercent } from "@/lib/format"
+import { isPositiveMoney } from "@/services/analytics/money"
 import type { Insight } from "@/services/analytics/insights"
 import type {
   ChannelPerformance,
@@ -147,20 +148,34 @@ export function buildFactSheet(input: FactSheetInput): FactSheet {
         : undefined,
   }))
 
-  const products: Fact[] = input.products.slice(0, LIST_LIMIT).map((product) => ({
-    key: "product",
-    label: product.product_name || product.sku,
-    display:
-      `revenue ${money(product.revenue)}, ` +
-      `gross profit ${money(product.gross_profit)}, ` +
-      `margin ${formatPercent(product.gross_margin)}, ` +
-      `units ${formatNumber(product.units_sold, 2)}`,
-    caveat:
+  const products: Fact[] = input.products.slice(0, LIST_LIMIT).map((product) => {
+    // Every reason this product's figures are less than complete, stated.
+    const caveats = [
       Number(product.cost_coverage ?? 0) < 100
         ? `Costs recorded on ${formatPercent(product.cost_coverage)} of lines, so this ` +
           `margin is overstated.`
-        : undefined,
-  }))
+        : null,
+      product.items_value_unknown > 0
+        ? `${formatNumber(product.items_value_unknown)} of its order lines have no recorded ` +
+          `value, so its revenue and profit leave them out.`
+        : null,
+      isPositiveMoney(product.revenue_derived)
+        ? `${money(product.revenue_derived)} of its revenue was CALCULATED as quantity x unit ` +
+          `price, because the source gave no line total.`
+        : null,
+    ].filter((line): line is string => line !== null)
+
+    return {
+      key: "product",
+      label: product.product_name,
+      display:
+        `revenue ${money(product.revenue)}, ` +
+        `gross profit ${money(product.gross_profit)}, ` +
+        `margin ${formatPercent(product.gross_margin)}, ` +
+        `units ${formatNumber(product.units_sold, 2)}`,
+      caveat: caveats.length > 0 ? caveats.join(" ") : undefined,
+    }
+  })
 
   // The honesty section. Without it a model reading only the headline figures
   // would describe an overstated margin as though it were settled fact.

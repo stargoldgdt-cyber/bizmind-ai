@@ -168,13 +168,19 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
 
           <div className="flex flex-wrap items-center gap-2">
             <ChannelFilter
-              options={channels.map((channel) => ({ id: channel.id, name: channel.name }))}
+              options={channels.map((channel) => ({
+                id: channel.id,
+                name: channel.name,
+                href: hrefForChannel(channel.id),
+              }))}
               activeId={activeChannelId}
-              unattributedSelected={channelChoice.kind === "unattributed"}
-              unattributedAvailable={
+              allHref={hrefForChannel(null)}
+              unattributedHref={
                 current.orders_without_channel > 0 || channelChoice.kind === "unattributed"
+                  ? hrefForChannel(NO_CHANNEL)
+                  : undefined
               }
-              hrefFor={(channel) => hrefForChannel(channel)}
+              unattributedSelected={channelChoice.kind === "unattributed"}
             />
             <RangeSelector
               active={period.key}
@@ -485,6 +491,14 @@ async function ChannelSection({
   // Always every channel: the chosen one is shown against the rest.
   const channels = await getChannelComparison(businessId, period)
 
+  // Links are built here, in the server component. A function cannot be handed
+  // to a client component -- React has no way to send one over the wire.
+  const hrefs: Record<string, string> = {}
+  for (const channel of channels) {
+    const key = channel.channel_id ?? "unattributed"
+    hrefs[key] = hrefForChannel(channel.channel_id ?? NO_CHANNEL)
+  }
+
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-border bg-card p-4">
@@ -492,7 +506,7 @@ async function ChannelSection({
           channels={channels}
           currency={currency}
           activeChannelId={activeChannelId}
-          hrefFor={(id) => hrefForChannel(id === null ? NO_CHANNEL : id)}
+          hrefs={hrefs}
         />
       </div>
 

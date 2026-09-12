@@ -28,6 +28,11 @@ import {
  * "Orders with no channel" is offered only when there are some. It is a real
  * slice of the business, not an error state, and an owner needs to be able to
  * look at it; offering it when it is empty would just be noise.
+ *
+ * THE LINKS ARE BUILT BY THE PAGE, not by a callback passed in here. A server
+ * component cannot hand a function to a client one -- React has no way to send
+ * a function over the wire -- so each option arrives with its href already on
+ * it.
  */
 
 export type ChannelOption = {
@@ -35,22 +40,25 @@ export type ChannelOption = {
   name: string
   /** Shown beside the name so a busy list stays scannable. */
   detail?: string
+  /** The page with this channel selected, other filters kept. */
+  href: string
 }
 
 export function ChannelFilter({
   options,
   activeId,
+  allHref,
+  unattributedHref,
   unattributedSelected,
-  unattributedAvailable,
-  hrefFor,
 }: {
   options: ChannelOption[]
   /** The selected channel, or null for every channel. */
   activeId: string | null
+  /** The page with no channel filter at all. */
+  allHref: string
+  /** Present only when the business has orders with no channel. */
+  unattributedHref?: string
   unattributedSelected: boolean
-  unattributedAvailable: boolean
-  /** Builds the link for a choice, keeping the other filters. */
-  hrefFor: (channel: string | null) => string
 }) {
   const [open, setOpen] = useState(false)
 
@@ -80,7 +88,7 @@ export function ChannelFilter({
 
         <ul className="max-h-72 overflow-y-auto">
           <ChoiceRow
-            href={hrefFor(null)}
+            href={allHref}
             label="All channels"
             selected={activeId === null && !unattributedSelected}
             onNavigate={() => setOpen(false)}
@@ -89,7 +97,7 @@ export function ChannelFilter({
           {options.map((option) => (
             <ChoiceRow
               key={option.id}
-              href={hrefFor(option.id)}
+              href={option.href}
               label={option.name}
               detail={option.detail}
               selected={option.id === activeId}
@@ -97,9 +105,9 @@ export function ChannelFilter({
             />
           ))}
 
-          {unattributedAvailable && (
+          {unattributedHref && (
             <ChoiceRow
-              href={hrefFor("none")}
+              href={unattributedHref}
               label="No channel"
               detail="Orders with none recorded"
               selected={unattributedSelected}

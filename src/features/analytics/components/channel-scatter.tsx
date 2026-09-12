@@ -27,8 +27,10 @@ import type { ChannelComparison } from "@/services/analytics"
  *
  * CLICKING A CHANNEL FILTERS THE DASHBOARD. Each point is a link, so it works
  * with a keyboard, can be opened in a new tab, and needs no JavaScript to
- * navigate. The table underneath is the accessible alternative: the same rows,
- * the same figures, with the exact amounts.
+ * navigate. The links are built by the page and passed in as strings: a server
+ * component cannot hand a function to a client one. The table underneath is
+ * the accessible alternative: the same rows, the same figures, with the exact
+ * amounts.
  *
  * A channel whose margin could not be calculated is NOT plotted at zero — it
  * is listed beneath the chart as unplotted, because a point at 0% would read
@@ -63,12 +65,13 @@ export function ChannelScatter({
   channels,
   currency,
   activeChannelId,
-  hrefFor,
+  hrefs,
 }: {
   channels: ChannelComparison[]
   currency: string
   activeChannelId: string | null
-  hrefFor: (channelId: string | null) => string
+  /** Channel id (or "unattributed") to the page filtered to it. */
+  hrefs: Record<string, string>
 }) {
   const titleId = useId()
   const [hovered, setHovered] = useState<string | null>(null)
@@ -212,7 +215,7 @@ export function ChannelScatter({
           return (
             <Link
               key={point.channel.channel_id ?? "unattributed"}
-              href={hrefFor(point.channel.channel_id)}
+              href={hrefs[point.channel.channel_id ?? "unattributed"] ?? "#"}
               aria-label={`${point.channel.channel_name}: ${formatPercent(
                 point.channel.revenue_share
               )} of revenue, ${formatPercent(point.channel.gross_margin)} margin, ${formatNumber(

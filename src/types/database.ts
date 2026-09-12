@@ -1551,6 +1551,30 @@ export type Database = {
        * from the batch row, never from arguments, so a caller cannot import
        * into a business they do not belong to. */
 
+      /* ---- Data sources and withdrawal (migration 0027) -----------------
+       * The row shapes live in `src/features/imports/queries.ts`, beside the
+       * code that reads them. */
+
+      import_batch_overview: {
+        Args: { p_limit?: number; p_offset?: number }
+        Returns: Record<string, unknown>[]
+      }
+
+      import_batch_withdrawal_preview: {
+        Args: { p_batch_id: string }
+        Returns: Record<string, unknown>[]
+      }
+
+      import_batch_withdraw: {
+        Args: { p_batch_id: string; p_reason?: string | null }
+        Returns: Record<string, unknown>[]
+      }
+
+      import_batch_restore: {
+        Args: { p_batch_id: string }
+        Returns: Record<string, unknown>[]
+      }
+
       import_apply_orders: {
         Args: { p_batch_id: string; p_rows: Json }
         Returns: Json

@@ -801,6 +801,65 @@ businesses the revenue of each channel plus orders with no channel adds up to
 the whole. `npm run test:analytics-foundation` holds every figure to a
 hand-worked dataset.
 
+## 7j. Channel comparison and data quality (0026)
+
+Three read-only functions, all `security invoker`, all taking the same window
+and channel parameters as the rest of the analytics layer.
+
+| Function | Answers |
+| --- | --- |
+| `analytics_channel_compare()` | Every channel side by side for a window and the one before it: revenue, its share of the whole (`revenue_share`), gross margin, orders, average order value, and the change against the previous window. Shares are computed in SQL so nothing divides money in a browser |
+| `analytics_change_drivers()` | What moved the headline figure: each channel's contribution to the revenue change, as an amount and as a percentage of the total change, ordered by size. The answer to "why is this month down?" |
+| `analytics_data_quality()` | One row per kind of gap — missing cost, no fee, no channel, no customer, unknown line value, no product lines — with how many orders it affects and what it does to the figures |
+| `analytics_quality_orders()` | The orders behind one of those gaps, paged in the database |
+
+A `full outer join` on `is not distinct from` is not hash- or merge-joinable in
+PostgreSQL, so the channel comparison joins on `coalesce(channel_id,
+'00000000-...'::uuid)` instead. Orders with no channel are a real row in the
+comparison, not a footnote.
+
+## 7k. Withdrawing an import (0027, 0028)
+
+What 0024's lineage was built for. An owner can take an import back out of
+their business data, and BizMind can say exactly what that will and will not
+touch **before** anything happens.
+
+| Function | What it does |
+| --- | --- |
+| `import_batch_overview()` | The Data Sources list: every import with its rows, added, updated, skipped, errors, warnings, how many records it wrote, how many it has withdrawn, its lineage status and its connection name. `security invoker`, so RLS decides what is listed |
+| `import_batch_withdrawal_preview()` | What withdrawing would do: records written, created, updated, how many would stop counting, how many would stay because something else also wrote them, and **who those others are**. Read-only, and computed with the same rule the withdrawal applies, so a confirmation cannot promise something the action will not do |
+| `import_batch_withdraw()` | Marks the records this import owns alone as withdrawn, marks the import, writes the audit log. Nothing is deleted |
+| `import_batch_restore()` | Clears the markers this import set, and only those |
+
+**Withdrawn, not deleted** (the owner's decision, 2026-09-12). The records stop
+counting towards every figure — 0025's readers already exclude them — while the
+import, its rows, its row problems and its lineage all remain, and it can be
+restored.
+
+**The rule.** A record is withdrawn only if every other write to it came from an
+import that is itself already withdrawn. Any other active import, any sync, any
+direct edit, or an `UNTRACED` origin makes it shared, and shared records are not
+touched. Only `RECORDED` and `RECOVERED` imports can be withdrawn at all.
+
+**What withdrawal cannot do.** A record this import UPDATED keeps the values it
+wrote: BizMind keeps no earlier version of a record. The preview says so in
+words, so nobody expects a rollback they are not getting.
+
+**Security.** The three that read or change business data are `security
+definer`, so they check for themselves: owner or admin, and a member of that
+import's business. An import in a business the caller does not belong to is
+refused with the same wording as one that does not exist, so a refusal cannot
+confirm that someone else's import is real. The withdrawal markers are
+otherwise unreachable — the 0024 triggers refuse any request that tries to set
+them directly.
+
+**0028 is a fix to 0027.** The preview returns a column called `entity` and
+counted rows with an unqualified `entity = 'ORDER'`; inside plpgsql the output
+column is also a variable, so PostgreSQL refused the query — at call time, not
+at install time. 0027's self-verification checked privileges and source text and
+passed; `npm run test:withdrawal` calls the functions for real, and found it on
+the first run. Migration self-checks cannot replace calling the thing.
+
 ---
 
 ## 8. Regenerating types

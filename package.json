@@ -29,6 +29,7 @@
     "test:migration-0010": "node --import tsx --conditions react-server scripts/verify-migration-0010.mts",
     "test:money-boundary": "node --import tsx --conditions react-server scripts/verify-money-boundary.mts",
     "test:integration-live": "node --import tsx --conditions react-server scripts/verify-integration-live.mts",
+    "test:withdrawal": "node --import tsx scripts/verify-import-withdrawal.mts",
     "ai:check": "node --import tsx --conditions react-server scripts/check-openai.mts",
     "template": "node --import tsx --conditions react-server scripts/make-import-template.mts"
   },

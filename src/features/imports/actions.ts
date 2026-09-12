@@ -295,6 +295,100 @@ export async function commitImportAction(
   return { ok: true, summary: (summary ?? {}) as Record<string, number>, batchId }
 }
 
+/**
+ * Withdraw an import from the business's data.
+ *
+ * The destructive path, and deliberately the careful one:
+ *   - the ROLE is checked in the database, not here (SECURITY DEFINER with its
+ *     own check), so a crafted request cannot get past it
+ *   - the business comes from the import itself, never from the request
+ *   - records another import, sync or person also wrote are left alone
+ *   - the import, its rows and its problems are kept, and it can be restored
+ *   - it is written to the audit log with the counts
+ *
+ * Nothing is deleted. "Withdrawn" means "stops counting towards every figure",
+ * which is what an owner actually wants when a file was wrong.
+ */
+export async function withdrawImportAction(
+  batchId: string,
+  reason: string
+): Promise<
+  | { ok: true; orders: number; products: number; expenses: number; shared: number }
+  | { ok: false; error: string }
+> {
+  const parsed = z.string().uuid().safeParse(batchId)
+  if (!parsed.success) return { ok: false, error: "That import could not be found." }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("import_batch_withdraw", {
+    p_batch_id: parsed.data,
+    p_reason: reason.trim().slice(0, 500) || null,
+  })
+
+  if (error) {
+    console.error("[imports] withdrawal failed", error.message)
+    return {
+      ok: false,
+      // The database's own wording here is written for the owner: "already
+      // withdrawn", "only an owner or admin", "cannot tell what it wrote".
+      error: error.message.replace(/^.*?:\s*/, ""),
+    }
+  }
+
+  const result = ((data as {
+    orders_withdrawn: number
+    products_withdrawn: number
+    expenses_withdrawn: number
+    records_shared: number
+  }[]) ?? [])[0]
+
+  revalidatePath("/imports")
+  revalidatePath("/dashboard")
+
+  return {
+    ok: true,
+    orders: result?.orders_withdrawn ?? 0,
+    products: result?.products_withdrawn ?? 0,
+    expenses: result?.expenses_withdrawn ?? 0,
+    shared: result?.records_shared ?? 0,
+  }
+}
+
+/** Puts a withdrawn import's records back into the figures. */
+export async function restoreImportAction(
+  batchId: string
+): Promise<{ ok: true; restored: number } | { ok: false; error: string }> {
+  const parsed = z.string().uuid().safeParse(batchId)
+  if (!parsed.success) return { ok: false, error: "That import could not be found." }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("import_batch_restore", {
+    p_batch_id: parsed.data,
+  })
+
+  if (error) {
+    console.error("[imports] restore failed", error.message)
+    return { ok: false, error: error.message.replace(/^.*?:\s*/, "") }
+  }
+
+  const result = ((data as {
+    orders_restored: number
+    products_restored: number
+    expenses_restored: number
+  }[]) ?? [])[0]
+
+  revalidatePath("/imports")
+  revalidatePath("/dashboard")
+
+  return {
+    ok: true,
+    restored:
+      (result?.orders_restored ?? 0) +
+      (result?.products_restored ?? 0) +
+      (result?.expenses_restored ?? 0),
+  }
+}
+
 export async function cancelImportAction(batchId: string) {
   const supabase = await createClient()
   await supabase

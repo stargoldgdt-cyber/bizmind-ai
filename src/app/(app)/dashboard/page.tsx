@@ -1,50 +1,85 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { redirect } from "next/navigation"
+import { Suspense } from "react"
 import { CircleAlert } from "lucide-react"
 
 import { AppShell } from "@/components/layout/app-shell"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ONBOARDING_ROUTE } from "@/config/routes"
-import { ChannelTable } from "@/features/analytics/components/channel-table"
-import { DataQuality } from "@/features/analytics/components/data-quality"
+import { ChannelFilter } from "@/features/analytics/components/channel-filter"
+import { ChannelIntelligence } from "@/features/analytics/components/channel-intelligence"
+import { ChannelScatter } from "@/features/analytics/components/channel-scatter"
 import { EmptyDashboard } from "@/features/analytics/components/empty-dashboard"
 import { HealthCard } from "@/features/analytics/components/health-card"
 import { InsightList } from "@/features/analytics/components/insight-list"
 import { MetricCard } from "@/features/analytics/components/metric-card"
 import { PeriodNarrative } from "@/features/analytics/components/period-narrative"
-import { ProductTable } from "@/features/analytics/components/product-table"
+import { ProductIntelligence } from "@/features/analytics/components/product-intelligence"
+import { QualityPanel } from "@/features/analytics/components/quality-panel"
 import { RangeSelector } from "@/features/analytics/components/range-selector"
+import { SyncStatus } from "@/features/analytics/components/sync-status"
+import { WhatChanged } from "@/features/analytics/components/what-changed"
+import {
+  channelFromParams,
+  channelParamFor,
+  filterHref,
+  NO_CHANNEL,
+  scopeFor,
+} from "@/features/analytics/dashboard-params"
 import { periodFromParams } from "@/features/analytics/page-context"
-import { businessHasAnyOrders } from "@/features/analytics/queries"
+import { businessHasAnyOrders, listChannels } from "@/features/analytics/queries"
 import { getActiveBusiness, getUserBusinesses } from "@/features/businesses/queries"
-import { listAlerts, presentAlert } from "@/services/automation"
 import { formatMoney, formatNumber, formatPercent } from "@/lib/format"
+import { createClient, getCurrentUser } from "@/lib/supabase/server"
 import {
   findComparison,
   getAnalytics,
+  getChangeDrivers,
+  getChannelComparison,
+  getDataQuality,
   METRICS,
+  type AnalyticsScope,
   type MetricComparison,
+  type ResolvedPeriod,
 } from "@/services/analytics"
-import { createClient, getCurrentUser } from "@/lib/supabase/server"
+import { listAlerts, presentAlert } from "@/services/automation"
 
 export const metadata: Metadata = {
   title: "Dashboard",
 }
 
 /**
- * The dashboard.
+ * The decision workspace.
  *
- * Performs NO calculations. Every figure, including every period-over-period
- * change, arrives already computed from the analytics service. This page
- * chooses what to show and how to phrase it — nothing more.
+ * PERFORMS NO CALCULATIONS. Every figure, every share, every change and every
+ * coverage arrives already computed by the analytics service. This page
+ * chooses what to show, in what order, and how to phrase it.
+ *
+ * THE ORDER IS THE ARGUMENT
+ * -------------------------
+ *   what needs attention · how healthy · the headline figures · what changed
+ *   · which channel earns · which product earns · what is missing · what it
+ *   means
+ *
+ * Health before the figures, because how far to trust them changes how to
+ * read them. What changed before the breakdowns, because the breakdowns are
+ * where an owner goes to answer it.
+ *
+ * THE FILTERS ARE THE WHOLE PAGE
+ * ------------------------------
+ * Date and channel live in the URL and are passed to the analytics service, so
+ * selecting Amazon re-computes revenue, cost, fees, margin, products and the
+ * trend for Amazon -- in the database. Nothing is filtered in the browser.
+ *
+ * The deeper sections stream in: the page does not wait for product detail to
+ * show revenue, and the AI brief never blocks anything.
  */
 export default async function DashboardPage(props: PageProps<"/dashboard">) {
   const searchParams = await props.searchParams
-  // Shared resolver, so a custom range works identically on every page and no
-  // date arithmetic happens in a component.
   const period = periodFromParams(searchParams)
+  const channelChoice = channelFromParams(searchParams)
+  const scope = scopeFor(channelChoice)
 
   const [user, businesses, activeBusiness] = await Promise.all([
     getCurrentUser(),
@@ -62,28 +97,32 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
     .maybeSingle()
 
   // The business comes from the session, never from the request.
-  // Fetched alongside the analytics, not after it: the empty state needs to
-  // know whether this business has EVER recorded an order, so it can tell a
-  // new owner apart from an established one having a quiet fortnight.
-  const [analytics, hasAnyData, openAlerts] = await Promise.all([
-    getAnalytics(activeBusiness.id, period, activeBusiness.currency),
+  const [analytics, hasAnyData, openAlerts, channels] = await Promise.all([
+    getAnalytics(activeBusiness.id, period, activeBusiness.currency, { scope }),
     businessHasAnyOrders(activeBusiness.id),
-    // Alerts are not period-scoped: something that needs attention needs it
-    // regardless of which window the owner happens to be looking at.
+    // Not period-scoped: something that needs attention needs it regardless of
+    // the window the owner happens to be looking at.
     listAlerts(activeBusiness.id, { status: "OPEN", limit: 3 }),
+    listChannels(activeBusiness.id),
   ])
 
-  const { current, comparisons, channels, products, health, insights, reconciliation } = analytics
+  const { current, comparisons, products, health, insights, businessWide } = analytics
   const currency = activeBusiness.currency
 
   const hasSales = current.orders_count > 0
-  const coverage = current.cost_coverage === null ? null : Number(current.cost_coverage)
-  const missingCostLines = current.items_total - current.items_with_cost
-  const feeCoverage = current.fee_coverage === null ? null : Number(current.fee_coverage)
+  const scoped = current.channel_scoped
+  const activeChannelId = channelChoice.kind === "channel" ? channelChoice.channelId : null
+  const activeChannelName =
+    channelChoice.kind === "unattributed"
+      ? "orders with no channel"
+      : (channels.find((c) => c.id === activeChannelId)?.name ?? null)
 
-  // Two independent gaps can overstate profit: unrecorded costs and
-  // unrecorded fees. Both are named, because "some data is missing" tells an
-  // owner nothing about what to fix.
+  const hrefForChannel = (channel: string | null) =>
+    filterHref("/dashboard", searchParams, { channel })
+  const hrefForIssue = (issue: string) =>
+    filterHref("/data-quality", searchParams, { issue })
+
+  const missingCostLines = current.items_total - current.items_with_cost
   const gaps: string[] = []
   if (missingCostLines > 0) {
     gaps.push(`${missingCostLines} of ${current.items_total} order lines have no recorded cost`)
@@ -111,18 +150,56 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
       userName={profile?.full_name ?? null}
     >
       <div className="mx-auto max-w-7xl">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">{activeBusiness.name}</h1>
+        {/* ---- Header: what, when, which channel, how current ------------- */}
+        <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <h1 className="truncate text-2xl font-bold tracking-tight">
+              {activeBusiness.name}
+            </h1>
             <p className="mt-1 text-sm text-muted-foreground">
               {period.label} · {period.comparisonLabel} · all figures in {currency}
             </p>
+            <div className="mt-1.5">
+              <Suspense fallback={null}>
+                <SyncStatus />
+              </Suspense>
+            </div>
           </div>
-          <RangeSelector
-            active={period.key}
-            customLabel={period.key === "custom" ? period.label : undefined}
-          />
-        </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <ChannelFilter
+              options={channels.map((channel) => ({ id: channel.id, name: channel.name }))}
+              activeId={activeChannelId}
+              unattributedSelected={channelChoice.kind === "unattributed"}
+              unattributedAvailable={
+                current.orders_without_channel > 0 || channelChoice.kind === "unattributed"
+              }
+              hrefFor={(channel) => hrefForChannel(channel)}
+            />
+            <RangeSelector
+              active={period.key}
+              customLabel={period.key === "custom" ? period.label : undefined}
+              keep={
+                channelParamFor(channelChoice) === null
+                  ? {}
+                  : { channel: channelParamFor(channelChoice) as string }
+              }
+            />
+          </div>
+        </header>
+
+        {scoped && (
+          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-primary/25 bg-primary/5 px-4 py-2.5">
+            <p className="text-sm">
+              Showing <span className="font-medium">{activeChannelName}</span> only.
+              Expenses and net profit are whole-business figures and are not
+              split across channels.
+            </p>
+            <Button asChild size="sm" variant="outline" className="ml-auto rounded-4xl">
+              <Link href={hrefForChannel(null)}>All channels</Link>
+            </Button>
+          </div>
+        )}
 
         {period.incomplete && hasSales && (
           <p className="mt-3 text-xs text-muted-foreground">
@@ -150,11 +227,7 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
           <EmptyDashboard hasAnyData={hasAnyData} periodLabel={period.label} />
         ) : (
           <>
-            {/*
-              Above every figure, because "something needs your attention" is a
-              different kind of statement from "here is your revenue" and
-              should not have to be scrolled to.
-            */}
+            {/* ---- Needs attention ---------------------------------------- */}
             {openAlerts.length > 0 && (
               <section className="mt-6" aria-label="Needs attention">
                 <div className="overflow-hidden rounded-xl border border-warning/30 bg-warning-subtle">
@@ -177,7 +250,9 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
                           key={alert.id}
                           className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-warning/20 px-5 py-2.5 last:border-0"
                         >
-                          <span className="text-sm">{alert.title}</span>
+                          <Link href="/alerts" className="text-sm underline-offset-4 hover:underline">
+                            {alert.title}
+                          </Link>
                           <span className="font-mono text-xs tabular-nums text-warning-strong">
                             {shown.metricLabel} {shown.value} · limit {shown.threshold}
                           </span>
@@ -189,8 +264,14 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
               </section>
             )}
 
+            {/* ---- Business health ---------------------------------------- */}
+            <section className="mt-6" aria-label="Business health">
+              <HealthCard health={health} currency={currency} />
+            </section>
+
+            {/* ---- Key figures -------------------------------------------- */}
             <section className="mt-6" aria-label="Headline figures">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <MetricCard
                   emphasis
                   label={METRICS.revenue.label}
@@ -215,14 +296,19 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
                 />
                 <MetricCard
                   label={METRICS.net_profit.label}
-                  value={formatMoney(current.net_profit, currency)}
-                  change={pct("net_profit")}
+                  value={formatMoney(
+                    scoped ? (businessWide?.net_profit ?? null) : current.net_profit,
+                    currency
+                  )}
+                  change={scoped ? null : pct("net_profit")}
                   explanation={METRICS.net_profit.definition}
-                  warning={marginWarning}
+                  secondary={scoped ? "Whole business" : undefined}
+                  warning={
+                    scoped
+                      ? "Expenses are not recorded per channel, so net profit is shown for the whole business."
+                      : marginWarning
+                  }
                 />
-              </div>
-
-              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <MetricCard
                   label={METRICS.orders_count.label}
                   value={formatNumber(current.orders_count)}
@@ -235,130 +321,213 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
                   change={pct("avg_order_value")}
                   explanation={METRICS.avg_order_value.definition}
                 />
-                <MetricCard
-                  label={METRICS.fees.label}
-                  value={formatMoney(current.fees, currency)}
-                  change={pct("fees")}
-                  higherIsBetter={METRICS.fees.higherIsBetter}
-                  explanation={METRICS.fees.definition}
-                  warning={
-                    current.orders_fees_unknown > 0
-                      ? `${current.orders_fees_unknown} orders have no fee recorded — treated as unknown, not zero.`
-                      : undefined
-                  }
-                />
-                <MetricCard
-                  label={METRICS.expenses.label}
-                  value={formatMoney(current.expenses, currency)}
-                  change={pct("expenses")}
-                  higherIsBetter={METRICS.expenses.higherIsBetter}
-                  explanation={METRICS.expenses.definition}
-                />
               </div>
             </section>
 
-            <section className="mt-8" aria-label="What this means">
-              <PeriodNarrative key={period.key} range={period.key} />
-            </section>
-
-            {/*
-              Placed directly under the narrative, before the deeper tables.
-              An owner should learn how much of this they can rely on before
-              they start drawing conclusions from it, not after.
-            */}
-            <section className="mt-4" aria-label="Data quality">
-              <DataQuality current={current} />
-            </section>
-
-            <section className="mt-4" aria-label="Findings">
-              <InsightList insights={insights} currency={currency} />
-            </section>
-
-            <section className="mt-4" aria-label="Business health">
-              <HealthCard health={health} currency={currency} />
-            </section>
-
-            <section className="mt-4" aria-label="Channel performance">
-              <Card className="shadow-none">
-                <CardHeader>
-                  <CardTitle>Channel performance</CardTitle>
-                  <CardDescription>
-                    Revenue is not profit. Fees are counted per channel, so the
-                    margin column shows what each one actually earns you.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="px-0">
-                  <ChannelTable channels={channels} currency={currency} />
-                </CardContent>
-              </Card>
-            </section>
-
-            <section className="mt-4" aria-label="Product performance">
-              <Card className="shadow-none">
-                <CardHeader>
-                  <CardTitle>Product performance</CardTitle>
-                  <CardDescription>
-                    Revenue here is order-line revenue, so it excludes shipping and
-                    order-level discounts. Fees are shared across lines in
-                    proportion to their value — an allocation, not a charge you
-                    actually paid per product.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="px-0">
-                  <ProductTable products={products} currency={currency} />
-                </CardContent>
-              </Card>
-            </section>
-
-            <section className="mt-4 grid gap-4 sm:grid-cols-3" aria-label="Secondary figures">
-              <MetricCard
-                label={METRICS.units_sold.label}
-                value={formatNumber(current.units_sold, 2)}
-                change={pct("units_sold")}
-                explanation={METRICS.units_sold.definition}
+            {/* ---- What changed ------------------------------------------- */}
+            <section className="mt-8" aria-label="What changed">
+              <SectionHeading
+                title="What changed"
+                description="Against the previous period, and what moved it."
               />
-              <MetricCard
-                label={METRICS.customers_count.label}
-                value={formatNumber(current.customers_count)}
-                change={pct("customers_count")}
-                explanation={METRICS.customers_count.definition}
-              />
-              <MetricCard
-                label={METRICS.refunds.label}
-                value={formatMoney(current.refunds, currency)}
-                change={pct("refunds")}
-                higherIsBetter={METRICS.refunds.higherIsBetter}
-                explanation={METRICS.refunds.definition}
-              />
+              <Suspense fallback={<Skeleton height="h-52" />}>
+                <ChangeSection
+                  businessId={activeBusiness.id}
+                  period={period}
+                  scope={scope}
+                  comparisons={comparisons}
+                  currency={currency}
+                  hrefForChannel={hrefForChannel}
+                />
+              </Suspense>
             </section>
 
-            <div className="mt-6 space-y-1 text-xs text-muted-foreground">
-              <p>
-                Every figure here is calculated in the database from your own
-                records. Nothing is estimated or generated.
-                {coverage !== null && coverage < 100 &&
-                  ` Cost data covers ${coverage}% of order lines.`}
-                {feeCoverage !== null && feeCoverage < 100 &&
-                  ` Fee data covers ${feeCoverage}% of orders.`}
-              </p>
-              {Number(reconciliation.channel_difference) !== 0 && (
-                <p className="text-danger-strong">
-                  Channel revenue does not reconcile with total revenue — a
-                  difference of {formatMoney(reconciliation.channel_difference, currency)}.
-                  Please report this.
-                </p>
-              )}
-              {Number(reconciliation.order_line_gap) !== 0 && (
-                <p>
-                  Order revenue exceeds product-line revenue by{" "}
-                  {formatMoney(reconciliation.order_line_gap, currency)} — shipping,
-                  order-level discounts, and any orders with no product lines.
-                </p>
-              )}
-            </div>
+            {/* ---- Channel intelligence ----------------------------------- */}
+            <section className="mt-8" aria-label="Channel intelligence">
+              <SectionHeading
+                title="Channel intelligence"
+                description="Revenue shows where you are busy. Margin shows where you are paid. Click a channel to filter everything above."
+              />
+              <Suspense fallback={<Skeleton height="h-96" />}>
+                <ChannelSection
+                  businessId={activeBusiness.id}
+                  period={period}
+                  currency={currency}
+                  activeChannelId={activeChannelId}
+                  hrefForChannel={hrefForChannel}
+                />
+              </Suspense>
+            </section>
+
+            {/* ---- Product intelligence ----------------------------------- */}
+            <section className="mt-8" aria-label="Product intelligence">
+              <SectionHeading
+                title="Product intelligence"
+                description="Line revenue excludes shipping and order-level discounts. Fees are shared across lines in proportion to their value — an allocation, not a charge paid per product."
+              />
+              <div className="overflow-hidden rounded-xl border border-border bg-card pt-3">
+                <ProductIntelligence products={products} currency={currency} />
+              </div>
+            </section>
+
+            {/* ---- Data quality ------------------------------------------- */}
+            <section className="mt-8" aria-label="Data quality">
+              <SectionHeading
+                title="What is missing"
+                description="What BizMind does not know, and what that does to the figures above."
+              />
+              <Suspense fallback={<Skeleton height="h-64" />}>
+                <QualitySection
+                  businessId={activeBusiness.id}
+                  period={period}
+                  scope={scope}
+                  hrefForIssue={hrefForIssue}
+                />
+              </Suspense>
+            </section>
+
+            {/* ---- The analyst -------------------------------------------- */}
+            <section className="mt-8" aria-label="Your business analyst">
+              <SectionHeading
+                title="Your business analyst"
+                description="An explanation of the figures above. It never calculates one."
+              />
+              <PeriodNarrative key={`${period.key}-${activeChannelId ?? "all"}`} range={period.key} />
+            </section>
+
+            {/* ---- Findings ----------------------------------------------- */}
+            {insights.length > 0 && (
+              <section className="mt-8" aria-label="Findings">
+                <SectionHeading
+                  title="Findings"
+                  description="Produced by arithmetic, not judgement."
+                />
+                <InsightList insights={insights} currency={currency} />
+              </section>
+            )}
+
+            <p className="mt-8 text-xs text-muted-foreground">
+              Every figure here is calculated in the database from your own
+              records. Nothing is estimated or generated.
+            </p>
           </>
         )}
       </div>
     </AppShell>
   )
+}
+
+function SectionHeading({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="mb-3">
+      <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+      <p className="mt-0.5 max-w-prose-comfortable text-sm text-muted-foreground">
+        {description}
+      </p>
+    </div>
+  )
+}
+
+/** A section still loading. Sized to its content, so nothing jumps when it arrives. */
+function Skeleton({ height }: { height: string }) {
+  return (
+    <div
+      className={`${height} animate-pulse rounded-xl border border-border bg-muted/40`}
+      aria-hidden
+    />
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/* Streamed sections                                                          */
+/* -------------------------------------------------------------------------- */
+
+async function ChangeSection({
+  businessId,
+  period,
+  scope,
+  comparisons,
+  currency,
+  hrefForChannel,
+}: {
+  businessId: string
+  period: ResolvedPeriod
+  scope: AnalyticsScope
+  comparisons: MetricComparison[]
+  currency: string
+  hrefForChannel: (channel: string | null) => string
+}) {
+  const drivers = await getChangeDrivers(businessId, period, { scope, limit: 5 })
+
+  return (
+    <WhatChanged
+      comparisons={comparisons}
+      drivers={drivers}
+      currency={currency}
+      hrefForChannel={(key) => hrefForChannel(key === "unattributed" ? NO_CHANNEL : key)}
+    />
+  )
+}
+
+async function ChannelSection({
+  businessId,
+  period,
+  currency,
+  activeChannelId,
+  hrefForChannel,
+}: {
+  businessId: string
+  period: ResolvedPeriod
+  currency: string
+  activeChannelId: string | null
+  hrefForChannel: (channel: string | null) => string
+}) {
+  // Always every channel: the chosen one is shown against the rest.
+  const channels = await getChannelComparison(businessId, period)
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-border bg-card p-4">
+        <ChannelScatter
+          channels={channels}
+          currency={currency}
+          activeChannelId={activeChannelId}
+          hrefFor={(id) => hrefForChannel(id === null ? NO_CHANNEL : id)}
+        />
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <ChannelIntelligence
+          channels={channels}
+          currency={currency}
+          activeChannelId={activeChannelId}
+          hrefFor={(id) => hrefForChannel(id === null ? NO_CHANNEL : id)}
+        />
+      </div>
+    </div>
+  )
+}
+
+async function QualitySection({
+  businessId,
+  period,
+  scope,
+  hrefForIssue,
+}: {
+  businessId: string
+  period: ResolvedPeriod
+  scope: AnalyticsScope
+  hrefForIssue: (issue: string) => string
+}) {
+  const quality = await getDataQuality(businessId, period, { scope })
+
+  if (!quality) {
+    return (
+      <p className="rounded-xl border border-border bg-card px-5 py-6 text-sm text-muted-foreground">
+        Data quality could not be measured for this period.
+      </p>
+    )
+  }
+
+  return <QualityPanel quality={quality} hrefForIssue={(issue) => hrefForIssue(issue)} />
 }

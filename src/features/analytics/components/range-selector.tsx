@@ -47,11 +47,17 @@ export function RangeSelector({
   active,
   basePath = "/dashboard",
   customLabel,
+  keep = {},
 }: {
   active: ResolvedPeriod["key"]
   basePath?: string
   /** The resolved label of the current custom range, shown on the trigger. */
   customLabel?: string
+  /**
+   * Filters to carry across a period change -- the channel, above all.
+   * Changing the dates must not quietly drop the channel an owner chose.
+   */
+  keep?: Record<string, string>
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -61,10 +67,16 @@ export function RangeSelector({
   const isCustom = active === "custom"
   const invalid = from !== "" && to !== "" && from > to
 
+  /** A link to this page with one period, and every other filter kept. */
+  function hrefFor(query: Record<string, string>): string {
+    const search = new URLSearchParams({ ...keep, ...query })
+    return `${basePath}?${search.toString()}`
+  }
+
   function apply() {
     if (!from || !to || invalid) return
     setOpen(false)
-    router.push(`${basePath}?range=custom&from=${from}&to=${to}`)
+    router.push(hrefFor({ range: "custom", from, to }))
   }
 
   return (
@@ -78,7 +90,7 @@ export function RangeSelector({
         return (
           <Link
             key={option.value}
-            href={`${basePath}?range=${option.value}`}
+            href={hrefFor({ range: option.value })}
             aria-current={selected ? "true" : undefined}
             className={cn(
               "rounded-4xl px-3 py-1.5 text-xs font-medium transition-colors",

@@ -14,7 +14,7 @@ import { EmptyDashboard } from "@/features/analytics/components/empty-dashboard"
 import { HealthCard } from "@/features/analytics/components/health-card"
 import { InsightList } from "@/features/analytics/components/insight-list"
 import { MetricCard } from "@/features/analytics/components/metric-card"
-import { PeriodNarrative } from "@/features/analytics/components/period-narrative"
+import { BusinessBrief } from "@/features/analytics/components/business-brief"
 import { ProductIntelligence } from "@/features/analytics/components/product-intelligence"
 import { QualityPanel } from "@/features/analytics/components/quality-panel"
 import { RangeSelector } from "@/features/analytics/components/range-selector"
@@ -27,7 +27,7 @@ import {
   NO_CHANNEL,
   scopeFor,
 } from "@/features/analytics/dashboard-params"
-import { periodFromParams } from "@/features/analytics/page-context"
+import { param, periodFromParams } from "@/features/analytics/page-context"
 import { businessHasAnyOrders, listChannels } from "@/features/analytics/queries"
 import { getActiveBusiness, getUserBusinesses } from "@/features/businesses/queries"
 import { formatMoney, formatNumber, formatPercent } from "@/lib/format"
@@ -116,6 +116,15 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
     channelChoice.kind === "unattributed"
       ? "orders with no channel"
       : (channels.find((c) => c.id === activeChannelId)?.name ?? null)
+
+  // What the brief is told to describe: the page's own filters, as strings, so
+  // the server action re-reads them with the same functions this page used.
+  const briefFilters: Record<string, string> = {}
+  for (const key of ["range", "from", "to", "channel"] as const) {
+    const value = param(searchParams, key)
+    if (value) briefFilters[key] = value
+  }
+  const briefKey = JSON.stringify(briefFilters)
 
   const hrefForChannel = (channel: string | null) =>
     filterHref("/dashboard", searchParams, { channel })
@@ -398,7 +407,9 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
                 title="Your business analyst"
                 description="An explanation of the figures above. It never calculates one."
               />
-              <PeriodNarrative key={`${period.key}-${activeChannelId ?? "all"}`} range={period.key} />
+              {/* Reads the same filters the page did, so the brief describes
+                  what is on screen. The key remounts it when they change. */}
+              <BusinessBrief key={briefKey} filters={briefFilters} />
             </section>
 
             {/* ---- Findings ----------------------------------------------- */}

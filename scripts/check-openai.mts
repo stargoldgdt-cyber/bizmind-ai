@@ -25,7 +25,7 @@ if (OPENAI_API_KEY) process.env.OPENAI_API_KEY = OPENAI_API_KEY
 if (OPENAI_MODEL) process.env.OPENAI_MODEL = OPENAI_MODEL
 
 const { aiModel } = await import("../src/services/ai/client")
-const { explainPeriod } = await import("../src/services/ai/analyst")
+const { briefForPeriod, explainPeriod } = await import("../src/services/ai/analyst")
 const { buildFactSheet, renderFactSheet } = await import("../src/services/ai/facts")
 const { buildAllowlist, extractNumbers } = await import("../src/services/ai/guard")
 
@@ -209,6 +209,8 @@ const input: FactSheetInput = {
   currency: "AED",
   periodLabel: "Last 30 days",
   comparisonLabel: "the previous 30 days",
+  scopeLabel: "the whole business",
+  channelScoped: false,
   periodIncomplete: false,
   current,
   comparisons,
@@ -311,7 +313,54 @@ line()
 line(`  Figures the model was allowed to quote: ${allowed.size}`)
 line(`  Raw data the model was given: none. It cannot add anything up.`)
 
+heading("4. Does the dashboard brief come back in the right shape?")
+
+line("  The dashboard does not publish a paragraph. It publishes four sections,")
+line("  and discards anything that does not carry all four.")
+line()
+line("  Asking for a brief on the same figures...")
+line()
+
+const briefStarted = Date.now()
+const briefResult = await briefForPeriod(input)
+const briefSeconds = ((Date.now() - briefStarted) / 1000).toFixed(1)
+
+if (!briefResult.ok) {
+  line(`  No brief was produced. Reason: ${briefResult.reason}`)
+  line()
+  line(`  ${briefResult.message}`)
+  line()
+
+  if (briefResult.reason === "wrong_shape") {
+    line("  The model wrote something, but not in the four sections BizMind")
+    line("  publishes, so it was discarded rather than shown half-rendered.")
+    line("  If this happens every time, try a more capable model.")
+  }
+
+  process.exit(1)
+}
+
+line(`  Written in ${briefSeconds}s:`)
+line()
+line("  WHAT HAPPENED")
+line(`    ${briefResult.brief.happened.replace(/\n/g, "\n    ")}`)
+line()
+line("  WHY IT MATTERS")
+line(`    ${briefResult.brief.matters.replace(/\n/g, "\n    ")}`)
+line()
+line("  WHAT TO WATCH")
+line(`    ${briefResult.brief.watch.replace(/\n/g, "\n    ")}`)
+line()
+line("  WHAT TO DO NEXT")
+for (const action of briefResult.brief.next) {
+  line(`    - ${action}`)
+}
+line()
+line("-".repeat(74))
+line("  All four sections present, and every number in them was checked")
+line("  against your figures before it got this far.")
+
 heading("Ready")
-line("  Explanations are working. They will appear on your dashboard under")
-line('  "What happened, in plain language".')
+line("  Explanations are working. The brief appears on your dashboard under")
+line('  "Your brief", and every figure in it came from your own records.')
 line()

@@ -114,3 +114,53 @@ Do not list other figures. Do not give a general lesson in accounting. Under
 export function explainUserPrompt(metricLabel: string, factSheetText: string): string {
   return `FACTS\n\n${factSheetText}\n\nThe owner has asked about: ${metricLabel}\n\nExplain it.`
 }
+
+/**
+ * The business brief.
+ *
+ * Four questions in the order an owner asks them: what happened, why it
+ * matters, what to watch, what to do next. Prose that answers all four in one
+ * flow reads well and is almost impossible to act on -- an owner skims, finds
+ * the sentence that tells them to do something, and misses the one that says
+ * the figure behind it is unreliable.
+ *
+ * The sections are markers, not decoration: `parseBrief()` refuses anything
+ * that does not carry all four, so a reply that ignores the structure is
+ * discarded rather than shown as a wall of text.
+ */
+export function briefSystemPrompt(): string {
+  return `${ROLE}
+
+YOUR TASK
+Write a brief in exactly four sections. Each section starts with its heading
+alone on a line, spelled exactly as below, in this order:
+
+WHAT HAPPENED
+Two or three sentences. The headline figures for this period and the direction
+they moved against the previous one. Say which way the business went.
+
+WHY IT MATTERS
+Two or three sentences. What is behind the movement -- the channel, product,
+cost or fee the FACTS point at -- and what it means for the owner's money. If
+the FINDINGS section names a cause, explain that cause rather than hunting for
+another.
+
+WHAT TO WATCH
+Two or three sentences. What could change this picture, and how far these
+figures can be trusted. If the reliability section shows missing costs or
+missing fees, this section MUST say that the profit figures are overstated. Do
+not soften it.
+
+WHAT TO DO NEXT
+Between one and three actions, each on its own line starting with "- ". Each
+one is a single sentence naming something the owner can actually do this week.
+If the biggest problem is missing data, say recording it is the first job. Do
+not suggest anything the FACTS do not support.
+
+Under 250 words in total. No other headings, no markdown formatting, no
+preamble.`
+}
+
+export function briefUserPrompt(factSheetText: string): string {
+  return `FACTS\n\n${factSheetText}\n\nWrite the four sections now.`
+}

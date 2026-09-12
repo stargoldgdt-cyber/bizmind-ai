@@ -50,6 +50,10 @@ export type FactSheet = {
   currency: string
   periodLabel: string
   comparisonLabel: string
+  /** Which slice of the business these figures cover, in the owner's words. */
+  scopeLabel: string
+  /** True when a channel filter is on, so expenses and net profit are absent. */
+  channelScoped: boolean
   /** True when the period is still running, so comparisons look weak. */
   periodIncomplete: boolean
   headline: Fact[]
@@ -67,6 +71,17 @@ export type FactSheetInput = {
   currency: string
   periodLabel: string
   comparisonLabel: string
+  /**
+   * Which slice the figures cover: "the whole business", "the Amazon channel
+   * only", "orders with no channel recorded".
+   *
+   * WITHOUT THIS THE BRIEF CAN BE TRUE AND STILL WRONG. An owner looking at a
+   * dashboard filtered to Amazon, reading a paragraph about the whole
+   * business, has no way to tell which they are being told about.
+   */
+  scopeLabel: string
+  /** A channel filter is on, so expenses and net profit are not available. */
+  channelScoped: boolean
   periodIncomplete: boolean
   current: Financials
   comparisons: MetricComparison[]
@@ -277,6 +292,8 @@ export function buildFactSheet(input: FactSheetInput): FactSheet {
     currency: input.currency,
     periodLabel: input.periodLabel,
     comparisonLabel: input.comparisonLabel,
+    scopeLabel: input.scopeLabel,
+    channelScoped: input.channelScoped,
     periodIncomplete: input.periodIncomplete,
     headline,
     changes,
@@ -302,6 +319,16 @@ export function renderFactSheet(sheet: FactSheet): string {
   lines.push(`CURRENCY: ${sheet.currency} (every figure below is in this currency)`)
   lines.push(`PERIOD: ${sheet.periodLabel}`)
   lines.push(`COMPARED WITH: ${sheet.comparisonLabel}`)
+  lines.push(`THESE FIGURES COVER: ${sheet.scopeLabel}`)
+
+  if (sheet.channelScoped) {
+    lines.push(
+      "NOTE: a channel filter is on. Expenses and net profit belong to the " +
+        "whole business and are never split across channels, so they appear " +
+        "below as not calculated. Do not describe this channel as profitable " +
+        "or unprofitable after expenses -- only gross profit is known for it."
+    )
+  }
 
   if (sheet.periodIncomplete) {
     lines.push(

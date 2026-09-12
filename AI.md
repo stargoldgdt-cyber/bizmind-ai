@@ -127,6 +127,37 @@ leaving it as folklore.
 
 ---
 
+## 4b. The brief has a shape, and the shape is checked
+
+The dashboard does not publish a paragraph. It publishes four sections:
+
+| Section | Answers |
+| --- | --- |
+| **WHAT HAPPENED** | the headline figures, and which way they moved |
+| **WHY IT MATTERS** | what is behind the movement, in money |
+| **WHAT TO WATCH** | what could change it, and how far these figures can be trusted |
+| **WHAT TO DO NEXT** | one to three things the owner can do this week |
+
+Four sections rather than four paragraphs because an owner skims. A brief whose
+caveat is buried mid-paragraph gets acted on without the caveat, which is the
+failure this product exists to prevent. Under a heading it cannot be missed.
+
+`parseBrief()` refuses anything that does not carry all four headings, in
+order, each with something under it and at least one action. A reply that
+ignores the structure is discarded like one that invents a figure — **it is
+never repaired**. Filling in a missing section here would be the code writing
+the business's analysis itself.
+
+**The brief describes what is on screen.** The dashboard's filters (period,
+custom dates, channel) are passed to the action, which re-reads them with the
+same functions the page used and fetches the same scoped figures. The fact
+sheet states which slice it covers, and under a channel filter it says that
+expenses and net profit belong to the whole business and are not split across
+channels — so the brief cannot call a channel profitable on figures that do not
+exist for it.
+
+---
+
 ## 5. It degrades safely, always
 
 The dashboard renders every figure before the AI layer is asked for a single
@@ -177,11 +208,11 @@ behaviour we want to control. See DECISIONS.md.
 | `facts.ts` | Builds the fact sheet. No raw data reaches it |
 | `guard.ts` | The number guard and the two other refusals |
 | `prompts.ts` | Everything BizMind asks a model to do, readable in full |
-| `analyst.ts` | The features, and the single checked path |
+| `analyst.ts` | The features, the brief's four sections, and the single checked path |
 | `index.ts` | What the rest of the app may use |
 
-`src/features/analytics/actions.ts` holds the server actions. **They accept a
-period key and nothing else** — every figure is fetched server-side for the
+`src/features/analytics/actions.ts` holds the server actions. **They accept
+filters and nothing else** — a period key, custom dates, a channel id — every figure is fetched server-side for the
 business in the session. If the browser could post the numbers to be explained,
 a tampered request could have BizMind narrate figures that were never in
 anyone's records, and the resulting paragraph would look entirely genuine.
@@ -196,7 +227,8 @@ npm run ai:check
 
 Verifies the key, confirms the configured model exists on the account (and
 lists ones that do if it does not), then writes a real explanation of a sample
-month and puts it through the guard. It costs a fraction of a penny.
+month, puts it through the guard, and then asks for a dashboard brief and
+checks that all four sections came back. It costs a fraction of a penny.
 
 BizMind's default model is **`gpt-5.6-terra`**, set in one place —
 `DEFAULT_MODEL` in `src/services/ai/client.ts`. `OPENAI_MODEL` overrides it in

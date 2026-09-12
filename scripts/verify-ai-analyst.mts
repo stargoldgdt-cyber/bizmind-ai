@@ -18,7 +18,12 @@ delete process.env.OPENAI_API_KEY
 import { readFileSync, readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
 
-import { explainMetric, explainPeriod } from "../src/services/ai/analyst"
+import {
+  briefForPeriod,
+  explainMetric,
+  explainPeriod,
+  parseBrief,
+} from "../src/services/ai/analyst"
 import { isAiConfigured } from "../src/services/ai/client"
 import { buildFactSheet, renderFactSheet, type FactSheetInput } from "../src/services/ai/facts"
 import {
@@ -29,7 +34,7 @@ import {
   guardNumbers,
   normalise,
 } from "../src/services/ai/guard"
-import { narrativeSystemPrompt } from "../src/services/ai/prompts"
+import { briefSystemPrompt, narrativeSystemPrompt } from "../src/services/ai/prompts"
 import type { BusinessHealth } from "../src/services/analytics/health"
 import type { Insight } from "../src/services/analytics/insights"
 import type {
@@ -209,6 +214,8 @@ const INPUT: FactSheetInput = {
   currency: "AED",
   periodLabel: "Last 30 days",
   comparisonLabel: "the previous 30 days",
+  scopeLabel: "the whole business",
+  channelScoped: false,
   periodIncomplete: false,
   current: FINANCIALS,
   comparisons: COMPARISONS,
@@ -493,6 +500,7 @@ check(
 const reasons = [
   "not_configured", "no_credit", "rate_limited", "timed_out", "refused",
   "failed", "invented_figures", "claimed_to_calculate", "out_of_scope",
+  "wrong_shape",
 ]
 check(
   "every possible reason has an owner-facing message",
@@ -694,6 +702,135 @@ check(
       ([, left, right]) => !MONEY_FIELDS.test(left) && !MONEY_FIELDS.test(right)
     )
   })()
+)
+
+/* -------------------------------------------------------------------------- */
+section("10. THE BRIEF IS FOUR SECTIONS, OR IT IS NOTHING")
+
+const GOOD_BRIEF = `WHAT HAPPENED
+Revenue rose against last month, and gross profit rose with it.
+
+WHY IT MATTERS
+Amazon carried the increase; the website was flat.
+
+WHAT TO WATCH
+Costs are missing on some order lines, so these profit figures are overstated.
+
+WHAT TO DO NEXT
+- Record the missing cost prices on your product list.
+- Check the Amazon fee column in your next export.`
+
+const parsedBrief = parseBrief(GOOD_BRIEF)
+check("a well-formed brief is split into its four sections", parsedBrief !== null)
+check(
+  "each section keeps its own words",
+  parsedBrief?.happened.startsWith("Revenue rose") === true &&
+    parsedBrief?.matters.startsWith("Amazon carried") === true &&
+    parsedBrief?.watch.includes("overstated") === true
+)
+check(
+  "the actions come back as a list, without their bullets",
+  parsedBrief?.next.length === 2 &&
+    parsedBrief?.next[0].startsWith("Record the missing") === true,
+  JSON.stringify(parsedBrief?.next)
+)
+check(
+  "no heading text leaks into a section body",
+  parsedBrief !== null &&
+    ![parsedBrief.happened, parsedBrief.matters, parsedBrief.watch, ...parsedBrief.next].some(
+      (part) => /WHAT HAPPENED|WHY IT MATTERS|WHAT TO WATCH|WHAT TO DO NEXT/i.test(part)
+    )
+)
+
+check(
+  "decoration around a heading is tolerated",
+  parseBrief(GOOD_BRIEF.replace(/^WHAT HAPPENED$/m, "## **WHAT HAPPENED:**")) !== null
+)
+
+check(
+  "A MISSING SECTION IS REFUSED, NOT PATCHED UP",
+  parseBrief(GOOD_BRIEF.replace(/WHAT TO WATCH[\s\S]*?(?=WHAT TO DO NEXT)/, "")) === null
+)
+check(
+  "a brief with no action to take is refused",
+  parseBrief(GOOD_BRIEF.replace(/^- .*$/gm, "")) === null
+)
+check(
+  "an empty section is refused",
+  parseBrief(GOOD_BRIEF.replace("Amazon carried the increase; the website was flat.", "")) === null
+)
+check(
+  "sections out of order are refused",
+  parseBrief(
+    [
+      "WHY IT MATTERS",
+      "a",
+      "WHAT HAPPENED",
+      "b",
+      "WHAT TO WATCH",
+      "c",
+      "WHAT TO DO NEXT",
+      "- d",
+    ].join("\n")
+  ) === null
+)
+check(
+  "plain prose with no headings at all is refused",
+  parseBrief("Revenue went up a lot, so keep going.") === null
+)
+check(
+  "at most three actions are published, however many are offered",
+  parseBrief(`${GOOD_BRIEF}\n- three\n- four\n- five`)?.next.length === 3
+)
+
+check(
+  "THE BRIEF DEGRADES LIKE EVERYTHING ELSE: no key, no brief, and a reason",
+  await (async () => {
+    const result = await briefForPeriod(INPUT)
+    return (
+      !result.ok && result.reason === "not_configured" && result.message.includes("unaffected")
+    )
+  })()
+)
+
+const briefPrompt = briefSystemPrompt()
+check(
+  "the prompt asks for exactly the four headings the parser requires",
+  ["WHAT HAPPENED", "WHY IT MATTERS", "WHAT TO WATCH", "WHAT TO DO NEXT"].every((heading) =>
+    briefPrompt.includes(heading)
+  )
+)
+check(
+  "and still forbids stating or calculating a figure",
+  briefPrompt.includes("NEVER state a number that is not in FACTS") &&
+    briefPrompt.includes("NEVER calculate anything")
+)
+
+/* -------------------------------------------------------------------------- */
+section("11. THE BRIEF SAYS WHICH SLICE OF THE BUSINESS IT DESCRIBES")
+
+const wholeSheet = renderFactSheet(buildFactSheet(INPUT))
+check(
+  "an unfiltered sheet says it covers the whole business",
+  wholeSheet.includes("THESE FIGURES COVER: the whole business")
+)
+check("and carries no channel-filter warning", !wholeSheet.includes("a channel filter is on"))
+
+const scopedSheet = renderFactSheet(
+  buildFactSheet({
+    ...INPUT,
+    scopeLabel: "only the Amazon channel",
+    channelScoped: true,
+  })
+)
+check(
+  "A FILTERED SHEET NAMES THE CHANNEL, so the brief cannot describe the wrong slice",
+  scopedSheet.includes("THESE FIGURES COVER: only the Amazon channel")
+)
+check(
+  "and warns that expenses and net profit are not split across channels",
+  scopedSheet.includes("never split across channels") &&
+    scopedSheet.includes("Do not describe this channel as profitable")
 )
 
 /* -------------------------------------------------------------------------- */

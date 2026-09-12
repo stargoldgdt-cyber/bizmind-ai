@@ -11,8 +11,8 @@ import "server-only"
  * See AI.md for the rules this layer exists to enforce.
  */
 
-export { explainMetric, explainPeriod } from "./analyst"
-export type { Narration, SuppressionReason } from "./analyst"
+export { briefForPeriod, explainMetric, explainPeriod, parseBrief } from "./analyst"
+export type { BriefResult, BusinessBrief, Narration, SuppressionReason } from "./analyst"
 export { aiModel, isAiConfigured } from "./client"
 export { buildFactSheet, renderFactSheet } from "./facts"
 export type { Fact, FactSheet, FactSheetInput } from "./facts"

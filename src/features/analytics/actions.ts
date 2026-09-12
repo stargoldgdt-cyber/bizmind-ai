@@ -3,14 +3,17 @@
 import { z } from "zod"
 
 import { getActiveBusiness } from "@/features/businesses/queries"
-import { explainMetric, explainPeriod, type Narration } from "@/services/ai"
 import {
-  DEFAULT_PERIOD,
-  getAnalytics,
-  isPeriodKey,
-  METRICS,
-  resolvePeriod,
-} from "@/services/analytics"
+  briefForPeriod,
+  explainMetric,
+  explainPeriod,
+  type BriefResult,
+  type Narration,
+} from "@/services/ai"
+import { getAnalytics, METRICS } from "@/services/analytics"
+
+import { channelFromParams, scopeFor } from "./dashboard-params"
+import { periodFromParams } from "./page-context"
 
 /**
  * Server actions for the AI analyst.
@@ -31,8 +34,18 @@ import {
  * hands them on.
  */
 
+/**
+ * The filters, exactly as the dashboard puts them in the URL.
+ *
+ * They are re-read here with the same functions the page uses, so the brief
+ * describes the figures on screen rather than a different slice of the
+ * business. Every value is a filter, never a figure.
+ */
 const requestSchema = z.object({
   range: z.string().max(40).optional(),
+  from: z.string().max(40).optional(),
+  to: z.string().max(40).optional(),
+  channel: z.string().max(40).optional(),
 })
 
 const metricRequestSchema = requestSchema.extend({
@@ -40,17 +53,33 @@ const metricRequestSchema = requestSchema.extend({
   metric: z.string().min(1).max(60),
 })
 
+type Filters = z.infer<typeof requestSchema>
+
 /** Loads the same bundle the dashboard is showing, for the same business. */
-async function loadContext(range: string | undefined) {
+async function loadContext(filters: Filters) {
   const business = await getActiveBusiness()
   if (!business) return { ok: false as const, error: "No business selected." }
 
-  const period = resolvePeriod(isPeriodKey(range) ? range : DEFAULT_PERIOD)
-  const analytics = await getAnalytics(business.id, period, business.currency)
+  // The same two functions the dashboard uses. A second interpretation of
+  // `?channel=` here would let the brief describe a different slice from the
+  // one on screen, which is worse than no brief at all.
+  const period = periodFromParams(filters)
+  const choice = channelFromParams(filters)
+  const scope = scopeFor(choice)
+
+  const analytics = await getAnalytics(business.id, period, business.currency, { scope })
 
   if (analytics.error !== null) {
     return { ok: false as const, error: "Those figures could not be calculated." }
   }
+
+  const channelScoped = scope.kind !== "all"
+  const scopeLabel =
+    choice.kind === "unattributed"
+      ? "only the orders with no channel recorded"
+      : choice.kind === "channel"
+        ? `only the ${analytics.channels[0]?.channel_name ?? "selected"} channel`
+        : "the whole business"
 
   return {
     ok: true as const,
@@ -59,6 +88,8 @@ async function loadContext(range: string | undefined) {
       currency: business.currency,
       periodLabel: period.label,
       comparisonLabel: period.comparisonLabel,
+      scopeLabel,
+      channelScoped,
       periodIncomplete: period.incomplete,
       current: analytics.current,
       comparisons: analytics.comparisons,
@@ -77,7 +108,7 @@ export async function explainPeriodAction(rawInput: unknown): Promise<Narration>
     return { ok: false, reason: "refused", message: "That request could not be read." }
   }
 
-  const context = await loadContext(parsed.data.range)
+  const context = await loadContext(parsed.data)
   if (!context.ok) {
     return { ok: false, reason: "refused", message: context.error }
   }
@@ -109,10 +140,43 @@ export async function explainMetricAction(rawInput: unknown): Promise<Narration>
     return { ok: false, reason: "refused", message: "That is not a BizMind figure." }
   }
 
-  const context = await loadContext(parsed.data.range)
+  const context = await loadContext(parsed.data)
   if (!context.ok) {
     return { ok: false, reason: "refused", message: context.error }
   }
 
   return explainMetric(definition.label, context.input)
+}
+
+/**
+ * The dashboard's brief: what happened, why it matters, what to watch, what to
+ * do next.
+ *
+ * Same guarantees as every other AI call here -- the figures are fetched
+ * server-side for the business in the session, the reply is checked against
+ * them, and an unavailable model is an ordinary outcome that leaves the
+ * dashboard intact.
+ */
+export async function briefForPeriodAction(rawInput: unknown): Promise<BriefResult> {
+  const parsed = requestSchema.safeParse(rawInput ?? {})
+  if (!parsed.success) {
+    return { ok: false, reason: "refused", message: "That request could not be read." }
+  }
+
+  const context = await loadContext(parsed.data)
+  if (!context.ok) {
+    return { ok: false, reason: "refused", message: context.error }
+  }
+
+  // Nothing to brief on. Asking a model to find meaning in an empty period is
+  // exactly how an invented figure appears.
+  if (!context.hasSales) {
+    return {
+      ok: false,
+      reason: "refused",
+      message: "There are no sales in this period to explain.",
+    }
+  }
+
+  return briefForPeriod(context.input)
 }

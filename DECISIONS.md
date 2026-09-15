@@ -1471,3 +1471,45 @@ immutable row. Lineage is unchanged: the payout still traces to its source row.
 
 **Decided:** The WooCommerce connector is hidden and not extended. Its code and
 tests stay until removal is separately approved.
+
+---
+
+## 2026-09-15 — Amazon fee rules approved by the owner (B2, B3)
+
+**Decided:** The 21 Amazon Flat File V2 rules are GLOBAL data seeded by
+migration 0031, `SAMPLE_VERIFIED` against four real Amazon.ae settlements, with
+the evidence on each rule. The owner confirmed:
+
+- **Premium Services Fee** is the Amazon Selling Partner 360 (SP 360) fee: a
+  marketplace fee at marketplace level, not advertising.
+- **Tax on fee** is a separate VAT line (TAX · FEE_VAT). Whether it counts in
+  profit is still B1.
+- **COD charge** is other income, not sales; the COD fee is a marketplace fee.
+- A settlement's header row gives the **payout Amazon reports** (its total and
+  deposit date). Matching it to the bank stays in Phase 6.
+
+**Why:** These are the codes in the owner's real files, and each settlement
+reconciled exactly under them. A code not covered stays UNMAPPED rather than
+being guessed.
+
+---
+
+## 2026-09-15 — A changed settlement is refused, not replaced (B8)
+
+**Decided:** The default stands. Uploading a settlement id already counting in
+the account, with different content, is refused, naming the file that holds it.
+The owner withdraws the old file first.
+
+**Why:** Replacing silently would change figures already seen, and the ledger
+never edits a row.
+
+---
+
+## 2026-09-15 — Settlement files are uploaded as the marketplace provides them
+
+**Decided:** Ledger files may be `.txt` (Amazon's report). Any cell a
+spreadsheet turned into a non-text value makes the upload refused, and the
+Amazon adapter refuses comma decimals and dates without a time.
+
+**Why:** Re-saving a report in a spreadsheet can reformat dates and amounts in
+ways that cannot be reliably reversed.

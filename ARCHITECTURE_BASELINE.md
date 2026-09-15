@@ -36,13 +36,13 @@ Where this file and an older document disagree, this file wins.
 | # | Question | Default until decided |
 | --- | --- | --- |
 | B1 | VAT treatment in P&L (UAE 5%, KSA 15%) | Tax lines kept apart and excluded from profit, with a "not confirmed" banner |
-| B2 | Who approves a fee-mapping rule (DECISIONS.md, 2026-09-09, "A source column is not a metric…") | Built-in versioned rules with evidence; new codes stay UNMAPPED; no business overrides in V1 |
-| B3 | Amazon: Premium Services Fee, Tax lines, reserve lines | Provisional rules, labelled |
+| B2 | Who approves a fee-mapping rule (DECISIONS.md, 2026-09-09, "A source column is not a metric…") | Built-in versioned rules with evidence; new codes stay UNMAPPED; no business overrides in V1 — **Resolved 2026-09-15 (Phase 2):** GLOBAL rules approved by the owner, seeded by migration, `SAMPLE_VERIFIED` against real files |
+| B3 | Amazon: Premium Services Fee, Tax lines, reserve lines | Provisional rules, labelled — **Resolved 2026-09-15:** Premium Services Fee is SP 360, a marketplace fee; Tax on fee is TAX·FEE_VAT; COD charge is other income; no tax-on-sales or reserve lines seen (they would arrive UNMAPPED) |
 | B4 | Noon mappings, `balance_transfer`, invoices/credit notes | No noon adapter |
 | B5 | Is a noon fee line joined to a single-SKU order "reliable attribution"? | No, order level |
 | ~~B6~~ | **Resolved 2026-09-15:** fingerprint + parsed source rows; original files not kept; no buyer PII in source rows | — |
 | B7 | COGS for sales before the first cost entry | Cost unknown; explicit audited backfill only |
-| B8 | Same settlement id, different content | Refused, naming the file already counting it |
+| B8 | Same settlement id, different content | Refused, naming the file already counting it — **Kept as decided 2026-09-15** |
 | B9 | Reconciliation tolerance and date window | Exact amount, ±7 days, editable |
 | B10 | When legacy customer PII is purged | At legacy retirement |
 | ~~B11~~ | **Resolved 2026-09-15:** Viewer read-only; Staff import only; Admin import + SKU mappings + COGS + expenses; Owner everything incl. integrations, reconciliation, configuration | — |

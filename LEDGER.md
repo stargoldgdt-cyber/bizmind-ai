@@ -140,7 +140,9 @@ Timestamps must carry a time zone. At most 50,000 rows per file.
 | Path | Role |
 | --- | --- |
 | `src/services/marketplaces/contract.ts` | Adapter contract and draft types |
-| `src/services/marketplaces/registry.ts` | Registry (empty in Phase 1) |
+| `src/services/marketplaces/registry.ts` | Registry |
+| `src/services/marketplaces/adapters.ts` | The application's adapters: Amazon Flat File V2 ([AMAZON.md](AMAZON.md)) |
+| `src/services/marketplaces/amazon/` | The Amazon adapter |
 | `src/services/marketplaces/customer-data.ts` | The customer-data filter |
 | `src/services/marketplaces/ledger-file.ts` | Payload builder |
 | `src/services/marketplaces/apply.ts` | Server-only door: the three RPCs, through the user's session |
@@ -148,8 +150,8 @@ Timestamps must carry a time zone. At most 50,000 rows per file.
 
 ## 9. Tests
 
-- `npm run test:marketplaces` (offline, part of `npm run verify`): the empty
-  registry, registry refusals, the customer-data filter, SQL/TypeScript pattern
+- `npm run test:marketplaces` (offline, part of `npm run verify`): only the
+  approved adapters registered, registry refusals, the customer-data filter, SQL/TypeScript pattern
   parity, the payload builder, the dataset boundary, and that no new module can
   reach around the database.
 - `npm run test:ledger` (live, against Supabase): isolation, immutability for
@@ -157,6 +159,7 @@ Timestamps must carry a time zone. At most 50,000 rows per file.
   blank values, customer data, lineage, rule matching, withdrawal and restore,
   cross-tenant refusal, and that deleting a business still works through the
   immutable tables.
+- Amazon suites: see [AMAZON.md §5](AMAZON.md).
 
 ## 10. Reversibility
 

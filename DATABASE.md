@@ -893,6 +893,23 @@ have SELECT only. The migration proves the writer rule by trying to break it.
 `supabase/rollback/0030_marketplace_ledger_foundation.rollback.sql` (refuses
 while any ledger file or account exists). 0029's enum value cannot be removed.
 
+## 7m. Amazon Flat File V2 (0031)
+
+GCC Phase 2. Details: [AMAZON.md](AMAZON.md).
+
+| Change | What it does |
+| --- | --- |
+| `import_batches.file_type` | Adds `txt`; `ledger_apply_file()` accepts it (otherwise unchanged from 0030) |
+| `ledger_mapping_rules` | 21 GLOBAL Amazon rules, `SAMPLE_VERIFIED`, owner-approved |
+| `marketplaces` | AMAZON becomes `AVAILABLE` |
+| `import_batch_overview()` | Recreated with `dataset`, `format_id`, account id/label/code and transaction, settlement, payout and unmapped counts; ledger files count ledger lines as records |
+| `import_batch_withdrawal_preview()` | Refuses a ledger file (it has its own withdrawal) |
+| `ledger_file_summary()` | Invoker. A file's lines per side/category/subcategory, exact totals as text |
+| `ledger_file_settlements()` | Invoker. Each settlement's reported total, the sum of its lines, whether they match, and its reported payout |
+
+No rollback script: to undo, set AMAZON back to `CONTRACT_ONLY` and retire the
+rules; the reader functions are harmless unused.
+
 ---
 
 ## 8. Regenerating types

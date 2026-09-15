@@ -318,7 +318,7 @@ analytics, AI guard, integration engine, Google Sheets, alerts); their record is
 
 ```
 GCC 1   Ledger foundation              ✅ built, verified live (119 checks) — LEDGER.md
-GCC 2   Amazon Flat File V2 adapter
+GCC 2   Amazon Flat File V2 adapter        ✅ built, July reproduced from real files — AMAZON.md
 GCC 3   P&L engine, fee breakdown, data quality
 GCC 4   Product master, SKU mapping, dated COGS
 GCC 5   Expenses + Google Sheets dataset targets

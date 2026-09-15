@@ -79,7 +79,12 @@ export type ReturnStatus =
   | "REFUNDED"
   | "REJECTED"
 
-export type ImportEntity = "ORDERS" | "PRODUCTS" | "EXPENSES"
+/** LEDGER (migration 0029): a marketplace file written to the financial ledger. */
+export type ImportEntity = "ORDERS" | "PRODUCTS" | "EXPENSES" | "LEDGER"
+
+/** Ledger sides and attribution (migration 0030). */
+export type LedgerSideDb = "PNL" | "CASH" | "TAX" | "MEMO"
+export type LedgerAttributionDb = "ORDER_LINE" | "ORDER" | "MARKETPLACE"
 
 export type ImportStatus =
   | "DRAFT"
@@ -802,6 +807,180 @@ export type Database = {
         Relationships: []
       }
 
+      /* ---- Marketplace ledger foundation (migration 0030) ---------------- *
+       * Read-only to signed-in users. The only writers are the SECURITY DEFINER
+       * functions under Functions; a trigger refuses even the service role.
+       * bigint ids arrive as JSON numbers. Money on these rows is numeric --
+       * read money through the ledger_* views, which return exact text. */
+
+      marketplaces: {
+        Row: {
+          code: string
+          name: string
+          adapter_status: "AVAILABLE" | "SAMPLES_REQUIRED" | "CONTRACT_ONLY"
+          created_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+
+      marketplace_accounts: {
+        Row: {
+          id: string
+          business_id: string
+          marketplace_code: string
+          label: string
+          country: string
+          currency: string
+          external_seller_ref: string | null
+          status: "ACTIVE" | "ARCHIVED"
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+
+      tax_profiles: {
+        Row: {
+          id: string
+          business_id: string
+          marketplace_account_id: string
+          vat_registration: "UNKNOWN" | "REGISTERED" | "NOT_REGISTERED"
+          /** Only UNCONFIGURED exists until an accountant confirms a treatment. */
+          treatment: "UNCONFIGURED"
+          note: string | null
+          updated_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+
+      source_rows: {
+        Row: {
+          id: number
+          business_id: string
+          source_file_id: string
+          row_number: number
+          /** The row as read: text or null (blank). Never customer data. */
+          raw: Record<string, string | null>
+          row_hash: string
+          created_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+
+      ledger_mapping_rules: {
+        Row: {
+          id: string
+          scope: "GLOBAL" | "BUSINESS"
+          business_id: string | null
+          marketplace_code: string
+          format_id: string
+          match_key: string
+          match: Json
+          side: LedgerSideDb
+          category: string
+          subcategory: string | null
+          sign_rule: "AS_REPORTED" | "NEGATE"
+          quantity_rule: "NONE" | "REPORTED" | "COUNT_LINE"
+          attribution: LedgerAttributionDb
+          confidence: "SAMPLE_VERIFIED" | "SELLER_ANALYSIS" | "DOCUMENTED" | "PROVISIONAL"
+          evidence: string
+          version: number
+          supersedes_id: string | null
+          status: "ACTIVE" | "RETIRED"
+          created_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+
+      settlements: {
+        Row: {
+          id: string
+          business_id: string
+          marketplace_account_id: string
+          source_file_id: string
+          source_row_id: number
+          external_settlement_id: string
+          period_start: string | null
+          period_end: string | null
+          reported_total: Numeric | null
+          reported_deposit_date: string | null
+          currency: string
+          created_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+
+      payouts: {
+        Row: {
+          id: string
+          business_id: string
+          marketplace_account_id: string
+          origin: "SOURCE_FILE" | "MANUAL"
+          source_file_id: string | null
+          source_row_id: number | null
+          settlement_id: string | null
+          external_ref: string | null
+          amount: Numeric
+          currency: string
+          paid_at: string | null
+          created_by: string | null
+          voided_at: string | null
+          void_reason: string | null
+          created_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+
+      financial_transactions: {
+        Row: {
+          id: number
+          business_id: string
+          marketplace_account_id: string
+          source_file_id: string
+          source_row_id: number
+          line_index: number
+          mapping_rule_id: string | null
+          side: LedgerSideDb | null
+          category: string
+          subcategory: string | null
+          source_type: string | null
+          source_subtype: string | null
+          source_description: string | null
+          amount: Numeric
+          currency: string
+          posted_at: string
+          order_ref: string | null
+          order_line_ref: string | null
+          raw_sku: string | null
+          quantity: Numeric | null
+          quantity_basis: "REPORTED" | "DERIVED_LINE_COUNT" | null
+          attribution: LedgerAttributionDb
+          settlement_id: string | null
+          payout_id: string | null
+          created_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+
       /* ---- Import pipeline (migration 0004) ---------------------------- */
 
       import_batches: {
@@ -832,6 +1011,16 @@ export type Database = {
           /** Migration 0020. Set when a sync wrote this batch; null for an upload. */
           integration_account_id: string | null
           sync_run_id: string | null
+          /** Migration 0030. LEGACY for every import before the ledger. */
+          dataset: "LEGACY" | "LEDGER"
+          source_kind: "UPLOAD" | "GOOGLE_SHEETS" | "API" | "NATIVE" | null
+          marketplace_account_id: string | null
+          format_id: string | null
+          adapter_version: string | null
+          /** Fingerprint of the uploaded file; the bytes are not kept (decision B6). */
+          file_sha256: string | null
+          /** Columns removed before storage: outside the format, or customer data. */
+          stripped_columns: string[]
         }
         Insert: {
           business_id: string
@@ -1485,7 +1674,78 @@ export type Database = {
       }
     }
 
-    Views: Record<never, never>
+    Views: {
+      /* ---- The counting scope (migration 0030) ---------------------------
+       * Active source files only; money as exact text. */
+
+      ledger_lines: {
+        Row: {
+          id: number
+          business_id: string
+          marketplace_account_id: string
+          marketplace_code: string
+          source_file_id: string
+          source_row_id: number
+          line_index: number
+          mapping_rule_id: string | null
+          side: LedgerSideDb | null
+          category: string
+          subcategory: string | null
+          source_type: string | null
+          source_subtype: string | null
+          source_description: string | null
+          amount: string
+          currency: string
+          posted_at: string
+          order_ref: string | null
+          order_line_ref: string | null
+          raw_sku: string | null
+          quantity: string | null
+          quantity_basis: "REPORTED" | "DERIVED_LINE_COUNT" | null
+          attribution: LedgerAttributionDb
+          settlement_id: string | null
+          payout_id: string | null
+          created_at: string
+        }
+        Relationships: []
+      }
+
+      ledger_settlements: {
+        Row: {
+          id: string
+          business_id: string
+          marketplace_account_id: string
+          source_file_id: string
+          source_row_id: number
+          external_settlement_id: string
+          period_start: string | null
+          period_end: string | null
+          reported_total: string | null
+          reported_deposit_date: string | null
+          currency: string
+          created_at: string
+        }
+        Relationships: []
+      }
+
+      ledger_payouts: {
+        Row: {
+          id: string
+          business_id: string
+          marketplace_account_id: string
+          origin: "SOURCE_FILE" | "MANUAL"
+          source_file_id: string | null
+          source_row_id: number | null
+          settlement_id: string | null
+          external_ref: string | null
+          amount: string
+          currency: string
+          paid_at: string | null
+          created_at: string
+        }
+        Relationships: []
+      }
+    }
 
     Functions: {
       create_business: {
@@ -1563,6 +1823,72 @@ export type Database = {
       import_batch_withdrawal_preview: {
         Args: { p_batch_id: string }
         Returns: Record<string, unknown>[]
+      }
+
+      /* ---- Marketplace ledger foundation (migration 0030) ---------------- */
+
+      marketplace_account_create: {
+        Args: {
+          p_business_id: string
+          p_marketplace_code: string
+          p_label: string
+          p_country: string
+          p_currency: string
+          p_external_seller_ref?: string | null
+        }
+        Returns: string
+      }
+
+      marketplace_account_update: {
+        Args: {
+          p_account_id: string
+          p_label?: string | null
+          p_external_seller_ref?: string | null
+          p_currency?: string | null
+          p_status?: "ACTIVE" | "ARCHIVED" | null
+        }
+        Returns: undefined
+      }
+
+      tax_profile_update: {
+        Args: {
+          p_account_id: string
+          p_vat_registration: "UNKNOWN" | "REGISTERED" | "NOT_REGISTERED"
+          p_note?: string | null
+        }
+        Returns: undefined
+      }
+
+      ledger_apply_file: {
+        Args: { p_file: Json }
+        Returns: {
+          source_file_id: string
+          duplicate: boolean
+          rows_written: number
+          transactions_written: number
+          settlements_written: number
+          payouts_written: number
+          issues_written: number
+          unmapped_written: number
+        }[]
+      }
+
+      ledger_file_withdraw: {
+        Args: { p_source_file_id: string; p_reason?: string | null }
+        Returns: {
+          transactions_withdrawn: number
+          settlements_withdrawn: number
+          payouts_withdrawn: number
+        }[]
+      }
+
+      ledger_file_restore: {
+        Args: { p_source_file_id: string }
+        Returns: {
+          transactions_restored: number
+          settlements_restored: number
+          payouts_restored: number
+        }[]
       }
 
       import_batch_withdraw: {
@@ -2029,6 +2355,15 @@ export type WebhookEvent = T["webhook_events"]["Row"]
 export type AutomationRule = T["automation_rules"]["Row"]
 export type AutomationRun = T["automation_runs"]["Row"]
 export type Alert = T["alerts"]["Row"]
+export type Marketplace = T["marketplaces"]["Row"]
+export type MarketplaceAccount = T["marketplace_accounts"]["Row"]
+export type TaxProfile = T["tax_profiles"]["Row"]
+export type SourceRowRecord = T["source_rows"]["Row"]
+export type LedgerMappingRule = T["ledger_mapping_rules"]["Row"]
+export type Settlement = T["settlements"]["Row"]
+export type Payout = T["payouts"]["Row"]
+export type FinancialTransaction = T["financial_transactions"]["Row"]
+export type LedgerLine = Database["public"]["Views"]["ledger_lines"]["Row"]
 
 /** A business plus the calling user's role in it. */
 export type BusinessWithRole = Business & { role: BusinessRole }

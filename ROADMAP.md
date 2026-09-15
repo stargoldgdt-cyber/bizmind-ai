@@ -17,7 +17,7 @@ files arrive, any time after Phase 3.
 | --- | --- | --- | --- |
 | **1** | Ledger foundation: marketplaces, accounts, tax profiles, source files, source rows, mapping rules, ledger, settlements, payouts; immutability; one writer; withdrawal; adapter contract; customer-data filter. **No parser, no UI** | Live tests prove isolation, immutability, the one writer, duplicates, withdrawal/restore, currency, blanks, customer data, lineage | ✅ Built and verified live, 2026-09-15 ([LEDGER.md](LEDGER.md)) |
 | **2** | Amazon Flat File V2 adapter; rejection of other Amazon reports; marketplace accounts screen; upload flow with format detection; Data Sources shows ledger files | July Amazon figures reproduced or every difference explained; B2, B3, B8 answered | ✅ Built and verified live, 2026-09-15: July reproduced exactly from four real settlements ([AMAZON.md](AMAZON.md)) |
-| 3 | P&L engine (marketplace + combined), fee breakdown, refund analysis, data-quality checks | Hand-worked dataset suite | — |
+| 3 | P&L engine (marketplace + combined), fee breakdown, refund analysis, data-quality checks; fee-VAT treatment per account (B1) | Hand-worked dataset suite; July Amazon contribution incomplete while fee VAT is Unknown, 36,552.76 when Recoverable, 36,432.97 when Not recoverable | — |
 | 4 | Product master, SKU aliases + suggester + confirmation queue, dated COGS, product/SKU/category P&L | Cross-marketplace model checks reproduced; B7 answered | — |
 | 5 | Expense refactor + categories; Google Sheets dataset targets (COGS, product master, operating expenses; optional advertising, bank); schedule | Existing expense tab keeps syncing; Sheets live suite green; B12, B14 answered | — |
 | 6 | Bank accounts + statement import, payouts, matcher, reconciliation, cashflow | Every reconciliation status produced by a fixture month; B9 answered | — |
@@ -30,14 +30,16 @@ files arrive, any time after Phase 3.
 
 See [ARCHITECTURE_BASELINE.md §B](ARCHITECTURE_BASELINE.md). B6 and B11 were
 resolved on 2026-09-15 and are implemented in Phase 1. B2, B3 and B8 were
-answered in Phase 2 (DECISIONS.md, 2026-09-15).
+answered in Phase 2, and B1 before Phase 3 (DECISIONS.md, 2026-09-15).
 
 ## 3. Manual steps for the owner
 
 1. ~~Apply migrations 0029, 0030 and 0031~~ — done 2026-09-15.
 2. **Supply sample files:** a noon Transaction View, noon invoices / credit
    notes, one bank statement. (Amazon settlements: supplied and used, Phase 2.)
-3. **Ask an accountant** about VAT treatment (B1) before Phase 3 sign-off.
+3. **Confirm with an accountant** that VAT on each account's marketplace fees
+   is recoverable, before setting it in BizMind (B1 is decided; the per-account
+   setting is the accountant's confirmation).
 4. **Ask Carrefour seller support** which platform and exports exist (B13).
 5. **Publish the Google OAuth app** before real sellers connect a sheet
    (testing-mode sign-ins expire after 7 days).

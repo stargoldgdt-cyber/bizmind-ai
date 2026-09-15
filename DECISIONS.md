@@ -1483,7 +1483,7 @@ the evidence on each rule. The owner confirmed:
 - **Premium Services Fee** is the Amazon Selling Partner 360 (SP 360) fee: a
   marketplace fee at marketplace level, not advertising.
 - **Tax on fee** is a separate VAT line (TAX · FEE_VAT). Whether it counts in
-  profit is still B1.
+  profit: see B1, decided later the same day.
 - **COD charge** is other income, not sales; the COD fee is a marketplace fee.
 - A settlement's header row gives the **payout Amazon reports** (its total and
   deposit date). Matching it to the bank stays in Phase 6.
@@ -1513,3 +1513,60 @@ Amazon adapter refuses comma decimals and dates without a time.
 
 **Why:** Re-saving a report in a spreadsheet can reformat dates and amounts in
 ways that cannot be reliably reversed.
+
+---
+
+## 2026-09-15 — VAT on marketplace fees is not a P&L expense when recoverable (B1)
+
+**Decided by the owner:**
+
+- UAE marketplace service fees may include 5% VAT; Saudi fees may include 15%.
+- When that VAT is legally recoverable as input VAT through the company's VAT
+  return, it is **excluded from P&L**. It is recorded separately on the tax
+  ledger as input VAT, and is never counted as marketplace cost, operating
+  expense, advertising expense or revenue.
+- When the VAT is not recoverable, it is an expense, on its own line rather
+  than folded into the marketplace fee.
+- **Unknown is the default.** While the treatment is unknown, BizMind does not
+  assume zero and does not assume expense. P&L contribution is shown as
+  incomplete (requiring a VAT treatment), never as a final figure, with the
+  warning "VAT treatment unknown: AED <amount>" and a data-quality warning.
+  The contribution excluding that VAT may be shown only as an informational
+  "Contribution before fee-VAT treatment".
+- The separation is kept: P&L = economic profit and cost; tax ledger = VAT and
+  input VAT; cashflow = actual cash movement; settlement = the marketplace's
+  calculation; payout = the payment the marketplace reports; bank = the actual
+  receipt.
+
+**July 2026 example (Amazon.ae), contribution before COGS and operating
+expenses, AED 119.79 VAT on the SP 360 fee:**
+
+| Account's fee-VAT treatment | Final P&L contribution | Shown |
+| --- | --- | --- |
+| Unknown (default) | None — incomplete | "VAT treatment unknown: AED 119.79"; informational "Contribution before fee-VAT treatment: AED 36,552.76" |
+| Recoverable | **AED 36,552.76** | Warning gone; AED 119.79 is input VAT on the tax ledger |
+| Not recoverable | **AED 36,432.97** | AED 119.79 as a separate non-recoverable VAT expense line |
+
+The owner describes this VAT as recoverable. July reads AED 36,552.76 as final
+only once the owner marks the Amazon.ae account Recoverable.
+
+**How it is applied:**
+
+- The treatment is set per marketplace account on its tax profile (a UAE and a
+  Saudi account can differ), by the owner, once confirmed by their accountant.
+  It is never inferred from registration, country or rate, and BizMind never
+  calculates VAT from a rate: it uses the VAT the marketplace reports.
+- Existing `TAX · FEE_VAT` ledger lines are the input VAT on marketplace fees.
+  The code stays `FEE_VAT` (ledger rows are immutable and the category list is
+  closed); screens call it "Input VAT". Changing the treatment never changes a
+  ledger row.
+- Not covered by this decision: VAT charged on sales (`OUTPUT_VAT`). It stays
+  on the tax ledger, apart from revenue, as before.
+
+**Why:** Recoverable input VAT is reclaimed from the tax authority, so it is not
+an economic cost of selling. Counting it would understate profit; silently
+dropping it when recoverability is unconfirmed would overstate it, which is
+why an unknown treatment leaves the contribution incomplete rather than final.
+
+**Supersedes:** the B1 default ("tax lines excluded from profit, with a 'not
+confirmed' banner").

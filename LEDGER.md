@@ -131,7 +131,7 @@ Timestamps must carry a time zone. At most 50,000 rows per file.
 | --- | --- | --- |
 | `PNL` | REVENUE, REFUND, MARKETPLACE_FEE, FULFILMENT, PROMOTION, SUBSIDY, ADVERTISING, REIMBURSEMENT, OTHER_INCOME, OTHER_COST | Profit & loss |
 | `CASH` | PAYOUT, RESERVE_HOLD, RESERVE_RELEASE, BALANCE_CARRIED, TRANSFER | Cashflow only, never revenue |
-| `TAX` | OUTPUT_VAT, FEE_VAT, OTHER_TAX | Shown separately; treatment set by `tax_profiles` once confirmed |
+| `TAX` | OUTPUT_VAT, FEE_VAT, OTHER_TAX | The tax ledger, never revenue. `FEE_VAT` is input VAT on marketplace fees: out of P&L when the account's treatment is recoverable, a separate expense line when not recoverable; while unknown, P&L contribution is incomplete and a warning names the amount (B1) |
 | `MEMO` | SETTLEMENT_TOTAL, INFORMATIONAL | No totals |
 | (none) | `UNMAPPED` | No totals; always reported with its amount |
 

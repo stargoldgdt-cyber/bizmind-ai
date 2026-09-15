@@ -23,7 +23,7 @@ Where this file and an older document disagree, this file wins.
 | A8 | COGS: one "COGS / Unit" field in the UI; dated historical versions in the backend |
 | A9 | Settlement, payout and bank deposit are separate entities, linked only by reconciliation |
 | A10 | SKU mapping: UNMAPPED → SUGGESTED → CONFIRMED / REJECTED. Never an automatic merge on normalised similarity |
-| A11 | VAT architecture configurable; no accounting treatment before an accountant confirms it |
+| A11 | VAT architecture configurable; no accounting treatment before an accountant confirms it. The P&L treatment of VAT on marketplace fees is decided in B1 (2026-09-15) |
 | A12 | Currency belongs to the marketplace account. No FX conversion in V1 |
 | A13 | WooCommerce is hidden and deprecated, not deleted |
 | A14 | No customer name, email, phone or address in the new core model or the ledger |
@@ -35,7 +35,7 @@ Where this file and an older document disagree, this file wins.
 
 | # | Question | Default until decided |
 | --- | --- | --- |
-| B1 | VAT treatment in P&L (UAE 5%, KSA 15%) | Tax lines kept apart and excluded from profit, with a "not confirmed" banner |
+| ~~B1~~ | **Resolved 2026-09-15:** VAT on marketplace fees (UAE 5%, KSA 15%) is not a P&L expense when it is recoverable as input VAT; it stays on the tax ledger. Non-recoverable VAT is a separate expense line. While the treatment is Unknown, P&L contribution is incomplete (never shown as final) and a data-quality warning names the amount. See §C "VAT on marketplace fees" and DECISIONS.md | — |
 | B2 | Who approves a fee-mapping rule (DECISIONS.md, 2026-09-09, "A source column is not a metric…") | Built-in versioned rules with evidence; new codes stay UNMAPPED; no business overrides in V1 — **Resolved 2026-09-15 (Phase 2):** GLOBAL rules approved by the owner, seeded by migration, `SAMPLE_VERIFIED` against real files |
 | B3 | Amazon: Premium Services Fee, Tax lines, reserve lines | Provisional rules, labelled — **Resolved 2026-09-15:** Premium Services Fee is SP 360, a marketplace fee; Tax on fee is TAX·FEE_VAT; COD charge is other income; no tax-on-sales or reserve lines seen (they would arrive UNMAPPED) |
 | B4 | Noon mappings, `balance_transfer`, invoices/credit notes | No noon adapter |
@@ -60,7 +60,7 @@ Google Sheets → dataset targets → products · product_costs · expenses · b
 
 | Entity | Phase | Rule |
 | --- | --- | --- |
-| `marketplaces`, `marketplace_accounts`, `tax_profiles` | 1 ✅ | Currency on the account; tax UNCONFIGURED |
+| `marketplaces`, `marketplace_accounts`, `tax_profiles` | 1 ✅ | Currency on the account; tax UNCONFIGURED (fee-VAT recoverability added in Phase 3, B1) |
 | `import_batches` (source files) | 1 ✅ | SHA-256, format, adapter version, stripped column names |
 | `source_rows` | 1 ✅ | Immutable, text, no customer data |
 | `ledger_mapping_rules` | 1 ✅ | Versioned data; never edited |
@@ -73,6 +73,45 @@ Google Sheets → dataset targets → products · product_costs · expenses · b
 
 Ledger sides: `PNL`, `CASH` (never revenue), `TAX` (separate), `MEMO`, plus
 `UNMAPPED` lines that count nowhere and are always reported.
+
+### Six views of money, never merged
+
+| View | Answers | Holds |
+| --- | --- | --- |
+| **P&L** | Economic profit and cost | `PNL` lines, plus non-recoverable VAT (B1) |
+| **Tax ledger** | VAT charged and input VAT | `TAX` lines, including recoverable and unknown VAT on fees |
+| **Cashflow** | Actual cash movement | Bank transactions and `CASH` lines (Phase 6) |
+| **Settlement** | What the marketplace calculated | `settlements` and the lines in them |
+| **Payout** | What the marketplace says it paid | `payouts` |
+| **Bank** | What actually arrived | `bank_transactions` (Phase 6) |
+
+A figure belongs to exactly one view. Links between views are made only by
+reconciliation (A9), never by adding one view's numbers into another's.
+
+### VAT on marketplace fees (B1)
+
+Marketplace service fees may carry VAT: 5% in the UAE, 15% in Saudi Arabia.
+BizMind records the VAT amount **the marketplace reports**; it never works VAT
+out from a rate.
+
+| Fee VAT treatment (per marketplace account) | P&L | Tax ledger | Shown to the owner |
+| --- | --- | --- | --- |
+| **Recoverable** as input VAT through the company's VAT return | Excluded. Not a marketplace cost, operating expense or advertising expense; never revenue | Input VAT | Input VAT |
+| **Not recoverable** | An expense, on its own line (not folded into the fee) | Kept for traceability | Non-recoverable VAT |
+| **Unknown** (the default) | Not added as an expense and not treated as zero. **P&L contribution is incomplete: no final figure is shown** | Held as VAT with unknown treatment | "VAT treatment unknown: <currency> <amount>" and a data-quality warning. The contribution may appear only as an informational "Contribution before fee-VAT treatment", never labelled as final P&L contribution |
+
+The treatment is configuration on the account's tax profile, set by the owner
+once their accountant confirms it (A11). It is not inferred from VAT
+registration, the country or the rate. Ledger lines never change when the
+treatment changes; the P&L reads the treatment when it is calculated.
+
+Example, July 2026 Amazon.ae (AED 119.79 VAT on the SP 360 fee):
+
+| Account's fee-VAT treatment | Final P&L contribution | Shown |
+| --- | --- | --- |
+| Unknown | None — incomplete | Warning "VAT treatment unknown: AED 119.79"; informational "Contribution before fee-VAT treatment: AED 36,552.76" |
+| Recoverable | AED 36,552.76 | No warning; AED 119.79 on the tax ledger as input VAT |
+| Not recoverable | AED 36,432.97 | AED 119.79 as a separate non-recoverable VAT expense line |
 
 ## D. Phases
 

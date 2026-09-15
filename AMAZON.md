@@ -67,7 +67,7 @@ fails if the two differ.
 | Refund · Promotion · Shipping | PNL · PROMOTION · shipping | Order line |
 | ServiceFee · Cost of Advertising · TransactionTotalAmount | PNL · ADVERTISING · sponsored_ads | Marketplace |
 | AmazonFees · Premium Services Fee · Base fee | PNL · MARKETPLACE_FEE · premium_services (SP 360) | Marketplace |
-| AmazonFees · Premium Services Fee · Tax on fee | TAX · FEE_VAT · premium_services | Marketplace |
+| AmazonFees · Premium Services Fee · Tax on fee | TAX · FEE_VAT · premium_services (input VAT, B1) | Marketplace |
 | FBAFees · FBA Inventory Storage Fee · Base fee | PNL · FULFILMENT · storage | Marketplace |
 
 Amounts keep Amazon's sign. Marketplace-level lines are never spread across
@@ -92,13 +92,27 @@ ledger lines exactly, then deletes the business. Result on 2026-09-15:
 | FBA fulfilment | −7,112.92 | −7,113 |
 | Refunded sales | −5,207.13 | −5,207 |
 | Ads + SP 360 fee + its VAT | −7,780.18 | −7,780 |
-| Contribution including VAT on fees | 36,432.97 | 36,433 |
+| Sum of P&L and tax lines (including VAT on fees) | 36,432.97 | 36,433 |
 | Units sold / refund lines | 296 / 25 | 296 / 25 |
 
-All 1,154 July lines recognised; all four settlements reconcile. Contribution
-before VAT on fees is 36,552.76 — which one the P&L shows is decision B1
-(Phase 3). The owner's 19.1% take rate needs a written definition in Phase 3
-(it is 19.03% or 19.20% depending on whether COD lines count).
+All 1,154 July lines recognised; all four settlements reconcile.
+
+**P&L contribution (B1, decided 2026-09-15)** before COGS and operating
+expenses depends on the Amazon.ae account's fee-VAT treatment (AED 119.79 VAT
+on the SP 360 fee):
+
+| Treatment | Final P&L contribution |
+| --- | --- |
+| Unknown (default) | Incomplete — warning "VAT treatment unknown: AED 119.79"; informational "Contribution before fee-VAT treatment: AED 36,552.76" |
+| Recoverable | AED 36,552.76; the VAT is input VAT on the tax ledger |
+| Not recoverable | AED 36,432.97; the VAT is a separate expense line |
+
+The 36,432.97 in the table above is the plain sum of P&L and tax lines, which
+is how the Phase 2 test proves the ledger holds the right lines; it is not a
+profit figure. The Phase 3 P&L test will assert all three outcomes.
+
+The owner's 19.1% take rate needs a written definition in Phase 3 (it is
+19.03% or 19.20% depending on whether COD lines count).
 
 ## 5. Code and tests
 

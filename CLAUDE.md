@@ -362,7 +362,14 @@ Update the relevant documentation in the same commit as the change.
   manufacturing, a mobile app, marketplace API connectors (V1 is file-based),
   autonomous purchasing or marketing, PPC management, repricing, inventory
   forecasting, or WhatsApp automation. VAT *treatment* is configuration an
-  accountant confirms, never something BizMind works out.
+  accountant confirms, never something BizMind works out. Recoverable VAT on
+  marketplace fees is never a P&L expense; non-recoverable VAT is its own
+  expense line; while the treatment is unknown, P&L contribution is incomplete,
+  never shown as final, and never assumed (B1).
+- Do not merge the six views of money: P&L (economic profit), tax ledger (VAT,
+  input VAT), cashflow (actual cash), settlement (marketplace calculation),
+  payout (marketplace-reported payment), bank (actual receipt). They link only
+  through reconciliation.
 - Do not update or delete ledger rows, or write them outside `ledger_apply_file()`.
 - Do not store customer names, emails, phone numbers or addresses in the ledger
   or any new table.

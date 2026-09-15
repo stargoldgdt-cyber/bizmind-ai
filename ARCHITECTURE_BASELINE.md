@@ -36,9 +36,9 @@ Where this file and an older document disagree, this file wins.
 | # | Question | Default until decided |
 | --- | --- | --- |
 | ~~B1~~ | **Resolved 2026-09-15:** VAT on marketplace fees (UAE 5%, KSA 15%) is not a P&L expense when it is recoverable as input VAT; it stays on the tax ledger. Non-recoverable VAT is a separate expense line. While the treatment is Unknown, P&L contribution is incomplete (never shown as final) and a data-quality warning names the amount. See §C "VAT on marketplace fees" and DECISIONS.md | — |
-| B2 | Who approves a fee-mapping rule (DECISIONS.md, 2026-09-09, "A source column is not a metric…") | Built-in versioned rules with evidence; new codes stay UNMAPPED; no business overrides in V1 — **Resolved 2026-09-15 (Phase 2):** GLOBAL rules approved by the owner, seeded by migration, `SAMPLE_VERIFIED` against real files |
+| B2 | Who approves a fee-mapping rule (DECISIONS.md, 2026-09-09, "A source column is not a metric…") | Built-in versioned rules with evidence; new codes stay UNMAPPED; no business overrides in V1 — **Resolved 2026-09-15 (Phase 2):** GLOBAL rules approved by the owner, seeded by migration, `SAMPLE_VERIFIED` against real files — **Amended 2026-09-15:** an owner or admin may classify an Unknown code for their own business (audited; never overriding a high-confidence BizMind rule) |
 | B3 | Amazon: Premium Services Fee, Tax lines, reserve lines | Provisional rules, labelled — **Resolved 2026-09-15:** Premium Services Fee is SP 360, a marketplace fee; Tax on fee is TAX·FEE_VAT; COD charge is other income; no tax-on-sales or reserve lines seen (they would arrive UNMAPPED) |
-| B4 | Noon mappings, `balance_transfer`, invoices/credit notes | No noon adapter |
+| B4 | Noon mappings, `balance_transfer`, invoices/credit notes | No noon adapter — samples supplied 2026-09-15; classified automatically from them in Phase 5 |
 | B5 | Is a noon fee line joined to a single-SKU order "reliable attribution"? | No, order level |
 | ~~B6~~ | **Resolved 2026-09-15:** fingerprint + parsed source rows; original files not kept; no buyer PII in source rows | — |
 | B7 | COGS for sales before the first cost entry | Cost unknown; explicit audited backfill only |
@@ -49,6 +49,8 @@ Where this file and an older document disagree, this file wins.
 | B12 | Sheets change notifications in V1 | Schedule + Sync now only |
 | B13 | Carrefour capability | Contract only |
 | B14 | Existing orders, sheets, expenses | Orders read-only legacy; expenses/products carry over; no conversion to ledger rows |
+| B15 | Marketplace take rate definition | Not defined and not shown. The historical 19.1% could not be reproduced exactly from the July files (DECISIONS.md) |
+| B16 | Gross Profit: Contribution − COGS, or Net Sales − COGS | Decided before Phase 6; until then Gross and Net Profit show Incomplete |
 
 ## C. The model, in one screen
 
@@ -112,6 +114,91 @@ Example, July 2026 Amazon.ae (AED 119.79 VAT on the SP 360 fee):
 | Unknown | None — incomplete | Warning "VAT treatment unknown: AED 119.79"; informational "Contribution before fee-VAT treatment: AED 36,552.76" |
 | Recoverable | AED 36,552.76 | No warning; AED 119.79 on the tax ledger as input VAT |
 | Not recoverable | AED 36,432.97 | AED 119.79 as a separate non-recoverable VAT expense line |
+
+### Automatic classification (approved 2026-09-15)
+
+Sellers never classify normal marketplace lines. The marketplace adapter and its
+rules classify every known line automatically; people handle exceptions only.
+
+```
+Upload → detect marketplace + format → read rows, strip customer data
+→ store source lines unchanged → match each line to a rule
+→ Financial Type → Category → Subcategory → P&L Treatment
+→ metrics, each Final or Incomplete
+```
+
+**Four layers**
+
+| Financial Type | Categories | Default P&L Treatment |
+| --- | --- | --- |
+| Revenue | Product Sales, Shipping Income | Increase Revenue (these make up Gross Sales) |
+| Revenue | Other Income, Reimbursement, Subsidy / Promotion Income | Increase Revenue (not Gross Sales) |
+| Revenue | Sales Refunds & Returns, Seller-funded Discounts | Decrease Revenue |
+| Expense | Marketplace Fee, Fulfillment / Logistics, Storage, Advertising, Payment / COD Fee, Refund Fee, Penalty, Other Marketplace Expense | Increase Expense |
+| Tax | Input VAT | Conditional on the account's VAT setting: Recoverable → No P&L Impact; Non-recoverable → Increase Expense; Unknown → P&L incomplete (B1) |
+| Tax | Output VAT | No P&L Impact |
+| Cash | Payout, Reserve Hold, Reserve Release, Transfer | No P&L Impact |
+| Memo | Report Total, Report Result, Informational | No P&L Impact (cross-checks only) |
+
+The subcategory keeps the marketplace's own detail (Referral Commission, FBN
+Outbound, SP 360, …). The treatment belongs to the category; the amount's sign
+carries reversals. "Conditional" is used only for a stored account setting,
+never for an unanswered question.
+
+- A reversal keeps the category of what it reverses.
+- Refunds of sales reduce revenue; they are not expenses.
+- Payouts are Cash, never revenue.
+- Non-recoverable VAT stays Tax / Input VAT; its treatment makes it an expense.
+- Marketplace-reported totals and results (Net Sale, fee totals, Payment
+  totals, Profit/Loss) are Memo cross-checks, never lines.
+- Percentages and text labels are not money and are never imported.
+- Seller cost data (such as Wholesale Price) is COGS input, not a marketplace line.
+
+**What lives where**
+
+| Place | Holds |
+| --- | --- |
+| Adapter code, one per report format | Detection, parsing, which columns are money, row → lines, match keys, customer-data removal, where the currency comes from, whether VAT is reported separately |
+| Classification rules, versioned data | Match key → type, category, subcategory, treatment, confidence, evidence |
+| Shared model, one for every marketplace | Types, categories, default treatments, metric definitions |
+| Marketplace account | Currency, VAT setting |
+
+Matching is deterministic: descriptions are normalised (case, spacing,
+statement and document prefixes), then matched to exact keys. Pattern rules
+are written by BizMind and are Medium confidence at most. AI never decides where
+money is counted; it may later draft a rule that a person approves.
+
+**Confidence and exceptions**
+
+| Situation | File | Line counts | What the seller sees |
+| --- | --- | --- | --- |
+| High-confidence rule | Imported | Yes | Nothing |
+| Medium-confidence rule | Imported | Yes | "Under review"; the figure notes the lines under review |
+| No rule (new code) | Imported | No | Unknown in Data Quality with code, amount and lines; affected figures Incomplete by that amount |
+| Input VAT while the account's VAT setting is Unknown | Imported | Conditional | Contribution Incomplete, with the VAT amount |
+| Unreadable row | Imported (rest of file) | No | Row error; affected figures Incomplete |
+| Marketplace totals differ from the lines | Imported | Yes | Warning with both amounts |
+| Wrong or unsupported report, wrong marketplace, currency mismatch, customer data that cannot be removed, changed settlement (B8) | Refused | — | Message saying what to upload instead |
+
+A figure is **Final** only when no Unknown line, unresolved Conditional line or
+unreadable row affects it. Otherwise it is **Incomplete**, with the exact amount
+and reason — never zero, never estimated. One unknown line never blocks a file.
+
+**Classification at calculation time.** Ledger lines keep the marketplace's facts
+and are never edited. Metrics classify each line through the active rule version
+when they are calculated. A correction retires a rule version and adds a new
+one; every later calculation, for every period, uses it without a re-upload.
+Before a correction applies, BizMind shows its effect (for example "moves
+AED 1,472.00 from Unknown to Fulfillment in July"), and the audit log records
+it. The side and category stored on a ledger line in Phases 1–2 remain the
+import-time record.
+
+**Who corrects a rule.** BizMind, globally for every seller; or, for an Unknown
+code only, an owner or admin for their own business — audited, and never
+overriding a high-confidence BizMind rule (B2, amended).
+
+**Validation.** Once the dashboard is live, the owner compares BizMind's figures
+with the marketplace reports. Each mismatch becomes a rule correction.
 
 ## D. Phases
 

@@ -111,8 +111,12 @@ The 36,432.97 in the table above is the plain sum of P&L and tax lines, which
 is how the Phase 2 test proves the ledger holds the right lines; it is not a
 profit figure. The Phase 3 P&L test will assert all three outcomes.
 
-The owner's 19.1% take rate needs a written definition in Phase 3 (it is
-19.03% or 19.20% depending on whether COD lines count).
+Take rate is not defined yet (B15). The owner's historical 19.1% could not be
+reproduced exactly from these files (DECISIONS.md, 2026-09-15).
+
+From Phase 3 the 21 rules are restated in the four-layer classification model
+(Financial Type → Category → Subcategory → P&L Treatment); the lines already
+stored do not change.
 
 ## 5. Code and tests
 

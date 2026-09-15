@@ -1570,3 +1570,131 @@ why an unknown treatment leaves the contribution incomplete rather than final.
 
 **Supersedes:** the B1 default ("tax lines excluded from profit, with a 'not
 confirmed' banner").
+
+---
+
+## 2026-09-15 — Marketplace lines are classified automatically; people handle exceptions only
+
+**Decided by the owner:** A seller never classifies normal marketplace lines.
+Uploading a file detects the marketplace and format, and the adapter's rules
+classify every known line automatically.
+
+- High-confidence rule: classified and counted.
+- Medium-confidence rule: classified and counted, flagged for review.
+- No rule, a new code or a genuinely ambiguous line: kept as Unknown, shown in
+  Data Quality, and the rest of the file continues.
+- A file is refused only for structural reasons: wrong or unsupported report,
+  wrong marketplace, currency mismatch, customer data that cannot be removed,
+  or a changed settlement (B8).
+
+The owner validates the live dashboard against the marketplace reports and
+reports mismatches; each becomes a rule correction.
+
+**Why:** Asking sellers 20–30 classification questions per upload makes the
+product unusable, and the marketplace's own codes already say what most lines
+are. The product foundation and a working dashboard come first; real-data
+validation corrects the rules afterwards.
+
+---
+
+## 2026-09-15 — Four-layer classification model
+
+**Decided:** Every marketplace line is classified as Financial Type (Revenue,
+Expense, Tax, Cash, Memo) → Category → Subcategory → P&L Treatment (Increase
+Revenue, Decrease Revenue, Increase Expense, No P&L Impact, Conditional). The
+full table is in ARCHITECTURE_BASELINE.md §C "Automatic classification".
+
+- The type records what the marketplace reported; the treatment records how it
+  affects profit. Non-recoverable VAT stays Tax / Input VAT with treatment
+  Increase Expense; recoverable VAT has No P&L Impact; unknown VAT is
+  Conditional and leaves the P&L incomplete (B1).
+- Reversals keep the original category; refunds of sales reduce revenue;
+  payouts are Cash.
+- Marketplace-reported totals and results are Memo cross-checks. Percentages
+  and labels are not imported. Seller cost data is COGS input.
+
+**Why:** Tax cannot simply mean "never affects profit", and a category alone
+cannot say whether money raises or lowers profit. Metrics are defined once over
+categories and treatments, with no Amazon- or noon-specific formulas.
+
+---
+
+## 2026-09-15 — Classification is applied at calculation time
+
+**Decided:** Ledger lines keep the marketplace's facts and are never edited.
+Metrics classify each line through the active rule version when they are
+calculated. A correction retires the old rule version and adds a new one; every
+later calculation uses it for all periods, with no re-upload. BizMind shows a
+correction's effect before it applies, and the audit log records it. The side
+and category stored on ledger lines in Phases 1–2 remain the import-time record.
+
+**Why:** Corrections found during validation must reach past months without
+rebuilding the financial engine or editing an immutable ledger.
+
+---
+
+## 2026-09-15 — Unknown lines make the figures they affect Incomplete
+
+**Decided:** A figure is Final only when no Unknown line, unresolved Conditional
+line or unreadable row affects it. Otherwise it is shown as Incomplete, with the
+exact unclassified amount and the reason. It is never shown as zero or estimated.
+
+**Why:** Leaving an unknown fee out silently overstates profit — the same reason
+unknown VAT leaves the contribution incomplete (B1).
+
+---
+
+## 2026-09-15 — Owners and admins may classify an Unknown code for their business (B2 amended)
+
+**Decided:** Rules are normally BizMind's, global and versioned. For an Unknown
+code only, an owner or admin may classify it for their own business. The choice
+is audited, marked as confirmed by the seller, and never overrides a
+high-confidence BizMind rule.
+
+**Why:** A seller should not wait for a BizMind release to classify a fee only
+their account has, but seller choices must not quietly replace verified rules.
+
+---
+
+## 2026-09-15 — Dashboard before COGS, expenses and reconciliation
+
+**Decided:** New phase order:
+
+3. Automatic classification + P&L engine (Amazon)
+4. Live dashboard + validation view
+5. noon adapter
+6. Products, SKU mapping, dated COGS
+7. Expenses + Google Sheets dataset targets
+8. Payouts, bank, reconciliation, cashflow, reports
+9. AI explanations + alerts
+10. Legacy retirement
+
+Owner validation runs from Phase 4 onward. Until Phases 6 and 7, Gross Profit
+and Net Profit show Incomplete.
+
+The noon sample files required by A17 were supplied on 2026-09-15. The noon
+Invoices & Credit Notes file names every statement fee with its VAT listed
+separately (Referral Fee and its adjustment, FBN Outbound, Directship Outbound
+and its rebates, Advertising, Return Administration, Damaged Returns, Warranty,
+Cancellation, Import VAT Recovery, Shipping Fee Rebate), so noon can be
+classified automatically in Phase 5.
+
+**Why:** A working product the owner can check against real reports finds rule
+problems sooner than further design discussion.
+
+---
+
+## 2026-09-15 — Marketplace take rate is not defined yet (B15)
+
+**Decided:** No take rate is defined or shown, and no replacement KPI is created.
+
+**Finding:** The owner's historical 19.1% ("Blended take rate" in the gap
+analysis acceptance table) has no recorded formula. Tested against the July 2026
+Amazon ledger lines (gross sales AED 61,429.11): commission plus FBA fulfilment
+is 18.62%; four different combinations of small additional costs reach
+19.06%–19.12%; all fees except SP 360 and advertising give 19.20%, or 19.03%
+without the COD fee. The exact historical formula cannot be proven from the
+available data.
+
+**Supersedes:** the Phase 2 note that 19.1% was "19.03% or 19.20% depending on
+whether COD lines count" — neither rounds to 19.1%.

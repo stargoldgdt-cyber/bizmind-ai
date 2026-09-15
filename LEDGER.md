@@ -135,6 +135,12 @@ Timestamps must carry a time zone. At most 50,000 rows per file.
 | `MEMO` | SETTLEMENT_TOTAL, INFORMATIONAL | No totals |
 | (none) | `UNMAPPED` | No totals; always reported with its amount |
 
+From Phase 3 these stored sides and categories are the import-time record.
+Figures classify every line at calculation time through the active rule
+version, into Financial Type → Category → Subcategory → P&L Treatment
+(ARCHITECTURE_BASELINE.md §C "Automatic classification"), so a corrected rule
+applies to past lines without touching them.
+
 ## 8. Code
 
 | Path | Role |

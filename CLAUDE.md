@@ -250,6 +250,13 @@ Source file → Transport (upload; marketplace APIs later)
             → Customer-data filter → ledger_apply_file() → source_rows + ledger
 ```
 
+Every known line is classified automatically by versioned rules into Financial
+Type → Category → Subcategory → P&L Treatment, at calculation time
+(`ARCHITECTURE_BASELINE.md` §C "Automatic classification"). Sellers never
+classify normal lines. An unknown code is kept, shown in Data Quality, and
+makes the figures it affects Incomplete. A correction is a new rule version,
+never a ledger edit.
+
 Supporting data — COGS, product master, expenses — is entered natively or
 arrives through Google Sheets dataset targets (`src/services/datasets`). It
 never writes the ledger.
@@ -319,13 +326,14 @@ analytics, AI guard, integration engine, Google Sheets, alerts); their record is
 ```
 GCC 1   Ledger foundation              ✅ built, verified live (119 checks) — LEDGER.md
 GCC 2   Amazon Flat File V2 adapter        ✅ built, July reproduced from real files — AMAZON.md
-GCC 3   P&L engine, fee breakdown, data quality
-GCC 4   Product master, SKU mapping, dated COGS
-GCC 5   Expenses + Google Sheets dataset targets
-GCC 6   Settlements, payouts, bank, reconciliation, cashflow
-GCC 7   Dashboard, money flow, reports, exports
-GCC 8   AI intents + alerts on the ledger
-GCC N   noon adapter (only after real sample files)
+GCC 3   Automatic classification + P&L engine (Amazon)
+GCC 4   Live dashboard + validation view
+GCC 5   noon adapter (sample files supplied)
+        Owner validation against marketplace reports, from GCC 4 onward
+GCC 6   Product master, SKU mapping, dated COGS
+GCC 7   Expenses + Google Sheets dataset targets
+GCC 8   Settlements, payouts, bank, reconciliation, cashflow, reports
+GCC 9   AI intents + alerts on the ledger
 GCC 10  Legacy retirement
 ```
 
@@ -370,6 +378,11 @@ Update the relevant documentation in the same commit as the change.
   input VAT), cashflow (actual cash), settlement (marketplace calculation),
   payout (marketplace-reported payment), bank (actual receipt). They link only
   through reconciliation.
+- Do not ask sellers to classify known marketplace lines, and do not block an
+  import because one line is unknown. Keep it Unknown, show it in Data Quality,
+  and mark the figures it affects Incomplete.
+- Do not let AI decide which category money is counted in. AI may draft a
+  rule; a person approves it.
 - Do not update or delete ledger rows, or write them outside `ledger_apply_file()`.
 - Do not store customer names, emails, phone numbers or addresses in the ledger
   or any new table.

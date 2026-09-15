@@ -6,8 +6,8 @@ the platform underneath (phases 0–12) is archived as
 [ROADMAP_LEGACY.md](ROADMAP_LEGACY.md).
 
 Each phase depends on the one before it, and each ends with figures checked
-against a real file or a hand-worked dataset. Noon joins whenever real sample
-files arrive, any time after Phase 3.
+against a real file or a hand-worked dataset. noon follows the dashboard
+(Phase 5); its sample files were supplied on 2026-09-15.
 
 ---
 
@@ -17,26 +17,28 @@ files arrive, any time after Phase 3.
 | --- | --- | --- | --- |
 | **1** | Ledger foundation: marketplaces, accounts, tax profiles, source files, source rows, mapping rules, ledger, settlements, payouts; immutability; one writer; withdrawal; adapter contract; customer-data filter. **No parser, no UI** | Live tests prove isolation, immutability, the one writer, duplicates, withdrawal/restore, currency, blanks, customer data, lineage | ✅ Built and verified live, 2026-09-15 ([LEDGER.md](LEDGER.md)) |
 | **2** | Amazon Flat File V2 adapter; rejection of other Amazon reports; marketplace accounts screen; upload flow with format detection; Data Sources shows ledger files | July Amazon figures reproduced or every difference explained; B2, B3, B8 answered | ✅ Built and verified live, 2026-09-15: July reproduced exactly from four real settlements ([AMAZON.md](AMAZON.md)) |
-| 3 | P&L engine (marketplace + combined), fee breakdown, refund analysis, data-quality checks; fee-VAT treatment per account (B1) | Hand-worked dataset suite; July Amazon contribution incomplete while fee VAT is Unknown, 36,552.76 when Recoverable, 36,432.97 when Not recoverable | — |
-| 4 | Product master, SKU aliases + suggester + confirmation queue, dated COGS, product/SKU/category P&L | Cross-marketplace model checks reproduced; B7 answered | — |
-| 5 | Expense refactor + categories; Google Sheets dataset targets (COGS, product master, operating expenses; optional advertising, bank); schedule | Existing expense tab keeps syncing; Sheets live suite green; B12, B14 answered | — |
-| 6 | Bank accounts + statement import, payouts, matcher, reconciliation, cashflow | Every reconciliation status produced by a fixture month; B9 answered | — |
-| 7 | Dashboard, money flow, report catalogue, CSV/XLSX export, Google Sheets export | Every figure drills to a source row; write-scope test green | — |
-| 8 | AI intents over verified queries; alerts on ledger metrics | Guard + intent suites; live model check | — |
-| N | noon adapter | July noon figures reproduced; B4, B5 answered | Blocked on sample files |
+| 3 | Automatic classification + P&L engine (Amazon): the four-layer model; rules gain type, category, subcategory, treatment and confidence; the 21 Amazon rules restated; classification at calculation time; per-account VAT setting (B1); Data Quality issues (unknown, under review, VAT unknown, totals mismatch, row errors); Gross Sales, Net Sales, Marketplace Fees, Fulfillment, Advertising, Other Income and Contribution, each Final or Incomplete | July Amazon matches Phase 2; contribution incomplete while fee VAT is Unknown, 36,552.76 when Recoverable, 36,432.97 when Not recoverable; an invented unknown fee shows Incomplete and becomes Final after a rule is added, without re-upload | — |
+| 4 | Live dashboard + validation view: account and month filters; figures with Final / Incomplete status; category → subcategory breakdown; drill-down to source lines; Data Quality page; marketplace-reported totals alongside; CSV export of the validation view; owner/admin classification of Unknown codes (B2 amended) | The owner loads the July Amazon files and uses the dashboard | — |
+| 5 | noon adapter: Transaction View + Invoices & Credit Notes, classified automatically; SAR contract as its own account; "NA" read as blank; buyer details stripped | July noon figures on the dashboard; B4, B5 answered | Samples supplied 2026-09-15 |
+| — | **Owner validation**, from Phase 4 onward: compare Sales, Fees, Fulfillment, Advertising, Refunds, VAT, Payouts and Profit with the marketplace reports; each mismatch becomes a rule correction | Reported mismatches corrected | Continuous |
+| 6 | Product master, SKU aliases + suggester + confirmation queue, dated COGS, product/SKU/category P&L | Gross Profit Final; cross-marketplace model checks reproduced; B7, B16 answered | — |
+| 7 | Expense refactor + categories; Google Sheets dataset targets (COGS, product master, operating expenses; optional advertising, bank); schedule | Net Profit Final; existing expense tab keeps syncing; Sheets live suite green; B12, B14 answered | — |
+| 8 | Bank accounts + statement import, payouts, matcher, reconciliation, cashflow; money flow, report catalogue, XLSX and Google Sheets export | Every reconciliation status produced by a fixture month; write-scope test green; B9 answered | — |
+| 9 | AI intents over verified queries; alerts on ledger metrics | Guard + intent suites; live model check | — |
 | 10 | Legacy retirement: freeze old writers, drop deprecated tables, purge legacy customer PII | No reads found; backup taken; owner approval; B10 answered | — |
 
 ## 2. Open decisions
 
 See [ARCHITECTURE_BASELINE.md §B](ARCHITECTURE_BASELINE.md). B6 and B11 were
 resolved on 2026-09-15 and are implemented in Phase 1. B2, B3 and B8 were
-answered in Phase 2, and B1 before Phase 3 (DECISIONS.md, 2026-09-15).
+answered in Phase 2, and B1 before Phase 3 (DECISIONS.md, 2026-09-15). B2 was
+amended, and B15 (take rate) and B16 (Gross Profit) opened, the same day.
 
 ## 3. Manual steps for the owner
 
 1. ~~Apply migrations 0029, 0030 and 0031~~ — done 2026-09-15.
-2. **Supply sample files:** a noon Transaction View, noon invoices / credit
-   notes, one bank statement. (Amazon settlements: supplied and used, Phase 2.)
+2. **Supply a bank statement** sample before Phase 8. (Amazon settlements and
+   the noon Transaction View and invoices: supplied 2026-09-15.)
 3. **Confirm with an accountant** that VAT on each account's marketplace fees
    is recoverable, before setting it in BizMind (B1 is decided; the per-account
    setting is the accountant's confirmation).
@@ -45,6 +47,8 @@ answered in Phase 2, and B1 before Phase 3 (DECISIONS.md, 2026-09-15).
    (testing-mode sign-ins expire after 7 days).
 6. **Set `CRON_SECRET` and the schedule** at deployment (sync and alerts).
 7. **Re-enable "Confirm email" in Supabase** before real customers.
+8. **Validate the live dashboard** against your marketplace reports from Phase 4
+   onward, and report every mismatch.
 
 ## 4. What stays true from the legacy phases
 

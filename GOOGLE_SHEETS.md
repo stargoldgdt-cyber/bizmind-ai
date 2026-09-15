@@ -1,5 +1,13 @@
 # Google Sheets
 
+> **Role changed 2026-09-15 (ARCHITECTURE_BASELINE.md, A2–A5).** Google Sheets stays,
+> as an *optional data layer*: COGS, product master and operating expenses in V1;
+> advertising and bank transactions optional; SKU mappings as suggestions only. The
+> transport described below — sign-in, picker, reading, paging, fingerprints,
+> retries, sync history, tenant isolation — is kept unchanged. What a tab *becomes*
+> moves from orders/products/expenses to dataset targets in GCC Phase 5 (§9). A
+> sheet never writes the financial ledger or a manual adjustment.
+
 **Steps 1, 2, 3 and 5 of 6 built: the database foundation, the Google
 sign-in, applying a sheet's rows, and the connect screen. Change notifications
 (step 4) are not built, so a sheet is read when it is connected and when the
@@ -25,7 +33,9 @@ Official documentation consulted 2026-09-11:
 | **Order numbers are unique per source** | A website order #1001 and an Amazon order #1001 are different orders. Before 0020 the second was refused, and a page is written all-or-nothing, so everything beside it was lost too |
 
 `drive.file` technically allows *editing* a picked file; Google has no per-file
-read-only scope. BizMind will never call a write endpoint.
+read-only scope. BizMind never writes to a sheet the owner picked.
+**Amended 2026-09-15 (A5):** it may write to a spreadsheet it created itself for
+a report export, and only to one recorded as such. No two-way sync in V1.
 
 ## 2. How a change reaches BizMind
 
@@ -203,6 +213,7 @@ On **Integrations**, a Google Sheets section:
    it is held in memory while connecting and never stored. The picker needs a
    browser API key: see DECISIONS.md, 2026-09-11.
 3. **Choose the tab and what it holds** — orders, products or expenses.
+   *(Legacy targets. GCC Phase 5 replaces them with dataset targets, §9.)*
 4. **Match columns** — the same fields, importance levels and warnings as an
    upload. Suggestions come from the headings, and every one is shown for
    checking. The worker's own checks run on the server before anything is
@@ -283,3 +294,25 @@ refresh, sealed state (wrong user, wrong business, expired, tampered), range
 quoting, exact numbers, heading rules, pagination, the version shortcut,
 renamed and deleted tabs, error classification, and that no token or secret
 appears in any result or log line.
+
+## 9. Dataset targets (approved 2026-09-15, built in GCC Phase 5)
+
+The boundary exists as `src/services/datasets/contract.ts` (Phase 1). No target
+is registered and the connector does not use it yet.
+
+| Dataset | Tier | Identity | Writes to |
+| --- | --- | --- | --- |
+| `PRODUCT_MASTER` | V1 | Internal SKU | products (archive, never delete) |
+| `COGS` | V1 | Internal SKU (+ optional effective date) | a new dated cost version only when the value or date changed |
+| `OPERATING_EXPENSES` | V1 | Reference | expenses (operating) |
+| `ADVERTISING_EXPENSES` | Optional | Reference | expenses (advertising), with a double-count check against settlement ad lines |
+| `BANK_TRANSACTIONS` | Optional | Row fingerprint | bank transactions |
+| `SKU_ALIAS_SUGGESTIONS` | Optional | Marketplace + raw SKU | SKU mappings as **SUGGESTED only** |
+
+Never a dataset: the ledger, manual adjustments, confirmed SKU mappings. The
+registry refuses them.
+
+When Phase 5 lands: existing EXPENSES tabs become OPERATING_EXPENSES and
+PRODUCTS tabs become PRODUCT_MASTER after the owner re-confirms the columns;
+ORDERS tabs pause with an explanation. Connecting and managing sheets moves to
+OWNER only (decision B11).

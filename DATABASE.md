@@ -100,6 +100,9 @@ product resolves through it.
 
 ## 2b. The universal data model
 
+> **Legacy model (2026-09-15).** Marketplace figures come from the immutable ledger
+> (§7l, [LEDGER.md](LEDGER.md)). These tables keep working until legacy retirement.
+
 The vendor-neutral shape every integration normalises into. Shopify,
 WooCommerce, a CSV and a manual entry all land here, so analytics and AI never
 learn what "Shopify" is.
@@ -859,6 +862,36 @@ column is also a variable, so PostgreSQL refused the query — at call time, not
 at install time. 0027's self-verification checked privileges and source text and
 passed; `npm run test:withdrawal` calls the functions for real, and found it on
 the first run. Migration self-checks cannot replace calling the thing.
+
+## 7l. Marketplace ledger foundation (0029, 0030)
+
+GCC Phase 1. Full rules and the payload contract: [LEDGER.md](LEDGER.md).
+
+| Object | What it is |
+| --- | --- |
+| `marketplaces` | AMAZON, NOON, CARREFOUR and each adapter's status. Reference data, read-only |
+| `marketplace_accounts` | One store on one marketplace in one country; holds the currency, which locks once data exists |
+| `tax_profiles` | One per account; treatment is `UNCONFIGURED` until an accountant confirms one |
+| `import_batches` + 7 columns | `dataset` (LEGACY / LEDGER), `source_kind`, account, `format_id`, `adapter_version`, `file_sha256`, `stripped_columns`. Every existing row is LEGACY |
+| `source_rows` | Every parsed row of a ledger file, text or null, no customer data. Immutable |
+| `ledger_mapping_rules` | Marketplace codes → side/category, versioned data; only ACTIVE → RETIRED may change |
+| `settlements`, `payouts` | What the marketplace reported settling and paying. Immutable |
+| `financial_transactions` | The ledger. Immutable |
+| `ledger_lines`, `ledger_settlements`, `ledger_payouts` | Invoker views: active files only, money as text |
+| `ledger_apply_file()` | The only writer. OWNER/ADMIN/STAFF |
+| `ledger_file_withdraw()` / `ledger_file_restore()` | OWNER/ADMIN. Withdrawal stamps the file; no row is deleted |
+| `marketplace_account_create/update()`, `tax_profile_update()` | OWNER |
+
+**Enforcement.** Triggers refuse every INSERT outside the writer (even for the
+service role), every UPDATE, every direct DELETE and every TRUNCATE on the four
+ledger tables; ledger file records and their row issues are guarded the same
+way. Deleting a business cascades through all of it. Composite foreign keys
+`(business_id, …)` on every reference. RLS enabled and forced; signed-in users
+have SELECT only. The migration proves the writer rule by trying to break it.
+
+**Additive.** Nothing existing changes meaning. Rollback:
+`supabase/rollback/0030_marketplace_ledger_foundation.rollback.sql` (refuses
+while any ledger file or account exists). 0029's enum value cannot be removed.
 
 ---
 

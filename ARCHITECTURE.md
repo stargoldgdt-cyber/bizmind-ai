@@ -6,9 +6,11 @@ How BizMind AI is put together, and why.
 
 ## 1. The shape of the system
 
-BizMind is a layer on top of the systems a business already runs. It reads
-their data, normalises it into one model, computes verified metrics, and uses
-AI only to explain and recommend.
+BizMind is a GCC marketplace profit intelligence platform (repositioned
+2026-09-15, `ARCHITECTURE_BASELINE.md`). It records what marketplaces reported
+in an immutable line-level ledger, computes verified figures from it in SQL,
+and uses AI only to explain and recommend. The layer diagram below still holds;
+the "universal data model" layer is the legacy model the ledger replaces.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -42,6 +44,20 @@ see `AI.md` when that layer is built.
 ---
 
 ## 2. How external data gets in
+
+### Marketplace data: the ledger path (2026-09-15)
+
+```
+Source file ─► Transport (upload; APIs later)
+           ─► Marketplace adapter          pure: rows in, drafts out, no writes
+           ─► Customer-data filter         allow-listed columns only
+           ─► ledger_apply_file()          the only writer
+           ─► source_rows · financial_transactions · settlements · payouts
+```
+
+Every ledger row is immutable and carries its source file and source row. See
+[LEDGER.md](LEDGER.md). Everything below this subsection describes the legacy
+connector pipeline, which spreadsheet datasets will reuse for validation.
 
 Every integration follows the same path. No connector is allowed to write
 directly into application tables.

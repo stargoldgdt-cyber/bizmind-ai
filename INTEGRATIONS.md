@@ -2,6 +2,12 @@
 
 How outside data gets into BizMind.
 
+> **2026-09-15.** Marketplace settlement data no longer goes through this pipeline.
+> It arrives through marketplace adapters and `ledger_apply_file()` into the
+> immutable ledger — see [LEDGER.md](LEDGER.md). The pipeline below is the legacy
+> order/product/expense model, and the base spreadsheet datasets will reuse for
+> validation (GCC Phase 5).
+
 File import is the **first connector**, not a separate feature. Shopify,
 WooCommerce and the REST connector reuse everything below the mapping step, so
 adding one never means touching the universal data model.
@@ -79,6 +85,9 @@ Importance drives behaviour: `required` blocks, `recommended` warns and must be
 acknowledged, `optional` is silent.
 
 ### Orders — revenue, margin, channel profit, customers
+
+> **Legacy.** Marketplace sales come from settlement files through the ledger, and
+> no new work imports customer details (decision A14).
 
 | Field | Importance | Why |
 | --- | --- | --- |
@@ -158,6 +167,9 @@ Re-importing the same file **updates** rather than duplicates, via
 ---
 
 ## 6b. Historical costs are never invented
+
+> **Legacy model.** For marketplace profit, COGS becomes one number per product with
+> a dated history (ARCHITECTURE_BASELINE.md A8, GCC Phase 4).
 
 An order line's cost is a snapshot of what the item cost **at the moment it was
 sold**. The current catalogue price is a different fact about a different point
@@ -253,14 +265,14 @@ Full model, statuses, profile behaviour and lineage: [MAPPING.md](MAPPING.md).
 
 ---
 
-## 8. Planned connectors
+## 8. What comes next
 
-| Phase | Connector | Reuses |
+| GCC phase | Source | Path |
 | --- | --- | --- |
-| 9 | Shopify | Everything below the mapping step; mapping is fixed |
-| 10 | WooCommerce | Same |
-| 11 | Generic REST | Same, with a user-defined mapping like the file connector |
-| 12 | Webhooks + sync engine | Same apply functions, driven by events rather than uploads |
+| 2 | Amazon Flat File V2 settlement | Adapter → ledger ([LEDGER.md](LEDGER.md)) |
+| N | noon Transaction View, invoices / credit notes | Adapter → ledger, after real samples |
+| — | Carrefour | Contract only until capability is verified |
+| 5 | Google Sheets: COGS, product master, expenses | Dataset targets ([GOOGLE_SHEETS.md §9](GOOGLE_SHEETS.md)) |
+| 6 | Bank statements | Adapter → bank transactions |
 
-`import_batches` is deliberately shaped to become the basis of `sync_jobs`: it
-already records a source, a status, counts, and an error.
+Shopify is not planned. WooCommerce is deprecated (kept, not extended).

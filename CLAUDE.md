@@ -11,26 +11,32 @@ this version differs from older Next.js in ways that matter.
 
 ## 1. The product
 
-**BizMind AI** is an AI business intelligence and automation layer.
+**BizMind AI** is a **GCC Marketplace Profit Intelligence Platform**
+(repositioned 2026-09-15 — read `ARCHITECTURE_BASELINE.md`).
 
-> Your ERP records what happened. BizMind tells you what to do about it.
+Sellers in the GCC list the same physical products on Amazon, noon and
+Carrefour. Each marketplace charges differently, settles differently and names
+products differently. BizMind answers, from the marketplaces' own settlement
+data:
 
-It is **not** an ERP, not a dashboard tool, not a chatbot, not an accounting
-system. It sits *on top of* the systems a business already runs (Shopify,
-WooCommerce, marketplaces, spreadsheets, ERPs) and turns their data into
-decisions.
+- how much each marketplace and each product really makes after marketplace
+  fees, product costs, advertising and operating expenses
+- where the money goes, and why profit changed
+- what was settled, what was paid out, and what actually reached the bank
+- what to do next
+
+It is **not** an ERP and **not** a traditional accounting system. It keeps an
+immutable, line-level ledger of what marketplaces reported, computes verified
+figures from it, and uses AI only to explain them.
 
 The loop the whole product serves:
 
 ```
-CONNECT → UNDERSTAND → ANALYZE → ALERT → RECOMMEND → AUTOMATE
+SOURCE DATA → LEDGER → UNDERSTAND → EXPLAIN → ALERT → RECOMMEND
 ```
 
-Traditional tools do `Data → Report`.
-BizMind does `Data → Understanding → Insight → Recommendation → Action`.
-
-**Users are business owners and operators, not analysts.** Every screen should
-answer "what do I do about this?", not just "here is a number".
+**Users are marketplace sellers and operators, not accountants.** Every screen
+should answer "what do I do about this?", not just "here is a number".
 
 ### Who the repository owner is
 
@@ -118,7 +124,15 @@ Non-negotiable:
    creates it.
 
 Roles: `OWNER`, `ADMIN`, `STAFF`, `VIEWER`. Model permissions so finer-grained
-ones can be added later without a rewrite.
+ones can be added later without a rewrite. Financial permissions (decision B11,
+2026-09-15) are checked inside the database functions, never only in the UI:
+
+| Role | May |
+| --- | --- |
+| VIEWER | Read only |
+| STAFF | Import data. Not confirm SKU mappings, change COGS, or confirm anything financial |
+| ADMIN | Import, confirm SKU mappings, manage COGS and expenses, withdraw a file |
+| OWNER | Everything, including integrations, reconciliation and configuration (marketplace accounts, tax profiles) |
 
 ---
 
@@ -223,16 +237,26 @@ wrong profit figure is worse than a plain one showing the right figure.
 ## 8. Architecture
 
 ```
-Presentation  →  API / Application  →  Business Logic
-              →  Analytics Engine   →  Universal Data Model  →  PostgreSQL
+Presentation  →  API / Application  →  Business logic
+              →  Financial engines (P&L, cashflow, reconciliation — in SQL)
+              →  Immutable ledger  →  PostgreSQL
 ```
 
-External systems are normalised before they reach our data model:
+Marketplace data reaches the ledger through exactly one path (`LEDGER.md`):
 
 ```
-External source → Connector → Mapper → Validation → Normalisation
-                → Universal Data Model
+Source file → Transport (upload; marketplace APIs later)
+            → Marketplace adapter (pure; one per marketplace format)
+            → Customer-data filter → ledger_apply_file() → source_rows + ledger
 ```
+
+Supporting data — COGS, product master, expenses — is entered natively or
+arrives through Google Sheets dataset targets (`src/services/datasets`). It
+never writes the ledger.
+
+The order/product/expense import pipeline and the analytics, health score and
+alerts built on it are the **legacy model**. They keep working until they are
+retired (`ROADMAP.md`), but no new feature is built on them.
 
 Directory conventions (create a folder when you have real code for it, not
 before — see `ARCHITECTURE.md`):
@@ -244,6 +268,8 @@ before — see `ARCHITECTURE.md`):
 | `src/components/` | Shared presentational components |
 | `src/features/<name>/` | Feature-scoped UI and logic |
 | `src/services/` | Business logic, analytics, AI, integrations |
+| `src/services/marketplaces/` | Marketplace adapter contract, customer-data filter, ledger file payload |
+| `src/services/datasets/` | Dataset targets Google Sheets and CSV write through (supporting data only) |
 | `src/lib/` | Framework-level helpers (Supabase clients, utils) |
 | `src/config/` | Constants, tokens, fonts, product copy |
 | `src/types/` | Shared TypeScript types |
@@ -252,6 +278,8 @@ before — see `ARCHITECTURE.md`):
 Rules:
 
 - Business logic belongs in `src/services/`, never in a React component.
+- Marketplaces are adapters. A new marketplace is an adapter, its mapping rules
+  (data) and a test fixture; the ledger and the engines never change for it.
 - Integrations are independent modules behind a shared interface. Never
   hard-code one vendor's assumptions into core logic.
 - APIs are versioned under `/api/v1/`. Do not break v1 once integrations exist.
@@ -272,6 +300,10 @@ Rules:
   still exact — see MONEY.md. Never do financial arithmetic in TypeScript at
   all: `npm run test:money-guard` fails the build on it. Compare with
   `compareMoney`, format with `formatMoney`, calculate in SQL.
+- **The ledger is immutable.** Never update or delete a `financial_transactions`,
+  `source_rows`, `settlements` or `payouts` row, and never write one except
+  through `ledger_apply_file()`. A correction is a new record or a withdrawn
+  source file. The database refuses anything else, for every role.
 
 ---
 
@@ -279,39 +311,27 @@ Rules:
 
 Work in phases. Do not jump ahead, and do not expand scope mid-phase.
 
+The product was repositioned on 2026-09-15. Legacy phases 0–12 built the
+platform the new product stands on (auth, tenancy, exact money, import,
+analytics, AI guard, integration engine, Google Sheets, alerts); their record is
+`ROADMAP_LEGACY.md`. The current plan:
+
 ```
-0  Environment            ✅ complete
-1  Project foundation     ✅ complete
-2  Auth + multi-tenancy     ✅ complete, isolation verified live
-3  Database + RLS          ✅ complete, isolation verified live
-4  Core dashboard          ✅ complete, arithmetic verified
-5  Universal data model    ✅ complete (CSV/Excel import connector)
-6  CSV / Excel import      ✅ delivered with phase 5
-7  Analytics engine        ✅ complete, figures hand-verified
-7.1 Source truth           ✅ complete, blank never becomes zero
-7.2 Canonical mapping      ✅ complete, no name becomes a fact
-8  AI business analyst      ✅ complete, AI cannot state a figure
-9  WooCommerce connector    ✅ BUILT — WOOCOMMERCE.md
-   Shopify connector        designed, not built — PHASE9_INTEGRATIONS.md
-10 Sync + webhook engine    ✅ ENGINE BUILT — INTEGRATION_ENGINE.md
-   + fixture connector      ✅ proves the engine with no network
-11 Alerts + automation      ✅ BUILT — AUTOMATION.md
-   rule-based only; nothing executes, and no model may fire an alert
-12 AI recommendations       ARCHITECTED, not built — PHASE12_AI_RECOMMENDATIONS.md
-13 Generic REST API
-14 Audit + security hardening
-15 Production deployment
+GCC 1   Ledger foundation              ✅ built, verified live (119 checks) — LEDGER.md
+GCC 2   Amazon Flat File V2 adapter
+GCC 3   P&L engine, fee breakdown, data quality
+GCC 4   Product master, SKU mapping, dated COGS
+GCC 5   Expenses + Google Sheets dataset targets
+GCC 6   Settlements, payouts, bank, reconciliation, cashflow
+GCC 7   Dashboard, money flow, reports, exports
+GCC 8   AI intents + alerts on the ledger
+GCC N   noon adapter (only after real sample files)
+GCC 10  Legacy retirement
 ```
 
-Phases 9–12 were renumbered when they were designed: the generic REST connector
-moved after the two named ones, because a generic design written before any real
-connector exists is a guess.
-
-**Read `ROADMAP.md` before starting any of them.** It records what is decided,
-what is not, the changes that must land first, and the recommended order — which
-is deliberately NOT the numbering. The sync engine (10) should be built before
-the first connector (9), against a fixture connector, so the engine is proven
-without credentials, without a vendor, and without a network.
+**Read `ARCHITECTURE_BASELINE.md` and `ROADMAP.md` before starting any phase.**
+Every open decision there has a conservative default; do not replace a default
+with a guess.
 
 Before every commit:
 
@@ -338,9 +358,21 @@ Update the relevant documentation in the same commit as the change.
 - Do not delete or overwrite files without reading them first.
 - Do not add a dependency without recording why.
 - Do not build ahead of the current phase.
-- Do not build payroll, HR, full accounting, VAT engines, manufacturing, a
-  mobile app, native Amazon/Daraz connectors, autonomous purchasing or
-  marketing, or WhatsApp automation. These are explicitly out of scope for V1.
+- Do not build payroll, HR, full accounting, VAT engines or VAT returns,
+  manufacturing, a mobile app, marketplace API connectors (V1 is file-based),
+  autonomous purchasing or marketing, PPC management, repricing, inventory
+  forecasting, or WhatsApp automation. VAT *treatment* is configuration an
+  accountant confirms, never something BizMind works out.
+- Do not update or delete ledger rows, or write them outside `ledger_apply_file()`.
+- Do not store customer names, emails, phone numbers or addresses in the ledger
+  or any new table.
+- Do not allocate marketplace-level fees or advertising to products (V1).
+- Do not merge SKUs automatically. A person confirms every mapping.
+- Do not convert currencies (V1). Currency belongs to the marketplace account.
+- Do not build two-way Google Sheets sync (V1). BizMind writes only to
+  spreadsheets it created for an export.
+- Do not assume Carrefour's platform or API, and do not finalise noon mappings
+  without real sample files.
 - Do not ship autonomous AI actions. V1 automation is rule-based and logged;
   approval-based actions come later.
 - Do not report work as finished without running lint and build.

@@ -311,6 +311,10 @@ pretend to work.
 
 ## 2026-09-08 — File import built as the first connector
 
+> **Amended 2026-09-15.** Marketplace settlement files use marketplace adapters with
+> built-in mapping rules and write to the ledger (see "The ledger is the financial
+> source of truth"). This pipeline remains for spreadsheet datasets and the legacy model.
+
 **Decided:** CSV/Excel import shares one pipeline with every future
 integration: mapping, validation, normalisation and an atomic apply. A file
 connector and a Shopify connector differ only in how raw records arrive and
@@ -326,6 +330,9 @@ makes each new connector a mapping plus a fetch.
 ---
 
 ## 2026-09-08 — Ambiguity is refused, never resolved
+
+> **Amended 2026-09-15.** Currency is checked against the *marketplace account*, not the
+> business; one business may hold AED and SAR accounts. Everything else stands.
 
 **Decided:** An ambiguous date (`03/04/2026`), a number contradicting the
 chosen decimal separator, an unrecognised order status, or a row in a foreign
@@ -403,6 +410,9 @@ first row unwritten.
 ---
 
 ## 2026-09-09 — Historical costs are never taken from the catalogue
+
+> **Superseded 2026-09-15** by "COGS is one number with a dated history". The intent
+> survives: editing a cost never silently changes past profit.
 
 **Decided:** An order line's `unit_cost` comes from the imported file and from
 nowhere else. Nothing copies a product's current cost into a past order.
@@ -489,6 +499,8 @@ The distinction is preserved all the way to the screen, where it appears as
 
 ## 2026-09-09 — Health thresholds are published first drafts, not science
 
+> **Deprecated 2026-09-15.** The health score is not carried into the marketplace product.
+
 **Decided:** Six dimensions, each scored by plain stated bands written in
 `health.ts`. No weighting model, no derived formula.
 
@@ -538,6 +550,9 @@ recommends anything, check that the number driving it is real.**
 
 ## 2026-09-09 — Products do not reconcile to total revenue, and that is stated
 
+> **Superseded for the ledger model 2026-09-15.** No product-level apportionment of
+> marketplace-level fees in V1 (decision A7). This entry describes the legacy model.
+
 **Decided:** Product revenue is order-LINE revenue. It does not include
 shipping or order-level discounts, so it does not sum to total revenue.
 `analytics_reconciliation()` reports the gap explicitly.
@@ -570,6 +585,9 @@ for a tidiness gain. Revisit if the CSS import is ever removed.
 ---
 
 ## 2026-09-09 — A source column is not a metric until someone says what it means
+
+> **Amended 2026-09-15.** Still binding for spreadsheet datasets. How it applies to
+> marketplace fee-mapping rules is open decision B2 (ARCHITECTURE_BASELINE.md).
 
 **Decided:** Data from an outside system is preserved under the source's own
 name and feeds **no** BizMind figure until a named person confirms what the
@@ -1287,3 +1305,169 @@ secret.
 
 **Cost to change:** Low. Swapping the key is an environment change; dropping
 the picker means revisiting the scope decision.
+
+---
+
+## 2026-09-15 — BizMind becomes a GCC Marketplace Profit Intelligence Platform
+
+**Decided:** BizMind is repositioned from an order-centric business intelligence
+layer to a GCC marketplace profit intelligence platform (Amazon, noon,
+Carrefour). Not an ERP, not a traditional accounting system. The approved
+baseline is `ARCHITECTURE_BASELINE.md`.
+
+**Why:** A real seller's settlement files showed the question that matters —
+which marketplace and which product actually make money — cannot be answered
+from an order total and one fee column.
+
+**Cost to change:** High. Every later phase builds on the ledger.
+
+---
+
+## 2026-09-15 — The ledger is the financial source of truth
+
+**Decided:** One immutable row per reported amount in `financial_transactions`,
+with source rows, settlements and payouts beside it. Exactly one writer,
+`ledger_apply_file()`. No UPDATE or DELETE for any role, including the service
+role; a trigger enforces it. Composite foreign keys make every reference carry
+its business id, so a row cannot point into another tenant even through a bug.
+Deleting a whole business still removes everything.
+
+**Why:** A figure that can be edited in place cannot be traced, and a trace is
+the product's promise: dashboard figure → transaction → source row → file.
+
+**Cost to change:** High.
+
+---
+
+## 2026-09-15 — A source file is its fingerprint and its parsed rows (B6)
+
+**Decided:** The ledger keeps a file's SHA-256 fingerprint and every parsed row
+(as text, blank as null, customer data removed). The original uploaded bytes are
+not stored.
+
+**Why:** The rows are the evidence every figure needs, and a stored original file
+would bring buyer details BizMind has decided never to hold.
+
+**Cost to change:** Low to add file storage later; the fingerprint already
+identifies the file.
+
+---
+
+## 2026-09-15 — Financial permissions (B11)
+
+**Decided:** VIEWER reads. STAFF imports, but cannot confirm SKU mappings,
+change COGS or confirm anything financial. ADMIN imports, confirms SKU mappings,
+manages COGS and expenses. OWNER has every financial, integration,
+reconciliation and configuration permission. Enforced inside each database
+function. Ledger file withdrawal stays OWNER/ADMIN, as legacy withdrawal is.
+
+**Why:** Importing is routine work; confirming what a number means is not.
+
+**Known gap:** The existing Google Sheets connect functions allow ADMIN, where
+B11 reserves integrations for OWNER. Left unchanged in Phase 1 (it is outside
+the phase); to be aligned when the Sheets target layer is rebuilt (Phase 5).
+
+---
+
+## 2026-09-15 — Currency belongs to the marketplace account
+
+**Decided:** `marketplace_accounts.currency` is the currency of everything
+recorded against the account, and it locks once data exists. A row in another
+currency is refused. No conversion in V1.
+
+**Why:** Amazon.ae and Amazon.sa settle in different currencies; converting
+would require an exchange rate, and inventing one would invent a figure.
+
+---
+
+## 2026-09-15 — COGS is one number with a dated history (built in Phase 4)
+
+**Decided:** The seller enters one COGS per unit. Each change is a new dated
+version; profit uses the cost in force on each sale's posted date.
+
+**Why:** Settlement files carry no cost, so the rule "cost only from the order
+line" would leave every marketplace sale without one. Dated versions keep the old
+rule's point — past profit never moves silently.
+
+---
+
+## 2026-09-15 — No customer data in the new model (A14)
+
+**Decided:** No buyer name, email, phone or address in `source_rows`, the ledger
+or any new table. Filtered at the adapter boundary against an allow-list, and
+refused again in the database (column-name rule and email detection).
+
+**Why:** BizMind does not need to know who bought something to know what it
+earned, and holding buyer details would be a liability with no benefit.
+
+**Limit, stated:** a pattern cannot recognise a person's name typed into a free
+description. The structural protection is the column allow-list.
+
+---
+
+## 2026-09-15 — Google Sheets is an optional data layer (A2–A5)
+
+**Decided:** The Sheets transport stays as built. Its targets move to datasets:
+COGS, product master and operating expenses in V1; advertising and bank
+transactions optional; SKU mappings as suggestions only. Manual adjustments are
+native only. BizMind may write only to spreadsheets it created for an export. No
+two-way sync in V1.
+
+**Why:** Sellers already keep costs and expenses in sheets; the ledger must stay
+a record of what marketplaces reported.
+
+---
+
+## 2026-09-15 — Marketplace-level costs stay marketplace-level (A7)
+
+**Decided:** Fees and advertising without reliable SKU attribution are not spread
+across products in V1.
+
+**Why:** An allocation presented as a product's cost is a guess shaped like a fact.
+
+---
+
+## 2026-09-15 — Adapters: Amazon Flat File V2; noon waits; Carrefour is a contract
+
+**Decided:** Amazon builds against `GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2`
+(the XML and V1 flat-file settlement reports are deprecated by Amazon); the
+summary export is never a financial source. Noon's mapping waits for real sample
+files. Carrefour stays a contract until its capability is verified — no Mirakl
+assumption.
+
+---
+
+## 2026-09-15 — VAT treatment is configuration, not computation (A11)
+
+**Decided:** Each account has a tax profile whose only treatment is
+`UNCONFIGURED` until an accountant confirms one. New treatments arrive by
+migration, not by a form. Tax lines are recorded on their own ledger side.
+
+---
+
+## 2026-09-15 — The rules table is `ledger_mapping_rules`
+
+**Decided:** The Phase 1 request listed `fee_mapping_rules`; the approved
+baseline names the table `ledger_mapping_rules`, and that name was kept.
+
+**Why:** The rules classify cash, tax and memo lines as well as fees. A table
+called "fee" rules would mislead the first person to add a payout rule.
+
+---
+
+## 2026-09-15 — Payouts reference their source row, not a ledger line
+
+**Decided:** The baseline listed `payouts.source_transaction_id`. Phase 1 stores
+`source_file_id` + `source_row_id` instead, and ledger lines reference their
+payout.
+
+**Why:** A ledger line points at its payout. A payout pointing back at a ledger
+line would be circular, and one side could only be filled in by updating an
+immutable row. Lineage is unchanged: the payout still traces to its source row.
+
+---
+
+## 2026-09-15 — WooCommerce deprecated, not deleted (A13)
+
+**Decided:** The WooCommerce connector is hidden and not extended. Its code and
+tests stay until removal is separately approved.

@@ -1,5 +1,11 @@
 # Mapping
 
+> **2026-09-15.** This describes column mapping for spreadsheet imports and the legacy
+> model. Two corrections: `source_records` is defined but has never been written by
+> any code path, so lineage for marketplace data runs through `source_rows` and the
+> ledger instead ([LEDGER.md](LEDGER.md)); and marketplace fee codes are classified by
+> versioned `ledger_mapping_rules`, whose confirmation model is open decision B2.
+
 **Flexible source fields. Standard BizMind meaning.**
 
 No business should have to rename its spreadsheet columns to use BizMind. One

@@ -1,31 +1,27 @@
 # BizMind AI
 
-**Your ERP records what happened. BizMind tells you what to do about it.**
+**GCC Marketplace Profit Intelligence.** Which marketplace and which product
+actually make you money — and where the rest of it went.
 
-BizMind AI is an AI business intelligence and automation layer. It connects to
-the systems a business already runs — Shopify, WooCommerce, marketplaces,
-spreadsheets, ERPs — normalises their data into one model, computes verified
-metrics, and turns those numbers into decisions.
-
-It is not an ERP, not a dashboard tool, and not a chatbot. It sits on top of
-what a business already has.
-
-```
-CONNECT → UNDERSTAND → ANALYZE → ALERT → RECOMMEND → AUTOMATE
-```
+BizMind helps sellers on Amazon, noon and Carrefour understand sales,
+marketplace fees, product costs, advertising, operating expenses, profit,
+settlements, payouts and cash — from the marketplaces' own settlement data,
+recorded in an immutable line-level ledger. It is not an ERP and not a
+traditional accounting system.
 
 ---
 
 ## Status
 
-**Phase 7 of 15 — analytics engine.**
+**GCC Phase 1 — ledger foundation built and verified live.**
 
-Foundation, design system, Supabase Auth, the multi-tenant security model, the
-universal data model, a working dashboard and CSV/Excel import are in place.
-Every business figure is computed in SQL and checked against hand arithmetic;
-tenant isolation was verified by attack, not assumption. Import is built as the
-first connector, so Shopify and WooCommerce reuse the same pipeline. AI arrives
-in its own phase. See `CLAUDE.md` § 10.
+The platform underneath is in place and tested: Supabase Auth, database-enforced
+tenant isolation, exact money handling, file import with lineage and withdrawal,
+a checked AI layer, an integration engine with Google Sheets, and rule-based
+alerts. Phase 1 added the immutable financial ledger, its single writer and the
+marketplace adapter contract. No marketplace parser exists yet; Amazon arrives
+in Phase 2. See [ROADMAP.md](./ROADMAP.md) and
+[ARCHITECTURE_BASELINE.md](./ARCHITECTURE_BASELINE.md).
 
 ---
 
@@ -62,6 +58,8 @@ Full instructions, including how secrets are handled, are in
 | `npm run test:money-boundary` | Proves exact decimals survive database → AI, live |
 | `npm run test:integration-engine` | The engine and fixture connector, no database |
 | `npm run test:woocommerce` | The WooCommerce connector, no store needed |
+| `npm run test:marketplaces` | The adapter contract, customer-data filter and ledger payload, offline |
+| `npm run test:ledger` | The ledger against the real database: immutability, one writer, isolation, withdrawal |
 | `npm run test:integration-live` | Tenant isolation and idempotency, live |
 | `npm run test:automation` | Alert rules, thresholds and the migration guards, no database |
 | `npm run test:automation-live` | Proves a rule stays silent when it should, live |
@@ -92,6 +90,9 @@ Supabase (PostgreSQL, Auth, RLS) · OpenAI · Vercel
 | [AI.md](./AI.md) | How the AI is stopped from ever producing a figure |
 | [MONEY.md](./MONEY.md) | Why money is a string, and what keeps it exact |
 | [INTEGRATION_ENGINE.md](./INTEGRATION_ENGINE.md) | The sync and webhook engine connectors plug into |
+| [ARCHITECTURE_BASELINE.md](./ARCHITECTURE_BASELINE.md) | The approved GCC architecture and its decisions |
+| [LEDGER.md](./LEDGER.md) | The immutable financial ledger (GCC Phase 1) |
+| [ROADMAP.md](./ROADMAP.md) | GCC phases, open decisions, manual steps |
 | [WOOCOMMERCE.md](./WOOCOMMERCE.md) | The first real connector, and what WooCommerce cannot tell us |
 | [ROADMAP.md](./ROADMAP.md) | **Phases 9–12: what is decided, what is not, what comes first** |
 | [PHASE9_INTEGRATIONS.md](./PHASE9_INTEGRATIONS.md) | Shopify + WooCommerce design |

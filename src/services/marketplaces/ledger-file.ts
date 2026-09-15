@@ -34,7 +34,7 @@ export type LedgerFileInput = {
   accountId: string
   accountCurrency: string
   format: FormatDescriptor
-  file: { name: string; type: "csv" | "xlsx"; sizeBytes: number; sha256: string }
+  file: { name: string; type: "txt" | "csv" | "xlsx"; sizeBytes: number; sha256: string }
   sourceKind?: "UPLOAD" | "API"
   /** Every header the file had, before filtering. Names only. */
   columns: readonly string[]
@@ -48,7 +48,7 @@ export type LedgerFilePayload = {
   adapter_version: string
   source_kind: "UPLOAD" | "API"
   file_name: string
-  file_type: "csv" | "xlsx"
+  file_type: "txt" | "csv" | "xlsx"
   file_size_bytes: number
   file_sha256: string
   columns: string[]

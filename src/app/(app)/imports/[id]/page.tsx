@@ -15,10 +15,17 @@ import {
 } from "@/components/ui/table"
 import { ONBOARDING_ROUTE } from "@/config/routes"
 import { getActiveBusiness, getUserBusinesses } from "@/features/businesses/queries"
+import { LedgerFilePanel } from "@/features/imports/components/ledger-file-panel"
+import {
+  LedgerFileContents,
+  LedgerFileSettlements,
+} from "@/features/imports/components/ledger-file-sections"
 import { WithdrawPanel } from "@/features/imports/components/withdraw-panel"
 import {
   getDataSource,
   getImportIssues,
+  getLedgerFileSettlements,
+  getLedgerFileSummary,
   getWithdrawalPreview,
   type DataSource,
 } from "@/features/imports/queries"
@@ -61,11 +68,17 @@ export default async function ImportDetailPage(props: PageProps<"/imports/[id]">
   // for on behalf of someone who could not act on it.
   const canManage = activeBusiness.role === "OWNER" || activeBusiness.role === "ADMIN"
 
+  // A marketplace settlement file lives in the ledger: it has its own contents,
+  // its own reconciliation and its own withdrawal (migrations 0030, 0031).
+  const isLedger = source.dataset === "LEDGER"
+
   const supabase = await createClient()
-  const [{ data: profile }, issues, preview] = await Promise.all([
+  const [{ data: profile }, issues, preview, summary, settlements] = await Promise.all([
     supabase.from("profiles").select("full_name").eq("id", user!.id).maybeSingle(),
     getImportIssues(source.batch_id, 200),
-    canManage ? getWithdrawalPreview(source.batch_id) : Promise.resolve(null),
+    canManage && !isLedger ? getWithdrawalPreview(source.batch_id) : Promise.resolve(null),
+    isLedger ? getLedgerFileSummary(source.batch_id) : Promise.resolve([]),
+    isLedger ? getLedgerFileSettlements(source.batch_id) : Promise.resolve([]),
   ])
 
   return (
@@ -89,8 +102,10 @@ export default async function ImportDetailPage(props: PageProps<"/imports/[id]">
               {source.file_name}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              {source.entity.charAt(0) + source.entity.slice(1).toLowerCase()} ·{" "}
-              {source.connection_name ?? source.source ?? "File"} ·{" "}
+              {isLedger
+                ? `Settlement file · ${source.marketplace_label ?? "Marketplace account"}`
+                : `${source.entity.charAt(0) + source.entity.slice(1).toLowerCase()} · ${source.connection_name ?? source.source ?? "File"}`}{" "}
+              ·{" "}
               {new Date(source.created_at).toLocaleString()}
             </p>
           </div>
@@ -102,6 +117,27 @@ export default async function ImportDetailPage(props: PageProps<"/imports/[id]">
         </div>
 
         {/* ---- what it did ------------------------------------------------ */}
+        {isLedger ? (
+          <>
+            <section className="mt-6 rounded-xl border border-border bg-card px-5 py-4">
+              <h2 className="text-sm font-semibold">What this file recorded</h2>
+              <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-5">
+                <Stat label="Rows in the file" value={source.row_count} />
+                <Stat label="Ledger lines" value={source.transactions_count} />
+                <Stat label="Settlements" value={source.settlements_count} />
+                <Stat label="Payouts reported" value={source.payouts_count} />
+                <Stat label="Not recognised yet" value={source.unmapped_count} />
+              </dl>
+              <p className="mt-4 max-w-prose-comfortable text-sm text-muted-foreground">
+                {source.withdrawn_at
+                  ? "Every line is still stored, but none of them counts towards anything until you put the file back."
+                  : "Recorded exactly as the marketplace reported it. Nothing in the ledger is ever edited; a wrong file is withdrawn, not changed."}
+              </p>
+            </section>
+            <LedgerFileSettlements settlements={settlements} />
+            <LedgerFileContents summary={summary} />
+          </>
+        ) : (
         <section className="mt-6 rounded-xl border border-border bg-card px-5 py-4">
           <h2 className="text-sm font-semibold">What this import did</h2>
           <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-5">
@@ -119,6 +155,7 @@ export default async function ImportDetailPage(props: PageProps<"/imports/[id]">
             {describeOutcome(source)}
           </p>
         </section>
+        )}
 
         {/* ---- what it could not read ------------------------------------- */}
         <section className="mt-6 overflow-hidden rounded-xl border border-border bg-card">
@@ -191,7 +228,17 @@ export default async function ImportDetailPage(props: PageProps<"/imports/[id]">
         <section className="mt-6">
           <h2 className="text-sm font-semibold">If this import was wrong</h2>
           <div className="mt-3">
-            {canManage ? (
+            {canManage && isLedger ? (
+              <LedgerFilePanel
+                sourceFileId={source.batch_id}
+                fileName={source.file_name}
+                transactions={source.transactions_count}
+                settlements={source.settlements_count}
+                payouts={source.payouts_count}
+                withdrawnAt={source.withdrawn_at}
+                withdrawalReason={source.withdrawal_reason}
+              />
+            ) : canManage ? (
               <WithdrawPanel
                 batchId={source.batch_id}
                 preview={preview}

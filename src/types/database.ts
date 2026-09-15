@@ -992,7 +992,8 @@ export type Database = {
           channel_id: string | null
           file_name: string
           /** "api" (migration 0018) for a batch a sync wrote. */
-          file_type: "csv" | "xlsx" | "api"
+          /** "txt" (migration 0031): a marketplace settlement report. */
+          file_type: "csv" | "xlsx" | "api" | "txt"
           file_size_bytes: number
           /** Detected column headings. */
           columns: Json
@@ -1870,6 +1871,34 @@ export type Database = {
           payouts_written: number
           issues_written: number
           unmapped_written: number
+        }[]
+      }
+
+      ledger_file_summary: {
+        Args: { p_source_file_id: string }
+        Returns: {
+          side: LedgerSideDb | null
+          category: string
+          subcategory: string | null
+          lines: number
+          total: string
+          currency: string
+        }[]
+      }
+
+      ledger_file_settlements: {
+        Args: { p_source_file_id: string }
+        Returns: {
+          settlement_id: string
+          external_settlement_id: string
+          period_start: string | null
+          period_end: string | null
+          reported_total: string | null
+          lines_total: string
+          reconciles: boolean
+          reported_deposit_date: string | null
+          payout_amount: string | null
+          currency: string
         }[]
       }
 

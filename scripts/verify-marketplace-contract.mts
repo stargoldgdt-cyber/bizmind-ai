@@ -38,7 +38,8 @@ import {
   buildLedgerFilePayload,
   type LedgerFileInput,
 } from "../src/services/marketplaces/ledger-file"
-import { createAdapterRegistry, marketplaceAdapters } from "../src/services/marketplaces/registry"
+import { marketplaceAdapters } from "../src/services/marketplaces/adapters"
+import { createAdapterRegistry } from "../src/services/marketplaces/registry"
 
 let passed = 0
 let failed = 0
@@ -79,17 +80,25 @@ function walk(dir: string): string[] {
 const migration = readFileSync("supabase/migrations/0030_marketplace_ledger_foundation.sql", "utf8")
 
 /* -------------------------------------------------------------------------- */
-section("1. PHASE 1 SHIPS NO MARKETPLACE PARSER")
+section("1. ONLY THE ADAPTERS THAT ARE APPROVED ARE REGISTERED")
 
-check("the application's adapter registry is empty", marketplaceAdapters.list().length === 0)
 check(
-  "nothing in src/ registers an adapter",
-  !walk("src").some((file) => readFileSync(file, "utf8").includes("marketplaceAdapters.register("))
+  "the application registers exactly one adapter: Amazon (Phase 2)",
+  marketplaceAdapters.list().map((a) => a.marketplace).join(",") === "AMAZON"
+)
+check("noon has no adapter yet", marketplaceAdapters.get("NOON") === null)
+check("Carrefour has no adapter -- a contract only (A15)", marketplaceAdapters.get("CARREFOUR") === null)
+check(
+  "only adapters.ts registers an adapter",
+  walk("src")
+    .filter((file) => readFileSync(file, "utf8").includes("marketplaceAdapters.register("))
+    .map((file) => file.replace(/\\/g, "/"))
+    .join(",") === "src/services/marketplaces/adapters.ts"
 )
 check(
-  "src/services/marketplaces holds the contract, filter, builder, registry and door -- no parser",
+  "src/services/marketplaces holds the contract, filter, builder, registry, door and the Amazon adapter",
   JSON.stringify(readdirSync("src/services/marketplaces").sort()) ===
-    JSON.stringify(["apply.ts", "contract.ts", "customer-data.ts", "index.ts", "ledger-file.ts", "registry.ts"]),
+    JSON.stringify(["adapters.ts", "amazon", "apply.ts", "contract.ts", "customer-data.ts", "index.ts", "ledger-file.ts", "registry.ts"]),
   readdirSync("src/services/marketplaces").join(", ")
 )
 

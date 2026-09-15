@@ -55,6 +55,7 @@ export const PROTECTED_PREFIXES = [
   "/activity",
   "/imports",
   "/integrations",
+  "/marketplaces",
   "/onboarding",
   "/settings",
 ] as const

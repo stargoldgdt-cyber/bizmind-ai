@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import { FileSpreadsheet, Plus } from "lucide-react"
+import { FileSpreadsheet, Plus, Upload } from "lucide-react"
 
 import { AppShell } from "@/components/layout/app-shell"
 import { Button } from "@/components/ui/button"
@@ -73,12 +73,20 @@ export default async function DataSourcesPage() {
             </p>
           </div>
           {canImport && (
-            <Button asChild className="rounded-4xl">
-              <Link href="/imports/new">
-                <Plus className="size-4" aria-hidden />
-                Import a file
-              </Link>
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button asChild className="rounded-4xl">
+                <Link href="/imports/settlement">
+                  <Upload className="size-4" aria-hidden />
+                  Upload a settlement
+                </Link>
+              </Button>
+              <Button asChild variant="outline" className="rounded-4xl">
+                <Link href="/imports/new">
+                  <Plus className="size-4" aria-hidden />
+                  Import a file
+                </Link>
+              </Button>
+            </div>
           )}
         </div>
 
@@ -145,7 +153,9 @@ export default async function DataSourcesPage() {
                         </TableCell>
 
                         <TableCell className="text-xs">
-                          {row.entity.charAt(0) + row.entity.slice(1).toLowerCase()}
+                          {row.dataset === "LEDGER"
+                            ? "Settlement"
+                            : row.entity.charAt(0) + row.entity.slice(1).toLowerCase()}
                         </TableCell>
 
                         <TableCell className="text-xs text-muted-foreground">
@@ -209,6 +219,7 @@ export default async function DataSourcesPage() {
 
 /** Where this data came from, in the owner's language. */
 function sourceLabel(row: DataSource): string {
+  if (row.dataset === "LEDGER") return row.marketplace_label ?? "Marketplace file"
   if (row.connection_name) return row.connection_name
   if (row.file_type === "api") return "Synced"
   return row.source ? `File · ${row.source}` : "File"

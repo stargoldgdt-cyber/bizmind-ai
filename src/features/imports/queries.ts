@@ -62,6 +62,16 @@ export type DataSource = {
   withdrawal_reason: string | null
   connection_name: string | null
   matched_count: number
+  /** LEGACY: orders, products, expenses. LEDGER: a marketplace settlement file (0031). */
+  dataset: "LEGACY" | "LEDGER"
+  format_id: string | null
+  marketplace_account_id: string | null
+  marketplace_label: string | null
+  marketplace_code: string | null
+  transactions_count: number
+  settlements_count: number
+  payouts_count: number
+  unmapped_count: number
 }
 
 /** Every source of data in this business, newest first. */
@@ -127,6 +137,50 @@ export async function getWithdrawalPreview(
   }
 
   return ((data as WithdrawalPreview[]) ?? [])[0] ?? null
+}
+
+/**
+ * A marketplace file's ledger lines, grouped by what they are.
+ *
+ * Totals are exact decimal text added up by the database; this module passes
+ * them through untouched. Withdrawn files still show their lines: the evidence
+ * is kept, it just counts towards nothing.
+ */
+export type LedgerFileCategory = {
+  side: "PNL" | "CASH" | "TAX" | "MEMO" | null
+  category: string
+  subcategory: string | null
+  lines: number
+  total: string
+  currency: string
+}
+
+export async function getLedgerFileSummary(sourceFileId: string): Promise<LedgerFileCategory[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("ledger_file_summary", { p_source_file_id: sourceFileId })
+  if (error) throw new Error(`Could not load this file's lines: ${error.message}`)
+  return data ?? []
+}
+
+/** Each settlement in a marketplace file: the marketplace's total against the sum of its lines. */
+export type LedgerFileSettlement = {
+  settlement_id: string
+  external_settlement_id: string
+  period_start: string | null
+  period_end: string | null
+  reported_total: string | null
+  lines_total: string
+  reconciles: boolean
+  reported_deposit_date: string | null
+  payout_amount: string | null
+  currency: string
+}
+
+export async function getLedgerFileSettlements(sourceFileId: string): Promise<LedgerFileSettlement[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("ledger_file_settlements", { p_source_file_id: sourceFileId })
+  if (error) throw new Error(`Could not load this file's settlements: ${error.message}`)
+  return data ?? []
 }
 
 export async function getImportIssues(batchId: string, limit = 200): Promise<ImportIssue[]> {

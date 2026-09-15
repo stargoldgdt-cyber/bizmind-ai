@@ -210,8 +210,11 @@ try {
     say(markets)
   )
   check(
-    "none is marked AVAILABLE -- Phase 1 ships no parser",
-    rows(markets).every((m) => m.adapter_status !== "AVAILABLE")
+    "only Amazon is AVAILABLE -- its adapter shipped in Phase 2 (0031); noon and Carrefour have none",
+    rows(markets)
+      .filter((m) => m.adapter_status === "AVAILABLE")
+      .map((m) => m.code)
+      .join(",") === "AMAZON"
   )
   check(
     "a signed-in user cannot add a marketplace",

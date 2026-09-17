@@ -67,6 +67,7 @@ Google Sheets → dataset targets → products · product_costs · expenses · b
 | `source_rows` | 1 ✅ | Immutable, text, no customer data |
 | `ledger_mapping_rules` | 1 ✅ | Versioned data; never edited |
 | `financial_transactions` | 1 ✅ | Immutable; one writer; composite-key lineage |
+| `classification_categories`, `classification_rules`, `tax_profiles.input_vat_treatment` | 3 ✅ | The model; versioned rules applied at calculation time; the account's VAT setting (B1) |
 | `settlements`, `payouts` | 1 ✅ | Immutable (manual payouts voidable, Phase 6) |
 | `products` (refactor), `sku_aliases`, `sku_alias_rejections`, `product_costs` | 4 | Confirmed aliases only; dated costs |
 | `expenses` (refactor), `expense_categories`, `adjustments` | 5 | Adjustments native, immutable |
@@ -199,6 +200,15 @@ overriding a high-confidence BizMind rule (B2, amended).
 
 **Validation.** Once the dashboard is live, the owner compares BizMind's figures
 with the marketplace reports. Each mismatch becomes a rule correction.
+
+**As built (Phase 3, migration 0032).** Classification rules are their own
+versioned table, separate from the import rules that decide quantity and
+attribution. A line's match key is its three source codes joined with "|".
+Rule precedence: a HIGH BizMind rule, then the business's own, then a MEDIUM
+BizMind rule. Amounts keep the marketplace's sign from the seller's view, so
+every figure is a signed sum and reversals net off. Periods are half-open on
+`posted_at`, in UTC; one row per marketplace account, never across currencies.
+Readers: `pnl_summary()`, `pnl_breakdown()`, `ledger_data_quality()`.
 
 ## D. Phases
 

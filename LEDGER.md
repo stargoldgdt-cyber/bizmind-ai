@@ -148,7 +148,8 @@ applies to past lines without touching them.
 | `src/services/marketplaces/contract.ts` | Adapter contract and draft types |
 | `src/services/marketplaces/registry.ts` | Registry |
 | `src/services/marketplaces/adapters.ts` | The application's adapters: Amazon Flat File V2 ([AMAZON.md](AMAZON.md)) |
-| `src/services/marketplaces/amazon/` | The Amazon adapter |
+| `src/services/marketplaces/amazon/` | The Amazon adapter and its classification (`classification.ts`) |
+| `src/services/classification/model.ts` | The classification model mirror (Phase 3) |
 | `src/services/marketplaces/customer-data.ts` | The customer-data filter |
 | `src/services/marketplaces/ledger-file.ts` | Payload builder |
 | `src/services/marketplaces/apply.ts` | Server-only door: the three RPCs, through the user's session |
@@ -166,6 +167,11 @@ applies to past lines without touching them.
   cross-tenant refusal, and that deleting a business still works through the
   immutable tables.
 - Amazon suites: see [AMAZON.md §5](AMAZON.md).
+- `npm run test:classification` (offline, part of `npm run verify`): the
+  model's consistency, and TypeScript/SQL parity for categories and rules.
+- `npm run test:pnl` (live): automatic classification, exact figures,
+  Final/Incomplete, the VAT setting, classifying an unknown code without a
+  re-upload, versioned corrections, isolation and withdrawal.
 
 ## 10. Reversibility
 

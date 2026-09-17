@@ -1698,3 +1698,30 @@ available data.
 
 **Supersedes:** the Phase 2 note that 19.1% was "19.03% or 19.20% depending on
 whether COD lines count" — neither rounds to 19.1%.
+
+---
+
+## 2026-09-16 — How Phase 3 implements automatic classification
+
+**Decided while building (migration 0032):**
+
+- **Classification rules are their own versioned table** (`classification_rules`),
+  separate from `ledger_mapping_rules`. Import rules still decide what is
+  written (quantity, attribution); classification rules decide what money
+  means when figures are calculated. A correction touches only the latter.
+- **A line's match key** is its three stored source codes joined with "|", so
+  lines recorded before Phase 3 are classified without being touched.
+- **Precedence:** a HIGH BizMind rule, then the business's own classification,
+  then a MEDIUM BizMind rule. A business may classify only a code BizMind does
+  not classify and that appears in its own files.
+- **Signs:** amounts keep the marketplace's sign from the seller's view, so each
+  figure is a signed sum and reversals net off without special cases.
+- **Periods** are half-open on the line's posted time, in UTC. Figures are per
+  marketplace account and never combined across currencies (A12).
+- **Figures and data quality are calculated, not stored,** so a rule change or
+  VAT setting change is reflected immediately and closes its own warnings.
+- **An unknown line makes every figure for its account and period Incomplete**,
+  since its category is unknown; unresolved VAT affects contribution only.
+
+**Why:** Each choice keeps the ledger untouched and lets validation corrections
+reach past periods without re-uploads or engine changes.

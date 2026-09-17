@@ -17,7 +17,7 @@ against a real file or a hand-worked dataset. noon follows the dashboard
 | --- | --- | --- | --- |
 | **1** | Ledger foundation: marketplaces, accounts, tax profiles, source files, source rows, mapping rules, ledger, settlements, payouts; immutability; one writer; withdrawal; adapter contract; customer-data filter. **No parser, no UI** | Live tests prove isolation, immutability, the one writer, duplicates, withdrawal/restore, currency, blanks, customer data, lineage | ✅ Built and verified live, 2026-09-15 ([LEDGER.md](LEDGER.md)) |
 | **2** | Amazon Flat File V2 adapter; rejection of other Amazon reports; marketplace accounts screen; upload flow with format detection; Data Sources shows ledger files | July Amazon figures reproduced or every difference explained; B2, B3, B8 answered | ✅ Built and verified live, 2026-09-15: July reproduced exactly from four real settlements ([AMAZON.md](AMAZON.md)) |
-| 3 | Automatic classification + P&L engine (Amazon): the four-layer model; rules gain type, category, subcategory, treatment and confidence; the 21 Amazon rules restated; classification at calculation time; per-account VAT setting (B1); Data Quality issues (unknown, under review, VAT unknown, totals mismatch, row errors); Gross Sales, Net Sales, Marketplace Fees, Fulfillment, Advertising, Other Income and Contribution, each Final or Incomplete | July Amazon matches Phase 2; contribution incomplete while fee VAT is Unknown, 36,552.76 when Recoverable, 36,432.97 when Not recoverable; an invented unknown fee shows Incomplete and becomes Final after a rule is added, without re-upload | — |
+| **3** | Automatic classification + P&L engine (Amazon): the four-layer model; rules gain type, category, subcategory, treatment and confidence; the 21 Amazon rules restated; classification at calculation time; per-account VAT setting (B1); Data Quality issues (unknown, under review, VAT unknown, totals mismatch, row errors); Gross Sales, Net Sales, Marketplace Fees, Fulfillment, Advertising, Other Income and Contribution, each Final or Incomplete | July Amazon matches Phase 2; contribution incomplete while fee VAT is Unknown, 36,552.76 when Recoverable, 36,432.97 when Not recoverable; an invented unknown fee shows Incomplete and becomes Final after a rule is added, without re-upload | ✅ Built and verified live, 2026-09-16: all three July VAT outcomes reproduced from the real files; 51 engine checks |
 | 4 | Live dashboard + validation view: account and month filters; figures with Final / Incomplete status; category → subcategory breakdown; drill-down to source lines; Data Quality page; marketplace-reported totals alongside; CSV export of the validation view; owner/admin classification of Unknown codes (B2 amended) | The owner loads the July Amazon files and uses the dashboard | — |
 | 5 | noon adapter: Transaction View + Invoices & Credit Notes, classified automatically; SAR contract as its own account; "NA" read as blank; buyer details stripped | July noon figures on the dashboard; B4, B5 answered | Samples supplied 2026-09-15 |
 | — | **Owner validation**, from Phase 4 onward: compare Sales, Fees, Fulfillment, Advertising, Refunds, VAT, Payouts and Profit with the marketplace reports; each mismatch becomes a rule correction | Reported mismatches corrected | Continuous |
@@ -36,12 +36,13 @@ amended, and B15 (take rate) and B16 (Gross Profit) opened, the same day.
 
 ## 3. Manual steps for the owner
 
-1. ~~Apply migrations 0029, 0030 and 0031~~ — done 2026-09-15.
+1. ~~Apply migrations 0029–0032~~ — done (0032 on 2026-09-16).
 2. **Supply a bank statement** sample before Phase 8. (Amazon settlements and
    the noon Transaction View and invoices: supplied 2026-09-15.)
 3. **Confirm with an accountant** that VAT on each account's marketplace fees
    is recoverable, before setting it in BizMind (B1 is decided; the per-account
-   setting is the accountant's confirmation).
+   setting is the accountant's confirmation). Set it under **Marketplace
+   accounts → VAT on fees**; until then contribution shows as incomplete.
 4. **Ask Carrefour seller support** which platform and exports exist (B13).
 5. **Publish the Google OAuth app** before real sellers connect a sheet
    (testing-mode sign-ins expire after 7 days).

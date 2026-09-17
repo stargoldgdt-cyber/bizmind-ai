@@ -63,6 +63,8 @@ Full instructions, including how secrets are handled, are in
 | `npm run test:amazon` | The Amazon Flat File V2 adapter, offline |
 | `npm run test:amazon-ledger` | An invented Amazon settlement end to end against the real database |
 | `npm run test:amazon-acceptance -- <file> <file> …` | The named real Amazon files reproduce July (local only; files never committed) |
+| `npm run test:classification` | The classification model and its TypeScript/SQL parity, offline |
+| `npm run test:pnl` | Automatic classification and the P&L engine against the real database |
 | `npm run test:integration-live` | Tenant isolation and idempotency, live |
 | `npm run test:automation` | Alert rules, thresholds and the migration guards, no database |
 | `npm run test:automation-live` | Proves a rule stays silent when it should, live |

@@ -277,6 +277,7 @@ before — see `ARCHITECTURE.md`):
 | `src/services/` | Business logic, analytics, AI, integrations |
 | `src/services/marketplaces/` | Marketplace adapter contract, customer-data filter, ledger file payload |
 | `src/services/datasets/` | Dataset targets Google Sheets and CSV write through (supporting data only) |
+| `src/services/classification/` | The classification model mirror (categories, treatments, statuses); figures are SQL |
 | `src/lib/` | Framework-level helpers (Supabase clients, utils) |
 | `src/config/` | Constants, tokens, fonts, product copy |
 | `src/types/` | Shared TypeScript types |
@@ -326,7 +327,7 @@ analytics, AI guard, integration engine, Google Sheets, alerts); their record is
 ```
 GCC 1   Ledger foundation              ✅ built, verified live (119 checks) — LEDGER.md
 GCC 2   Amazon Flat File V2 adapter        ✅ built, July reproduced from real files — AMAZON.md
-GCC 3   Automatic classification + P&L engine (Amazon)
+GCC 3   Automatic classification + P&L engine  ✅ built, verified live (51 checks) — ARCHITECTURE_BASELINE.md §C
 GCC 4   Live dashboard + validation view
 GCC 5   noon adapter (sample files supplied)
         Owner validation against marketplace reports, from GCC 4 onward

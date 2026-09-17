@@ -109,14 +109,50 @@ on the SP 360 fee):
 
 The 36,432.97 in the table above is the plain sum of P&L and tax lines, which
 is how the Phase 2 test proves the ledger holds the right lines; it is not a
-profit figure. The Phase 3 P&L test will assert all three outcomes.
+profit figure. The P&L engine reproduces all three outcomes from the real
+files (Phase 3, below).
 
 Take rate is not defined yet (B15). The owner's historical 19.1% could not be
 reproduced exactly from these files (DECISIONS.md, 2026-09-15).
 
-From Phase 3 the 21 rules are restated in the four-layer classification model
-(Financial Type → Category → Subcategory → P&L Treatment); the lines already
-stored do not change.
+### In the four-layer model (Phase 3)
+
+Migration 0032 restates the 21 codes as HIGH classification rules; the lines
+already stored do not change.
+
+| Code | Type · category · subcategory | P&L treatment |
+| --- | --- | --- |
+| Order · ItemPrice · Principal | Revenue · Product sales · Principal | Increase revenue |
+| Order · ItemPrice · Shipping | Revenue · Shipping income · Shipping charged | Increase revenue |
+| Order / Refund · ItemPrice · COD | Revenue · Other income · COD charge | Increase revenue |
+| Order / Refund · ItemFees · CODFee | Expense · Payment and COD fees · COD fee | Increase expense |
+| Order / Refund · ItemFees · Commission | Expense · Marketplace fees · Referral commission | Increase expense |
+| Order · ItemFees · VariableClosingFee | Expense · Marketplace fees · Variable closing fee | Increase expense |
+| AmazonFees · Premium Services Fee · Base fee | Expense · Marketplace fees · SP 360 premium services | Increase expense |
+| Refund · ItemFees · RefundCommission | Expense · Refund fees · Refund administration fee | Increase expense |
+| Order · ItemFees · FBAPerUnitFulfillmentFee | Expense · Fulfillment · FBA per-unit fulfilment | Increase expense |
+| Order / Refund · ItemFees · ShippingChargeback | Expense · Fulfillment · Shipping chargeback | Increase expense |
+| FBAFees · FBA Inventory Storage Fee · Base fee | Expense · Storage · FBA storage | Increase expense |
+| ServiceFee · Cost of Advertising · TransactionTotalAmount | Expense · Advertising · Sponsored ads | Increase expense |
+| Order / Refund · Promotion · Shipping | Revenue · Seller-funded discounts · Shipping promotion | Decrease revenue |
+| Refund · ItemPrice · Principal / Shipping | Revenue · Sales refunds · Refunded principal / shipping | Decrease revenue |
+| AmazonFees · Premium Services Fee · Tax on fee | Tax · Input VAT · VAT on SP 360 fee | Conditional (account VAT setting) |
+
+**July 2026 from the P&L engine** (real files, 2026-09-16):
+
+| Figure | AED |
+| --- | --- |
+| Gross sales | 61,429.11 |
+| Net sales (refunds −5,242.13, shipping promotions −281.77) | 55,905.21 |
+| Other income (COD charges) | 100.00 |
+| Marketplace fees (commission, closing, SP 360, COD fee, refund administration) | −6,908.84 |
+| Fulfillment (FBA, shipping chargebacks, storage) | −7,278.92 |
+| Advertising | −5,264.69 |
+| Contribution, VAT setting Unknown | Incomplete; 119.79 unresolved; informational 36,552.76 |
+| Contribution, Recoverable | **36,552.76** |
+| Contribution, Non-recoverable | **36,432.97** |
+
+All 1,154 July lines classified automatically; none unknown or under review.
 
 ## 5. Code and tests
 
@@ -137,4 +173,5 @@ stored do not change.
   Data Sources counts, duplicate upload, withdrawal, tenant isolation.
 - `npm run test:amazon-acceptance -- <file> <file> …` — live, the owner's real
   files, local only. Reads only the files named, never a folder; skips when
-  none is given.
+  none is given. Checks the ledger sums and, from Phase 3, the P&L engine's
+  July figures under all three VAT settings.

@@ -910,6 +910,29 @@ GCC Phase 2. Details: [AMAZON.md](AMAZON.md).
 No rollback script: to undo, set AMAZON back to `CONTRACT_ONLY` and retire the
 rules; the reader functions are harmless unused.
 
+## 7n. Automatic classification and the P&L engine (0032)
+
+GCC Phase 3. The model and rules: ARCHITECTURE_BASELINE.md §C "Automatic
+classification".
+
+| Object | What it is |
+| --- | --- |
+| `classification_categories` | The 24 categories: financial type, default P&L treatment, the figure each adds into. A check refuses a treatment that does not fit the type. Reference data, read-only |
+| `classification_rules` | Marketplace code → category + subcategory, HIGH or MEDIUM, versioned. GLOBAL rules come from migrations (21 for Amazon); BUSINESS rules only through `classification_rule_classify()`. Never edited; deleted only with the owning business |
+| `classification_match_key()` | A line's key: `source_type\|source_subtype\|source_description`, blanks as empty strings |
+| `tax_profiles.input_vat_treatment` | `UNKNOWN` (default), `RECOVERABLE`, `NON_RECOVERABLE`. Set by `tax_profile_set_input_vat()` (OWNER, audited) |
+| `ledger_classified_lines` | Invoker view: every line of an active file with its classification resolved through the rules active now, and its effective treatment |
+| `pnl_summary(from, to, account)` | Per account: gross sales, refunds, seller discounts, net sales, other income, marketplace fees, fulfillment, advertising, other costs, non-recoverable VAT, contribution (NULL unless FINAL), statuses and reasons. Exact text |
+| `pnl_breakdown(from, to, account)` | Totals per type, category, subcategory and status; unknown lines named by their code |
+| `ledger_data_quality(from, to, account)` | Unknown codes, lines under review, VAT setting unknown, row errors, settlement mismatches |
+| `classification_rule_impact()` | Invoker. What classifying a code would move, per account and month |
+| `classification_rule_classify()` / `classification_rule_retire()` | OWNER/ADMIN. Only for a code BizMind does not classify and that appears in the business's files; a correction retires the previous version. Audited |
+
+All readers are SECURITY INVOKER; the writers check membership and role.
+Ledger rows are untouched. Rollback:
+`supabase/rollback/0032_classification_pnl_engine.rollback.sql` (refuses while
+any business has classified its own codes).
+
 ---
 
 ## 8. Regenerating types

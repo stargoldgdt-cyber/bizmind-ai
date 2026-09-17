@@ -210,6 +210,14 @@ every figure is a signed sum and reversals net off. Periods are half-open on
 `posted_at`, in UTC; one row per marketplace account, never across currencies.
 Readers: `pnl_summary()`, `pnl_breakdown()`, `ledger_data_quality()`.
 
+**The screens (Phase 4, migration 0033).** `/ledger` (Marketplace profit: account
+and month filters, headline figures with Final/Incomplete, the statement, VAT
+apart from profit, the category breakdown, each settlement's reported total
+beside its lines and payout, CSV export), `/ledger/lines` (the lines behind any
+figure) and `/ledger/quality` (the exception path, including classifying an
+unknown code after previewing its effect, and undoing it). They sit beside
+the legacy `/dashboard`, `/profit` and `/data-quality` until Phase 10.
+
 ## D. Phases
 
 See [ROADMAP.md](ROADMAP.md). Phase 1 details: [LEDGER.md](LEDGER.md).

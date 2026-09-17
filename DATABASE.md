@@ -933,6 +933,19 @@ Ledger rows are untouched. Rollback:
 `supabase/rollback/0032_classification_pnl_engine.rollback.sql` (refuses while
 any business has classified its own codes).
 
+## 7o. The ledger dashboard's readers (0033)
+
+GCC Phase 4. Read-only, SECURITY INVOKER, closed to anon.
+
+| Function | What it returns |
+| --- | --- |
+| `pnl_periods(business)` | The months (UTC) each account has lines in, with line counts |
+| `pnl_settlements(from, to, account)` | Each settlement with a line in the period or a period overlapping it: reported total, the sum of all its lines, whether they match, the part posted in the period, and the reported payout |
+| `ledger_data_quality(from, to, account, business)` | Recreated: optional business filter and the marketplace code on every item. Calls without the new argument behave as before |
+
+Rollback: `supabase/rollback/0033_ledger_dashboard.rollback.sql` drops the two
+new readers and keeps the compatible `ledger_data_quality()`.
+
 ---
 
 ## 8. Regenerating types

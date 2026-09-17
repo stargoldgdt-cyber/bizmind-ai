@@ -1725,3 +1725,31 @@ whether COD lines count" — neither rounds to 19.1%.
 
 **Why:** Each choice keeps the ledger untouched and lets validation corrections
 reach past periods without re-uploads or engine changes.
+
+---
+
+## 2026-09-17 — The ledger dashboard lives at /ledger, beside the legacy pages
+
+**Decided (GCC Phase 4):**
+
+- The marketplace dashboard is **Marketplaces → Marketplace profit** (`/ledger`),
+  with `/ledger/lines` and `/ledger/quality`. The legacy `/dashboard`, `/profit`
+  and `/data-quality` stay unchanged until legacy retirement (Phase 10).
+- The period is one calendar month in UTC, matching the engine. Account and
+  month live in the URL.
+- An incomplete contribution is shown as the word "Incomplete"; its
+  informational figure always carries "not final" and a label saying what it
+  excludes (B1). The VAT warning reads "VAT treatment unknown: <amount>".
+- A settlement is listed for a month when any of its lines is posted in it or
+  its own period overlaps it, with its total compared against all its lines
+  and the part that counts in the month shown separately.
+- The validation export writes every figure exactly as SQL produced it,
+  leaves an incomplete contribution blank with the word Incomplete, and
+  neutralises text a spreadsheet would evaluate. It is never cached.
+- Classifying an unknown code shows its effect (lines and amounts per account
+  and month) before it is confirmed; the business's own classifications are
+  listed with Undo.
+
+**Why:** The owner validates the product against real marketplace reports;
+every figure must open into its lines and export exactly, and nothing
+unfinished may look final.

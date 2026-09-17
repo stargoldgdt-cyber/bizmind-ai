@@ -174,4 +174,5 @@ All 1,154 July lines classified automatically; none unknown or under review.
 - `npm run test:amazon-acceptance -- <file> <file> …` — live, the owner's real
   files, local only. Reads only the files named, never a folder; skips when
   none is given. Checks the ledger sums and, from Phase 3, the P&L engine's
-  July figures under all three VAT settings.
+  July figures under all three VAT settings, and (Phase 4) that the dashboard
+  offers July with its 1,154 lines across the four settlements, each adding up.

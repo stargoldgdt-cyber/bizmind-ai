@@ -171,7 +171,10 @@ applies to past lines without touching them.
   model's consistency, and TypeScript/SQL parity for categories and rules.
 - `npm run test:pnl` (live): automatic classification, exact figures,
   Final/Incomplete, the VAT setting, classifying an unknown code without a
-  re-upload, versioned corrections, isolation and withdrawal.
+  re-upload, versioned corrections, isolation and withdrawal, and the
+  dashboard's readers (months, settlements, business-scoped data quality).
+- `npm run test:ledger-dashboard` (offline, part of `npm run verify`): month
+  ranges, the exact and injection-safe CSV export, and the screens' wiring.
 
 ## 10. Reversibility
 

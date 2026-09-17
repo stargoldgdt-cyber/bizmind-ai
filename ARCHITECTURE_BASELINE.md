@@ -38,7 +38,7 @@ Where this file and an older document disagree, this file wins.
 | ~~B1~~ | **Resolved 2026-09-15:** VAT on marketplace fees (UAE 5%, KSA 15%) is not a P&L expense when it is recoverable as input VAT; it stays on the tax ledger. Non-recoverable VAT is a separate expense line. While the treatment is Unknown, P&L contribution is incomplete (never shown as final) and a data-quality warning names the amount. See §C "VAT on marketplace fees" and DECISIONS.md | — |
 | B2 | Who approves a fee-mapping rule (DECISIONS.md, 2026-09-09, "A source column is not a metric…") | Built-in versioned rules with evidence; new codes stay UNMAPPED; no business overrides in V1 — **Resolved 2026-09-15 (Phase 2):** GLOBAL rules approved by the owner, seeded by migration, `SAMPLE_VERIFIED` against real files — **Amended 2026-09-15:** an owner or admin may classify an Unknown code for their own business (audited; never overriding a high-confidence BizMind rule) |
 | B3 | Amazon: Premium Services Fee, Tax lines, reserve lines | Provisional rules, labelled — **Resolved 2026-09-15:** Premium Services Fee is SP 360, a marketplace fee; Tax on fee is TAX·FEE_VAT; COD charge is other income; no tax-on-sales or reserve lines seen (they would arrive UNMAPPED) |
-| B4 | Noon mappings, `balance_transfer`, invoices/credit notes | No noon adapter — samples supplied 2026-09-15; classified automatically from them in Phase 5 |
+| B4 | Noon mappings, `balance_transfer`, invoices/credit notes | No noon adapter — **Resolved 2026-09-17 (Phase 5):** mappings built from the real files (NOON.md); invoices supply fee VAT and output VAT; `balance_transfer` is Cash / Transfer under review until its purpose is confirmed |
 | B5 | Is a noon fee line joined to a single-SKU order "reliable attribution"? | No, order level |
 | ~~B6~~ | **Resolved 2026-09-15:** fingerprint + parsed source rows; original files not kept; no buyer PII in source rows | — |
 | B7 | COGS for sales before the first cost entry | Cost unknown; explicit audited backfill only |
@@ -217,6 +217,16 @@ beside its lines and payout, CSV export), `/ledger/lines` (the lines behind any
 figure) and `/ledger/quality` (the exception path, including classifying an
 unknown code after previewing its effect, and undoing it). They sit beside
 the legacy `/dashboard`, `/profit` and `/data-quality` until Phase 10.
+
+**noon (Phase 5, migration 0034).** Where a marketplace reports fees including
+VAT and states the VAT only on its invoices, the fee rules carry
+`amount_includes_vat` and the invoice lines `separates_included_vat`: each
+invoice line takes the stated VAT back out of the fee's category and records
+it as Input VAT. Until that happens in a period, contribution is incomplete
+(`FEE_VAT_NOT_SEPARATED`) unless the account's VAT setting is Non-recoverable.
+Any ledger file that repeats a row already counted for its account is
+refused, on upload and on restore. `pnl_summary()` can add up every account
+in one currency; the dashboard offers it as "All <currency> accounts".
 
 ## D. Phases
 

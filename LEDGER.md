@@ -147,7 +147,8 @@ applies to past lines without touching them.
 | --- | --- |
 | `src/services/marketplaces/contract.ts` | Adapter contract and draft types |
 | `src/services/marketplaces/registry.ts` | Registry |
-| `src/services/marketplaces/adapters.ts` | The application's adapters: Amazon Flat File V2 ([AMAZON.md](AMAZON.md)) |
+| `src/services/marketplaces/adapters.ts` | The application's adapters: Amazon Flat File V2 ([AMAZON.md](AMAZON.md)) and noon ([NOON.md](NOON.md)) |
+| `src/services/marketplaces/noon/` | The noon adapter: two formats and their rules |
 | `src/services/marketplaces/amazon/` | The Amazon adapter and its classification (`classification.ts`) |
 | `src/services/classification/model.ts` | The classification model mirror (Phase 3) |
 | `src/services/marketplaces/customer-data.ts` | The customer-data filter |
@@ -175,6 +176,12 @@ applies to past lines without touching them.
   dashboard's readers (months, settlements, business-scoped data quality).
 - `npm run test:ledger-dashboard` (offline, part of `npm run verify`): month
   ranges, the exact and injection-safe CSV export, and the screens' wiring.
+- noon suites: see [NOON.md §5](NOON.md).
+
+**Overlapping files (migration 0034).** A file whose rows are already counted
+for the account in another file is refused, naming that file; so is
+restoring a file whose rows have since been counted elsewhere. An identical
+file is still a harmless duplicate.
 
 ## 10. Reversibility
 

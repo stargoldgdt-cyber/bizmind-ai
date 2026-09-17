@@ -1753,3 +1753,39 @@ reach past periods without re-uploads or engine changes.
 **Why:** The owner validates the product against real marketplace reports;
 every figure must open into its lines and export exactly, and nothing
 unfinished may look final.
+
+---
+
+## 2026-09-17 — How noon is read (GCC Phase 5)
+
+**Decided, from the owner's real July 2026 exports (NOON.md):**
+
+- **Two reports, both required per period:** the Transaction View (item
+  level) and Invoices and Credit Notes. Each is recognised by its exact
+  headings.
+- **VAT is taken from noon's invoices, never calculated.** Transaction View
+  fees include VAT. Each statement-fee invoice line becomes two lines that add
+  to zero: the stated VAT back into the fee's category, and the same VAT as
+  Input VAT. Import VAT Recovery moves its whole amount the same way. Until a
+  period has its invoices, contribution is incomplete
+  (`FEE_VAT_NOT_SEPARATED`), unless the account's VAT setting is
+  Non-recoverable.
+- **Sales stay as noon reports them.** Customer invoices and credit notes add
+  only Output VAT, on the tax side.
+- **Dates** are calendar days (no time in the files), kept as 00:00 UTC.
+- **A zero amount adds no line.** A row whose amounts are all zero is kept as a
+  warning.
+- **Rows in another currency** (the "Noon SA" contract) are warnings in this
+  account and are counted when the file is uploaded to the matching account.
+- **Order updates** count with product sales, signed, under review (they mix
+  returns and later changes). **Balance transfers** are cash, under review,
+  until their purpose is confirmed (B4).
+- **Overlapping exports are refused** for every marketplace: a file repeating a
+  row already counted for the account, or a restore that would do so, names
+  the file that already holds the row.
+- **All accounts in one currency** can be added up (dashboard: "All AED
+  accounts"), never across currencies.
+
+**Why:** noon exports cover date ranges rather than settlements, state VAT
+only on invoices, and mix two contracts in one file. Each rule keeps the
+figures exact, keeps unconfirmed meanings visible, and never counts a row twice.

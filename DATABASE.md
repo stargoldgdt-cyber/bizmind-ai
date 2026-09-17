@@ -946,6 +946,23 @@ GCC Phase 4. Read-only, SECURITY INVOKER, closed to anon.
 Rollback: `supabase/rollback/0033_ledger_dashboard.rollback.sql` drops the two
 new readers and keeps the compatible `ledger_data_quality()`.
 
+## 7p. noon (0034)
+
+GCC Phase 5. Details: [NOON.md](NOON.md).
+
+| Change | What it does |
+| --- | --- |
+| `classification_rules.amount_includes_vat`, `.separates_included_vat` | The line's amount has VAT inside it; the line takes stated VAT back out. Never both |
+| 61 noon rules | Import and classification rules for the Transaction View and the Invoices and Credit Notes, generated from `src/services/marketplaces/noon/rules.ts` |
+| `marketplaces.NOON` | `AVAILABLE` |
+| `source_rows_row_hash_idx`, `ledger_apply_file()`, `ledger_file_restore()` | A file (or a restored file) whose rows are already counted for the account in another file is refused, naming that file. Otherwise unchanged from 0031 / 0030 |
+| `ledger_classified_lines` | Adds `rule_includes_vat`, `rule_separates_vat` |
+| `pnl_summary(from, to, account, business, combine_by_currency)` | Recreated: business filter, one row per currency when combined (`accounts` counts them; `input_vat_treatment` is `MIXED` when they differ), new reason `FEE_VAT_NOT_SEPARATED` |
+| `ledger_data_quality(...)` | Recreated with `FEE_VAT_NOT_SEPARATED`, one item per month |
+
+No rollback script: to undo, retire the noon rules and set NOON back to
+`SAMPLES_REQUIRED`; the added columns and checks are harmless unused.
+
 ---
 
 ## 8. Regenerating types

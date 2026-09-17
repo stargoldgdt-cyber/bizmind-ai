@@ -329,7 +329,7 @@ GCC 1   Ledger foundation              ✅ built, verified live (119 checks) —
 GCC 2   Amazon Flat File V2 adapter        ✅ built, July reproduced from real files — AMAZON.md
 GCC 3   Automatic classification + P&L engine  ✅ built, verified live (51 checks) — ARCHITECTURE_BASELINE.md §C
 GCC 4   Live dashboard + validation view   ✅ built, verified live — /ledger
-GCC 5   noon adapter (sample files supplied)
+GCC 5   noon adapter                       ✅ built, July reproduced from real files — NOON.md
         Owner validation against marketplace reports, from GCC 4 onward
 GCC 6   Product master, SKU mapping, dated COGS
 GCC 7   Expenses + Google Sheets dataset targets

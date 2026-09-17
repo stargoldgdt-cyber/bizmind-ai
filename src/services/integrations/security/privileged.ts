@@ -71,6 +71,13 @@ const TRUSTED_FUNCTIONS = [
   "integration_account_set_state",
   "sync_reconcile_due",
   /**
+   * GCC Phase 7 datasets (migration 0037): the product master and dated
+   * product costs from a Google Sheet. Each takes a JOB id and derives the
+   * business from that job.
+   */
+  "sync_apply_catalog",
+  "sync_apply_product_costs",
+  /**
    * Automation (migration 0016).
    *
    * `automation_claim_due` is the one function here that deliberately reads

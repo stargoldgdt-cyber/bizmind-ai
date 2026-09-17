@@ -80,7 +80,11 @@ export type ReturnStatus =
   | "REJECTED"
 
 /** LEDGER (migration 0029): a marketplace file written to the financial ledger. */
-export type ImportEntity = "ORDERS" | "PRODUCTS" | "EXPENSES" | "LEDGER"
+/** CATALOG and PRODUCT_COSTS: Google Sheets dataset syncs (migration 0036). */
+export type ImportEntity = "ORDERS" | "PRODUCTS" | "EXPENSES" | "LEDGER" | "CATALOG" | "PRODUCT_COSTS"
+
+/** Whether an expense reduces Net Profit (migration 0037). */
+export type ExpenseCostClass = "OPERATING" | "ADVERTISING" | "NOT_PROFIT"
 
 /** Ledger sides and attribution (migration 0030). */
 export type LedgerSideDb = "PNL" | "CASH" | "TAX" | "MEMO"
@@ -162,7 +166,7 @@ export type WebhookEventStatus =
   | "DEAD_LETTER"
   | "REJECTED"
 
-export type SyncResourceKey = "ORDERS" | "PRODUCTS" | "CUSTOMERS" | "INVENTORY" | "EXPENSES"
+export type SyncResourceKey = "ORDERS" | "PRODUCTS" | "CUSTOMERS" | "INVENTORY" | "EXPENSES" | "CATALOG" | "PRODUCT_COSTS"
 
 /** Why a sync ran (migration 0019). Shown in a sheet's sync history. */
 export type SyncTrigger = "INITIAL" | "AUTOMATIC" | "MANUAL" | "RECONCILIATION"
@@ -1011,6 +1015,42 @@ export type Database = {
           retired_at: string | null
           retired_by: string | null
           retire_reason: string | null
+          /** Migration 0037. */
+          source: "MANUAL" | "SHEETS"
+          integration_account_id: string | null
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+
+      /* ---- Expense classification (migration 0037) ---------------------- */
+
+      expense_categories: {
+        Row: {
+          code: string
+          label: string
+          cost_class: ExpenseCostClass
+          explanation: string
+          sort_order: number
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+
+      expense_category_rules: {
+        Row: {
+          id: string
+          /** null: one of BizMind's global rules. */
+          business_id: string | null
+          match_key: string
+          category_code: string
+          status: "ACTIVE" | "RETIRED"
+          created_by: string | null
+          created_at: string
+          retired_by: string | null
+          retired_at: string | null
         }
         Insert: never
         Update: never
@@ -1904,6 +1944,31 @@ export type Database = {
         Relationships: []
       }
 
+      expense_lines: {
+        Row: {
+          id: string
+          business_id: string
+          incurred_at: string
+          amount: string
+          /** Negative: money out. */
+          signed_amount: string
+          currency: string
+          category_name: string
+          match_key: string
+          rule_id: string | null
+          rule_scope: "GLOBAL" | "BUSINESS" | null
+          category_code: string | null
+          category_label: string | null
+          cost_class: ExpenseCostClass | null
+          classification_status: "CLASSIFIED" | "UNCLASSIFIED"
+          description: string | null
+          vendor: string | null
+          external_id: string | null
+          source: string | null
+        }
+        Relationships: []
+      }
+
       ledger_product_lines: {
         Row: Database["public"]["Views"]["ledger_classified_lines"]["Row"] & {
           product_id: string | null
@@ -2197,6 +2262,97 @@ export type Database = {
           payout_amount: string | null
           payout_date: string | null
         }[]
+      }
+
+      /* ---- Expenses and Net Profit (migration 0037) --------------------- */
+
+      expense_summary: {
+        Args: { p_from: string; p_to: string; p_business_id: string }
+        Returns: {
+          currency: string
+          lines: number
+          operating_expenses: string
+          external_advertising: string
+          not_in_profit: string
+          unclassified_lines: number
+          unclassified_amount: string
+        }[]
+      }
+
+      expense_breakdown: {
+        Args: { p_from: string; p_to: string; p_business_id: string }
+        Returns: {
+          currency: string
+          cost_class: ExpenseCostClass | "UNCLASSIFIED"
+          category_code: string | null
+          category_label: string | null
+          /** The business's own name, for an unclassified group only. */
+          category_name: string | null
+          lines: number
+          total: string
+        }[]
+      }
+
+      expense_periods: {
+        Args: { p_business_id: string }
+        Returns: { month: string; currency: string; lines: number }[]
+      }
+
+      expense_category_queue: {
+        Args: { p_business_id: string }
+        Returns: {
+          match_key: string
+          category_name: string
+          lines: number
+          currencies: string
+          total: string
+          first_seen: string
+          last_seen: string
+        }[]
+      }
+
+      pnl_net_profit: {
+        Args: { p_from: string; p_to: string; p_business_id: string }
+        Returns: {
+          currency: string
+          accounts: number
+          contribution: string | null
+          cogs: string
+          gross_profit: string | null
+          gross_profit_status: FigureStatusDb
+          gross_profit_before_open_items: string
+          expense_lines: number
+          operating_expenses: string
+          external_advertising: string
+          not_in_profit: string
+          unclassified_expense_lines: number
+          unclassified_expense_amount: string
+          /** Gross profit - operating expenses - outside advertising; NULL unless FINAL. */
+          net_profit: string | null
+          net_profit_status: FigureStatusDb
+          /** Informational only: never label it as the final net profit. */
+          net_profit_before_open_items: string
+          net_profit_reasons: (
+            | "UNKNOWN_LINES"
+            | "VAT_TREATMENT_UNKNOWN"
+            | "FEE_VAT_NOT_SEPARATED"
+            | "ROW_ERRORS"
+            | "SKU_NOT_MAPPED"
+            | "COST_MISSING"
+            | "NO_MARKETPLACE_DATA"
+            | "EXPENSES_UNCLASSIFIED"
+          )[]
+        }[]
+      }
+
+      expense_category_classify: {
+        Args: { p_business_id: string; p_category_name: string; p_category_code: string }
+        Returns: string
+      }
+
+      expense_category_rule_retire: {
+        Args: { p_rule_id: string }
+        Returns: undefined
       }
 
       /* ---- Product master and Gross Profit (migration 0035) -------------- */
@@ -2885,6 +3041,8 @@ export type LedgerClassifiedLine = Database["public"]["Views"]["ledger_classifie
 export type CatalogProduct = T["catalog_products"]["Row"]
 export type SkuAlias = T["sku_aliases"]["Row"]
 export type ProductCost = T["product_costs"]["Row"]
+export type ExpenseCategory = T["expense_categories"]["Row"]
+export type ExpenseCategoryRule = T["expense_category_rules"]["Row"]
 
 /** A business plus the calling user's role in it. */
 export type BusinessWithRole = Business & { role: BusinessRole }

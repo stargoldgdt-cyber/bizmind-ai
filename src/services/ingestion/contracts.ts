@@ -20,6 +20,15 @@ export type RawRecord = Record<string, unknown>
 export type EntityKey = "ORDERS" | "PRODUCTS" | "EXPENSES"
 
 /**
+ * Supporting datasets a live Google Sheet can keep up to date (GCC Phase 7).
+ * Never offered for a one-off file upload, and never written to the ledger.
+ */
+export type DatasetEntityKey = "CATALOG" | "PRODUCT_COSTS"
+
+/** What a connected sheet tab can hold. */
+export type SheetEntityKey = EntityKey | DatasetEntityKey
+
+/**
  * How much a field matters.
  *
  * `required`     — the import cannot proceed without it.
@@ -52,7 +61,7 @@ export type FieldDef = {
 }
 
 export type EntityDef = {
-  key: EntityKey
+  key: SheetEntityKey
   label: string
   description: string
   /** What this data unlocks on the dashboard. */
@@ -152,7 +161,32 @@ export type NormalizedExpense = {
   external_id?: string | null
 }
 
-export type NormalizedRow = NormalizedOrder | NormalizedProduct | NormalizedExpense
+/** One product of the product master, from a synced sheet. */
+export type NormalizedCatalogProduct = {
+  sku: string
+  name: string
+  category: string | null
+  brand: string | null
+}
+
+/** Every dated cost a synced sheet states for one product SKU. */
+export type NormalizedProductCosts = {
+  sku: string
+  costs: {
+    currency: string
+    /** Exact decimal text, at most 4 decimal places, never negative. */
+    unit_cost: string
+    /** YYYY-MM-DD, or null: the cost then applies from the day it is first synced. */
+    effective_from: string | null
+  }[]
+}
+
+export type NormalizedRow =
+  | NormalizedOrder
+  | NormalizedProduct
+  | NormalizedExpense
+  | NormalizedCatalogProduct
+  | NormalizedProductCosts
 
 /**
  * The outcome of validating a whole file. Produced without writing anything,

@@ -31,6 +31,7 @@ import {
 } from "@/features/imports/queries"
 import { formatNumber } from "@/lib/format"
 import { createClient, getCurrentUser } from "@/lib/supabase/server"
+import { importEntityLabel } from "@/services/ingestion/entities"
 
 export const metadata: Metadata = {
   title: "Import details",
@@ -104,7 +105,7 @@ export default async function ImportDetailPage(props: PageProps<"/imports/[id]">
             <p className="mt-1 text-sm text-muted-foreground">
               {isLedger
                 ? `Settlement file · ${source.marketplace_label ?? "Marketplace account"}`
-                : `${source.entity.charAt(0) + source.entity.slice(1).toLowerCase()} · ${source.connection_name ?? source.source ?? "File"}`}{" "}
+                : `${importEntityLabel(source.entity)} · ${source.connection_name ?? source.source ?? "File"}`}{" "}
               ·{" "}
               {new Date(source.created_at).toLocaleString()}
             </p>

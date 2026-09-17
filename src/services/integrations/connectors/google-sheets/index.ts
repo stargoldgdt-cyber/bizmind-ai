@@ -4,6 +4,7 @@ import { createHash, randomUUID } from "node:crypto"
 
 import { signaturesMatch } from "@/lib/crypto"
 import type { RawRecord } from "@/services/ingestion/contracts"
+import { SHEET_ENTITY_KEYS } from "@/services/ingestion/entities"
 import { normalizeText } from "@/services/ingestion/normalize"
 import type {
   Connector,
@@ -56,7 +57,8 @@ import { headingsFrom, recordsFrom } from "./table"
 
 export const GOOGLE_PAGE_ROWS = 1000
 
-const ENTITIES = ["ORDERS", "PRODUCTS", "EXPENSES"] as const
+// Everything a tab can hold: the legacy entities and the Phase 7 datasets.
+const ENTITIES = SHEET_ENTITY_KEYS
 type Entity = (typeof ENTITIES)[number]
 
 type SheetsMetadata = {

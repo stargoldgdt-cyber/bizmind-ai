@@ -2,10 +2,12 @@ import type {
   EntityDef,
   ImportOptions,
   Mapping,
+  NormalizedCatalogProduct,
   NormalizedExpense,
   NormalizedOrder,
   NormalizedOrderItem,
   NormalizedProduct,
+  NormalizedProductCosts,
   RawRecord,
   RowIssue,
   ValidationResult,
@@ -100,7 +102,11 @@ export function validate(
       ? validateOrders(ctx, rows)
       : entity.key === "PRODUCTS"
         ? validateProducts(ctx, rows)
-        : validateExpenses(ctx, rows)
+        : entity.key === "CATALOG"
+          ? validateCatalog(ctx, rows)
+          : entity.key === "PRODUCT_COSTS"
+            ? validateProductCosts(ctx, rows)
+            : validateExpenses(ctx, rows)
 
   return {
     ...result,
@@ -475,4 +481,151 @@ function validateExpenses(ctx: Ctx, rows: RawRecord[]) {
   })
 
   return { rows: out, failedRowCount: failedRows.size, validRowCount: out.length }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Product master (synced sheets only)                                        */
+/* -------------------------------------------------------------------------- */
+
+function validateCatalog(ctx: Ctx, rows: RawRecord[]) {
+  const bySku = new Map<string, NormalizedCatalogProduct>()
+  const firstRowOf = new Map<string, number>()
+  const failedRows = new Set<number>()
+
+  rows.forEach((row, index) => {
+    const rowNumber = index + 2
+    const sku = normalizeText(cell(row, ctx.mapping, "sku"))
+    const name = normalizeText(cell(row, ctx.mapping, "name"))
+
+    const problem = !sku
+      ? { field: "sku", message: "SKU code is empty." }
+      : !name
+        ? { field: "name", message: "Product name is empty." }
+        : sku.length > 120
+          ? { field: "sku", message: "A SKU code has at most 120 characters." }
+          : name.length > 200
+            ? { field: "name", message: "A product name has at most 200 characters." }
+            : null
+    if (problem || !sku || !name) {
+      failedRows.add(rowNumber)
+      addIssue(ctx, { rowNumber, severity: "ERROR", field: problem?.field, message: problem?.message ?? "" })
+      return
+    }
+
+    if (bySku.has(sku)) {
+      addIssue(ctx, {
+        rowNumber,
+        severity: "WARNING",
+        field: "sku",
+        message: `SKU "${sku}" also appears on row ${firstRowOf.get(sku)}. The later row wins.`,
+      })
+    } else {
+      firstRowOf.set(sku, rowNumber)
+    }
+
+    bySku.set(sku, {
+      sku,
+      name,
+      category: normalizeText(cell(row, ctx.mapping, "category"))?.slice(0, 80) ?? null,
+      brand: normalizeText(cell(row, ctx.mapping, "brand"))?.slice(0, 80) ?? null,
+    })
+  })
+
+  return { rows: [...bySku.values()], failedRowCount: failedRows.size, validRowCount: bySku.size }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Product costs (synced sheets only)                                         */
+/* -------------------------------------------------------------------------- */
+
+/** The database's limit for a unit cost: numeric(20,4). Never rounded here. */
+export const SHEET_COST_DIGITS = /^[0-9]{1,16}(\.[0-9]{1,4})?$/
+
+function validateProductCosts(ctx: Ctx, rows: RawRecord[]) {
+  const bySku = new Map<string, NormalizedProductCosts>()
+  const seen = new Map<string, number>()
+  const failedRows = new Set<number>()
+
+  rows.forEach((row, index) => {
+    const rowNumber = index + 2
+    let failed = false
+    const failRow = (field: string, message: string, raw?: unknown) => {
+      failed = true
+      addIssue(ctx, {
+        rowNumber,
+        severity: "ERROR",
+        field,
+        message,
+        rawValue: raw === undefined ? undefined : String(raw).slice(0, 120),
+      })
+    }
+
+    const sku = normalizeText(cell(row, ctx.mapping, "sku"))
+    if (!sku) failRow("sku", "SKU code is empty.")
+    else if (sku.length > 120) failRow("sku", "A SKU code has at most 120 characters.")
+
+    const costRaw = cell(row, ctx.mapping, "unit_cost")
+    const cost = normalizeDecimal(costRaw, ctx.options.decimalSeparator)
+    let unitCost: string | null = null
+    if (!cost.ok) {
+      failRow("unit_cost", `Cost per unit: ${cost.reason}`, costRaw)
+    } else {
+      // A zero written as "-0" is still zero; anything the database would
+      // round is refused rather than rounded.
+      const plain = cost.value.replace(/^-/, "")
+      if (SHEET_COST_DIGITS.test(plain)) unitCost = plain
+      else failRow("unit_cost", "Cost per unit: use at most 4 decimal places. BizMind never rounds a cost.", costRaw)
+    }
+
+    const dateRaw = cell(row, ctx.mapping, "effective_from")
+    let effectiveFrom: string | null = null
+    if (dateRaw !== undefined && normalizeText(dateRaw) !== null) {
+      const date = normalizeDate(dateRaw, ctx.options.dateFormat)
+      if (!date.ok) failRow("effective_from", `Applies from: ${date.reason}`, dateRaw)
+      else effectiveFrom = date.value.slice(0, 10)
+    }
+
+    // A cost is kept in the currency of the marketplace accounts it values,
+    // which may differ from the business currency. Nothing is converted.
+    const currencyRaw = normalizeText(cell(row, ctx.mapping, "currency"))
+    let currency = ctx.businessCurrency.toUpperCase()
+    if (currencyRaw !== null) {
+      const code = currencyRaw.toUpperCase()
+      if (/^[A-Z]{3}$/.test(code)) currency = code
+      else failRow("currency", `"${currencyRaw}" is not a three-letter currency code.`, currencyRaw)
+    }
+
+    if (failed || !sku || unitCost === null) {
+      failedRows.add(rowNumber)
+      return
+    }
+
+    const version = `${currency}|${effectiveFrom ?? "undated"}`
+    const product = bySku.get(sku) ?? { sku, costs: [] }
+    const earlier = seen.get(`${sku}|${version}`)
+    if (earlier !== undefined) {
+      addIssue(ctx, {
+        rowNumber,
+        severity: "WARNING",
+        field: "unit_cost",
+        message:
+          `SKU "${sku}" already has a ${currency} cost ${effectiveFrom ? `from ${effectiveFrom}` : "without a date"} ` +
+          `on row ${earlier}. The later row wins.`,
+      })
+      product.costs = product.costs.filter((c) => `${c.currency}|${c.effective_from ?? "undated"}` !== version)
+    } else {
+      seen.set(`${sku}|${version}`, rowNumber)
+    }
+    product.costs.push({ currency, unit_cost: unitCost, effective_from: effectiveFrom })
+    bySku.set(sku, product)
+  })
+
+  // A stable order, so the same sheet always fingerprints the same.
+  for (const product of bySku.values()) {
+    product.costs.sort((a, b) =>
+      `${a.currency}|${a.effective_from ?? ""}`.localeCompare(`${b.currency}|${b.effective_from ?? ""}`)
+    )
+  }
+
+  return { rows: [...bySku.values()], failedRowCount: failedRows.size, validRowCount: bySku.size }
 }

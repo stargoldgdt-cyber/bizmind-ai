@@ -1,4 +1,4 @@
-import type { EntityDef, EntityKey } from "./contracts"
+import type { DatasetEntityKey, EntityDef, EntityKey, SheetEntityKey } from "./contracts"
 
 /**
  * Canonical target fields, per entity.
@@ -355,10 +355,120 @@ const EXPENSES: EntityDef = {
   ],
 }
 
-export const ENTITIES: Record<EntityKey, EntityDef> = { ORDERS, PRODUCTS, EXPENSES }
+export const ENTITIES: Record<EntityKey, EntityDef & { key: EntityKey }> = {
+  ORDERS: { ...ORDERS, key: "ORDERS" },
+  PRODUCTS: { ...PRODUCTS, key: "PRODUCTS" },
+  EXPENSES: { ...EXPENSES, key: "EXPENSES" },
+}
 
-export const ENTITY_LIST: EntityDef[] = [ORDERS, PRODUCTS, EXPENSES]
+export const ENTITY_LIST = [ENTITIES.ORDERS, ENTITIES.PRODUCTS, ENTITIES.EXPENSES]
 
 export function getEntity(key: EntityKey): EntityDef {
   return ENTITIES[key]
+}
+
+/* ---- Supporting datasets for live Google Sheets (GCC Phase 7) ------------ */
+
+const CATALOG: EntityDef = {
+  key: "CATALOG",
+  label: "Products (product master)",
+  description:
+    "One row per product you sell. Kept in step with Products and costs; marketplace SKUs are still matched by you.",
+  unlocks: ["Product profit", "SKU matching suggestions"],
+  fields: [
+    {
+      key: "sku",
+      label: "Your SKU code",
+      importance: "required",
+      type: "text",
+      help: "Your own product code. It identifies the product on every sync.",
+      aliases: ["sku", "product code", "item code", "code", "internal sku", "seller sku", "partner sku"],
+    },
+    {
+      key: "name",
+      label: "Product name",
+      importance: "required",
+      type: "text",
+      aliases: ["name", "product", "product name", "item", "item name", "title"],
+    },
+    {
+      key: "category",
+      label: "Category",
+      importance: "optional",
+      type: "text",
+      aliases: ["category", "product category", "type", "department", "group"],
+    },
+    {
+      key: "brand",
+      label: "Brand",
+      importance: "optional",
+      type: "text",
+      aliases: ["brand", "manufacturer"],
+    },
+  ],
+}
+
+const PRODUCT_COSTS: EntityDef = {
+  key: "PRODUCT_COSTS",
+  label: "Product costs (COGS)",
+  description:
+    "What one unit of each product costs you, optionally from a date. Turns contribution into gross profit.",
+  unlocks: ["Gross profit", "Product margins"],
+  fields: [
+    {
+      key: "sku",
+      label: "Your SKU code",
+      importance: "required",
+      type: "text",
+      help: "Your own product code. A code BizMind does not know yet is added as a product named after it.",
+      aliases: ["sku", "product code", "item code", "code", "internal sku", "seller sku", "partner sku"],
+    },
+    {
+      key: "unit_cost",
+      label: "Cost per unit",
+      importance: "required",
+      type: "money",
+      help: "What one unit cost you. At most 4 decimal places; never negative.",
+      aliases: ["cost", "unit cost", "cost price", "cogs", "landed cost", "purchase price", "wholesale price", "buy price"],
+    },
+    {
+      key: "effective_from",
+      label: "Applies from",
+      importance: "recommended",
+      type: "date",
+      help: "The first day this cost applies to sales.",
+      consequence:
+        "Without a date, a cost applies only from the day it is first synced, so gross profit " +
+        "for earlier months stays incomplete.",
+      aliases: ["effective from", "effective date", "from", "valid from", "start date", "date", "cost date"],
+    },
+    {
+      key: "currency",
+      label: "Currency",
+      importance: "optional",
+      type: "text",
+      help: "The currency of the marketplace accounts this cost is for. Defaults to your business currency.",
+      aliases: ["currency", "currency code", "ccy"],
+    },
+  ],
+}
+
+export const DATASET_ENTITIES: Record<DatasetEntityKey, EntityDef> = { CATALOG, PRODUCT_COSTS }
+
+/** Everything a connected Google Sheet tab can hold. */
+export const SHEET_ENTITIES: Record<SheetEntityKey, EntityDef> = { ...ENTITIES, ...DATASET_ENTITIES }
+
+export const SHEET_ENTITY_KEYS = ["ORDERS", "PRODUCTS", "EXPENSES", "CATALOG", "PRODUCT_COSTS"] as const
+
+export const SHEET_ENTITY_LIST: EntityDef[] = SHEET_ENTITY_KEYS.map((key) => SHEET_ENTITIES[key])
+
+export function isSheetEntityKey(value: unknown): value is SheetEntityKey {
+  return typeof value === "string" && (SHEET_ENTITY_KEYS as readonly string[]).includes(value)
+}
+
+/** A short label for what an import or sync batch held. */
+export function importEntityLabel(entity: string): string {
+  if (entity === "CATALOG") return "Product master"
+  if (entity === "PRODUCT_COSTS") return "Product costs"
+  return entity.charAt(0) + entity.slice(1).toLowerCase()
 }

@@ -3,11 +3,15 @@ import type { FieldDef } from "@/services/ingestion/contracts"
 /**
  * Dataset targets: the boundary Google Sheets (and CSV) will write through.
  *
- * PHASE 1: BOUNDARY ONLY. No target is registered and the Google Sheets
- * connector does not use this yet -- its transport (sign-in, picker, reading,
- * paging, fingerprints, retries, sync history) is unchanged. Phase 5 moves its
- * target layer from the old ERP entities (ORDERS / PRODUCTS / EXPENSES) onto
- * these datasets (decisions A2-A4).
+ * THE PLAN, NOT THE WIRING. GCC Phase 7 built three of these targets as
+ * Google Sheets tab types on the existing sync path (the worker, record state
+ * and trusted writers), so no target is registered here:
+ *   PRODUCT_MASTER      -> a CATALOG tab, sync_apply_catalog()
+ *   COGS                -> a PRODUCT_COSTS tab, sync_apply_product_costs()
+ *   OPERATING_EXPENSES  -> the existing EXPENSES tab, classified at calculation time
+ * ADVERTISING_EXPENSES is an expense category; BANK_TRANSACTIONS arrives with
+ * GCC Phase 8; SKU_ALIAS_SUGGESTIONS is not built (BizMind suggests matches
+ * itself). This file keeps the rule the targets follow.
  *
  * WHAT A DATASET IS NOT
  * ---------------------
@@ -39,21 +43,21 @@ export const DATASET_PLAN: Record<
     label: "Product master",
     tier: "V1",
     identity: "Internal SKU",
-    writesTo: "products (upsert; archive, never delete)",
+    writesTo: "catalog_products (add or update by SKU code; never archive or delete)",
     suggestionsOnly: false,
   },
   COGS: {
     label: "COGS per unit",
     tier: "V1",
     identity: "Internal SKU (+ optional effective date)",
-    writesTo: "product_costs (a new dated version only when the cost or date changed)",
+    writesTo: "product_costs (a new dated version only when the cost or date changed; the old one withdrawn)",
     suggestionsOnly: false,
   },
   OPERATING_EXPENSES: {
     label: "Operating expenses",
     tier: "V1",
     identity: "Reference",
-    writesTo: "expenses (cost class OPERATING)",
+    writesTo: "expenses (classified by category name)",
     suggestionsOnly: false,
   },
   ADVERTISING_EXPENSES: {
@@ -132,5 +136,5 @@ export function createDatasetRegistry(): DatasetRegistry {
   }
 }
 
-/** The application's dataset targets. Empty until Phase 5. */
+/** The application's dataset targets. Empty: see the note at the top. */
 export const datasetTargets = createDatasetRegistry()

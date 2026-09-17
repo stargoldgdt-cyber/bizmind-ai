@@ -19,6 +19,7 @@ import { getActiveBusiness, getUserBusinesses } from "@/features/businesses/quer
 import { listDataSources, type DataSource } from "@/features/imports/queries"
 import { formatNumber } from "@/lib/format"
 import { createClient, getCurrentUser } from "@/lib/supabase/server"
+import { importEntityLabel } from "@/services/ingestion/entities"
 
 export const metadata: Metadata = {
   title: "Data sources",
@@ -155,7 +156,7 @@ export default async function DataSourcesPage() {
                         <TableCell className="text-xs">
                           {row.dataset === "LEDGER"
                             ? "Settlement"
-                            : row.entity.charAt(0) + row.entity.slice(1).toLowerCase()}
+                            : importEntityLabel(row.entity)}
                         </TableCell>
 
                         <TableCell className="text-xs text-muted-foreground">

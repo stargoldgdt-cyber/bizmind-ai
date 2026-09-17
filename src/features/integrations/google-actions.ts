@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { after } from "next/server"
 import { z } from "zod"
+import { isSheetEntityKey, SHEET_ENTITY_KEYS } from "@/services/ingestion/entities"
 
 import { getActiveBusiness } from "@/features/businesses/queries"
 import { createClient } from "@/lib/supabase/server"
@@ -184,7 +185,7 @@ const CHANNEL_TYPES = [
 ] as const
 
 const connectSchema = previewSchema.extend({
-  entity: z.enum(["ORDERS", "PRODUCTS", "EXPENSES"]),
+  entity: z.enum(SHEET_ENTITY_KEYS),
   /** BizMind field -> the sheet's own heading. */
   mapping: z.record(z.string().max(64), z.string().max(256)),
   dateFormat: z.enum(["auto", "DMY", "MDY", "YMD"]),
@@ -381,7 +382,7 @@ export async function syncGoogleSheetNowAction(rawInput: unknown): Promise<{ ok:
 
   const metadata = (account.metadata ?? {}) as Record<string, unknown>
   const entity = metadata.entity
-  if (entity !== "ORDERS" && entity !== "PRODUCTS" && entity !== "EXPENSES") {
+  if (!isSheetEntityKey(entity)) {
     return { ok: false, error: "This sheet's column choices are missing. Review the connection." }
   }
 

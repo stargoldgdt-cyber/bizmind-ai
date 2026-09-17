@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table"
 import { ONBOARDING_ROUTE } from "@/config/routes"
 import { getActiveBusiness, getUserBusinesses } from "@/features/businesses/queries"
+import { getNetProfit, type NetProfitRow } from "@/features/expenses/queries"
 import { FigureCard } from "@/features/ledger/components/figure-card"
 import { LedgerFilters } from "@/features/ledger/components/ledger-filters"
 import { StatusLabel } from "@/features/ledger/components/status-label"
@@ -46,7 +47,7 @@ export const metadata: Metadata = {
 }
 
 /**
- * Marketplace profit: the live dashboard on the ledger (GCC Phases 4-6).
+ * Marketplace profit: the live dashboard on the ledger (GCC Phases 4-7).
  *
  * PERFORMS NO CALCULATIONS. Every figure is computed by the P&L engine in SQL
  * (pnl_summary, pnl_breakdown, pnl_settlements) and arrives as exact text.
@@ -58,6 +59,9 @@ export const metadata: Metadata = {
  * -- only an informational figure labelled "not final" (decision B1).
  * Gross profit (contribution - COGS, decision B16) is likewise shown only
  * when contribution is final and every sold unit has a product and a cost.
+ * Net profit (gross profit - operating expenses) is business-wide, so it is
+ * shown for a whole currency: the combined view, or an account that is the
+ * only one in its currency. Expenses are never allocated to an account (A7).
  *
  * One account, or every account in one currency added up by the engine.
  * Accounts in different currencies are never combined (A12). The choice and
@@ -111,6 +115,8 @@ export default async function LedgerOverviewPage(props: PageProps<"/ledger">) {
 
   const single = account && month ? await getLedgerMonth(activeBusiness.id, account.id, month) : null
   const group = combined && month ? await getCurrencyMonth(activeBusiness.id, combined, month) : null
+  const netCurrency = combined ?? (account && byCurrency.get(account.currency)?.length === 1 ? account.currency : null)
+  const net = netCurrency && month ? await getNetProfit(activeBusiness.id, netCurrency, month) : null
   const canImport = activeBusiness.role !== "VIEWER"
   const isOwner = activeBusiness.role === "OWNER"
 
@@ -186,13 +192,32 @@ export default async function LedgerOverviewPage(props: PageProps<"/ledger">) {
               !group.total ? (
                 <NoLines month={month} />
               ) : (
-                <CombinedView data={group} total={group.total} month={month} isOwner={isOwner} />
+                <>
+                  <CombinedView data={group} total={group.total} month={month} isOwner={isOwner} />
+                  {net && <NetProfitSection net={net} month={month} />}
+                </>
               )
             ) : single && account ? (
               !single.summary ? (
                 <NoLines month={month} />
               ) : (
-                <MonthView summary={single.summary} data={single} account={account} month={month} isOwner={isOwner} />
+                <>
+                  <MonthView summary={single.summary} data={single} account={account} month={month} isOwner={isOwner} />
+                  {net ? (
+                    <NetProfitSection net={net} month={month} />
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Net profit is worked out for all your {account.currency} accounts together, because
+                      operating expenses belong to the whole business.{" "}
+                      <Link
+                        href={ledgerHref("/ledger", { account: `${ALL_PREFIX}${account.currency}`, month: month.key })}
+                        className="font-medium text-foreground underline underline-offset-4"
+                      >
+                        See all {account.currency} accounts
+                      </Link>
+                    </p>
+                  )}
+                </>
               )
             ) : null}
           </>
@@ -802,6 +827,81 @@ function CombinedView({
         </div>
       </section>
     </div>
+  )
+}
+
+/* ---- net profit, for a whole currency --------------------------------------- */
+
+const NET_REASON: Record<string, string> = {
+  UNKNOWN_LINES: "some marketplace lines are not recognised",
+  VAT_TREATMENT_UNKNOWN: "VAT on marketplace fees has no setting",
+  FEE_VAT_NOT_SEPARATED: "marketplace fees still include VAT",
+  ROW_ERRORS: "some marketplace rows could not be read",
+  SKU_NOT_MAPPED: "some SKUs are not matched to a product",
+  COST_MISSING: "some products have no cost for the sale date",
+  NO_MARKETPLACE_DATA: "there are no marketplace figures",
+  EXPENSES_UNCLASSIFIED: "some expense categories are not placed yet",
+}
+
+function NetProfitSection({ net, month }: { net: NetProfitRow; month: LedgerMonth }) {
+  const money = (value: string | null | undefined) => formatMoney(value, net.currency)
+  const final = net.net_profit !== null
+  return (
+    <section className="overflow-hidden rounded-xl border border-border bg-card">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4">
+        <div>
+          <h2 className="text-sm font-semibold">
+            Net profit, {month.label} ({net.currency})
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Gross profit from {formatNumber(net.accounts)} {net.currency} account{net.accounts === 1 ? "" : "s"}, less the
+            running costs of the business.
+          </p>
+        </div>
+        <StatusLabel status={net.net_profit_status} />
+      </div>
+      <div className="overflow-x-auto [&_td:first-child]:pl-5 [&_td:last-child]:pr-5">
+        <Table>
+          <TableBody>
+            <TableRow>
+              <TableCell className="text-sm">Gross profit</TableCell>
+              <TableCell className="text-right font-mono text-sm tabular-nums">
+                {net.gross_profit === null ? "Incomplete" : money(net.gross_profit)}
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell className="text-sm">Operating expenses</TableCell>
+              <TableCell className="text-right font-mono text-sm tabular-nums">{money(net.operating_expenses)}</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell className="text-sm">Advertising outside the marketplaces</TableCell>
+              <TableCell className="text-right font-mono text-sm tabular-nums">{money(net.external_advertising)}</TableCell>
+            </TableRow>
+            <TableRow className="bg-muted/40">
+              <TableCell className="text-sm font-semibold">Net profit</TableCell>
+              <TableCell className="text-right font-mono text-sm font-semibold tabular-nums">
+                {final ? (
+                  money(net.net_profit)
+                ) : (
+                  <span className="inline-flex items-center gap-1 font-sans text-xs text-warning-strong">
+                    <CircleAlert className="size-3.5" aria-hidden />
+                    Incomplete
+                  </span>
+                )}
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
+      <p className="border-t border-border px-5 py-3 text-xs text-muted-foreground">
+        {final
+          ? "Expenses are classified automatically from your expense sheets. "
+          : `Not final because ${net.net_profit_reasons.map((r) => NET_REASON[r] ?? r).join("; ")}. From what is known so far: ${money(net.net_profit_before_open_items)} — not final. `}
+        <Link href={ledgerHref("/ledger/expenses", { month: month.key })} className="font-medium text-foreground underline underline-offset-4">
+          Operating expenses
+        </Link>
+      </p>
+    </section>
   )
 }
 

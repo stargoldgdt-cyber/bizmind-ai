@@ -94,6 +94,9 @@ type ApplyResult = {
   products_updated?: number
   expenses_created?: number
   expenses_updated?: number
+  /** Phase 7 datasets: dated costs added, and costs replaced because the sheet changed them. */
+  costs_added?: number
+  costs_replaced?: number
   batch_id?: string
 }
 
@@ -565,9 +568,17 @@ async function park(
 /** Which apply function is a property of the RESOURCE, not the provider. */
 function applyFunctionFor(
   resource: string
-): "sync_apply_orders" | "sync_apply_products" | "sync_apply_expenses" {
+):
+  | "sync_apply_orders"
+  | "sync_apply_products"
+  | "sync_apply_expenses"
+  | "sync_apply_catalog"
+  | "sync_apply_product_costs" {
   if (resource === "PRODUCTS" || resource === "INVENTORY") return "sync_apply_products"
   if (resource === "EXPENSES") return "sync_apply_expenses"
+  // Phase 7 datasets: the product master and dated costs (migration 0037).
+  if (resource === "CATALOG") return "sync_apply_catalog"
+  if (resource === "PRODUCT_COSTS") return "sync_apply_product_costs"
   return "sync_apply_orders"
 }
 
@@ -577,10 +588,12 @@ function writtenCounts(outcome: ApplyResult | null | undefined) {
     inserted:
       (outcome?.orders_created ?? 0) +
       (outcome?.products_created ?? 0) +
-      (outcome?.expenses_created ?? 0),
+      (outcome?.expenses_created ?? 0) +
+      (outcome?.costs_added ?? 0),
     updated:
       (outcome?.orders_updated ?? 0) +
       (outcome?.products_updated ?? 0) +
-      (outcome?.expenses_updated ?? 0),
+      (outcome?.expenses_updated ?? 0) +
+      (outcome?.costs_replaced ?? 0),
   }
 }

@@ -4,14 +4,14 @@ import { z } from "zod"
 
 import { isExactNumber } from "@/lib/json-exact"
 import type {
-  EntityKey,
+  SheetEntityKey,
   ImportOptions,
   Mapping,
   NormalizedRow,
   RawRecord,
   RowIssue,
 } from "@/services/ingestion/contracts"
-import { ENTITIES } from "@/services/ingestion/entities"
+import { SHEET_ENTITIES as ENTITIES, SHEET_ENTITY_KEYS } from "@/services/ingestion/entities"
 import { normalizeText } from "@/services/ingestion/normalize"
 import { validate } from "@/services/ingestion/validate"
 
@@ -43,30 +43,35 @@ import { validate } from "@/services/ingestion/validate"
 export const FINGERPRINT_VERSION = "sheets-v1"
 
 const settingsSchema = z.object({
-  entity: z.enum(["ORDERS", "PRODUCTS", "EXPENSES"]),
+  entity: z.enum(SHEET_ENTITY_KEYS),
   mapping: z.record(z.string(), z.string()),
   date_format: z.enum(["auto", "DMY", "MDY", "YMD"]),
   decimal_separator: z.enum([".", ","]),
 })
 
 /** The field that identifies a record, per entity. */
-export const IDENTITY: Record<EntityKey, { field: string; label: string }> = {
+export const IDENTITY: Record<SheetEntityKey, { field: string; label: string }> = {
   ORDERS: { field: "external_id", label: "Order ID" },
   PRODUCTS: { field: "sku", label: "SKU" },
   EXPENSES: { field: "external_id", label: "Reference" },
+  CATALOG: { field: "sku", label: "SKU code" },
+  // Every dated cost of one product is one record: a row per date, same SKU.
+  PRODUCT_COSTS: { field: "sku", label: "SKU code" },
 }
 
-const NO_IDENTITY: Record<EntityKey, string> = {
+const NO_IDENTITY: Record<SheetEntityKey, string> = {
   ORDERS:
     "This row has no Order ID, so BizMind cannot tell which order it belongs to. It was skipped.",
   PRODUCTS: "This row has no SKU, so BizMind cannot tell which product it is. It was skipped.",
   EXPENSES:
     "This row has no Reference. A synced expense needs one, or an edit to it would be " +
     "counted as a second expense. It was skipped.",
+  CATALOG: "This row has no SKU code, so BizMind cannot tell which product it is. It was skipped.",
+  PRODUCT_COSTS: "This row has no SKU code, so BizMind cannot tell which product the cost is for. It was skipped.",
 }
 
 export type SheetSettings = {
-  entity: EntityKey
+  entity: SheetEntityKey
   mapping: Mapping
   options: ImportOptions
 }
@@ -156,7 +161,7 @@ export function readSheetSettings(
 }
 
 /** Recommended fields left unchosen, with what each one costs. */
-export function missingRecommended(entity: EntityKey, mapping: Mapping) {
+export function missingRecommended(entity: SheetEntityKey, mapping: Mapping) {
   return ENTITIES[entity].fields
     .filter((f) => f.importance === "recommended" && !mapping[f.key])
     .map((f) => ({

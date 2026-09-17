@@ -35,7 +35,15 @@ import type { RawRecord } from "@/services/ingestion/contracts"
 export type IntegrationProvider = "FIXTURE" | "WOOCOMMERCE" | "SHOPIFY" | "GOOGLE_SHEETS"
 
 /** What a connector can be asked to fetch. Mirrors the `resource` check. */
-export type SyncResource = "ORDERS" | "PRODUCTS" | "CUSTOMERS" | "INVENTORY" | "EXPENSES"
+export type SyncResource =
+  | "ORDERS"
+  | "PRODUCTS"
+  | "CUSTOMERS"
+  | "INVENTORY"
+  | "EXPENSES"
+  // GCC Phase 7: supporting datasets from a Google Sheet.
+  | "CATALOG"
+  | "PRODUCT_COSTS"
 
 export type SyncMode = "INITIAL" | "INCREMENTAL"
 

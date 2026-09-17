@@ -2,6 +2,8 @@ import "server-only"
 
 import { isEncryptionConfigured } from "@/lib/crypto"
 import { createClient } from "@/lib/supabase/server"
+import type { SheetEntityKey } from "@/services/ingestion/contracts"
+import { isSheetEntityKey } from "@/services/ingestion/entities"
 import {
   googleClientId,
   googleOAuthConfig,
@@ -57,7 +59,7 @@ export async function getGoogleSetup(businessId: string): Promise<GoogleSetup> {
   return { ready, clientId, projectNumber, pickerApiKey, authorizedAt: data?.authorized_at ?? null }
 }
 
-export type SheetEntity = "ORDERS" | "PRODUCTS" | "EXPENSES"
+export type SheetEntity = SheetEntityKey
 
 export type SheetRun = {
   id: string
@@ -127,8 +129,8 @@ function readMetadata(metadata: unknown) {
     sheetId: typeof m.sheet_id === "number" ? m.sheet_id : null,
     sheetTitle: text(m.sheet_title),
     entity:
-      m.entity === "ORDERS" || m.entity === "PRODUCTS" || m.entity === "EXPENSES"
-        ? (m.entity as SheetEntity)
+      isSheetEntityKey(m.entity)
+        ? m.entity
         : null,
     mapping,
     dateFormat: text(m.date_format),

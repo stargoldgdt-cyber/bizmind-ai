@@ -47,7 +47,7 @@ import {
   syncGoogleSheetNowAction,
 } from "@/features/integrations/google-actions"
 import type { GoogleSetup, SheetConnection } from "@/features/integrations/google-queries"
-import { getEntity } from "@/services/ingestion/entities"
+import { SHEET_ENTITIES } from "@/services/ingestion/entities"
 
 /**
  * Google Sheets on the Integrations page: connect Google, add a sheet, and see
@@ -319,7 +319,7 @@ function SheetCard({
     sheet.spreadsheetName && sheet.sheetTitle
       ? `${sheet.spreadsheetName} — ${sheet.sheetTitle}`
       : (sheet.displayName ?? "Google Sheet")
-  const entityLabel = sheet.entity ? getEntity(sheet.entity).label : null
+  const entityLabel = sheet.entity ? SHEET_ENTITIES[sheet.entity].label : null
   const preset = presetOf(sheet)
   const canSync = sheet.status === "CONNECTED" || sheet.status === "ERROR"
   const job = sheet.job

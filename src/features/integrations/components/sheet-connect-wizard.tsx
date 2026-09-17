@@ -27,8 +27,8 @@ import {
   prepareGoogle,
   requestDriveToken,
 } from "@/features/integrations/google-picker"
-import type { EntityKey, FieldDef, ImportOptions, Mapping } from "@/services/ingestion/contracts"
-import { ENTITY_LIST, getEntity } from "@/services/ingestion/entities"
+import type { FieldDef, ImportOptions, Mapping, SheetEntityKey } from "@/services/ingestion/contracts"
+import { SHEET_ENTITIES, SHEET_ENTITY_LIST } from "@/services/ingestion/entities"
 import { suggestMapping } from "@/services/ingestion/mapping"
 
 /**
@@ -67,7 +67,7 @@ export type SheetPreset = {
   spreadsheetName: string
   sheetId: number
   sheetTitle: string
-  entity: EntityKey
+  entity: SheetEntityKey
   mapping: Mapping
   dateFormat: ImportOptions["dateFormat"]
   decimalSeparator: "." | ","
@@ -121,7 +121,7 @@ export function SheetConnectWizard({
   const [tabs, setTabs] = useState<Tab[]>([])
   const [sheetId, setSheetId] = useState<number | null>(preset?.sheetId ?? null)
   const [tabTitle, setTabTitle] = useState(preset?.sheetTitle ?? "")
-  const [entity, setEntity] = useState<EntityKey>(preset?.entity ?? "ORDERS")
+  const [entity, setEntity] = useState<SheetEntityKey>(preset?.entity ?? "ORDERS")
 
   const [headers, setHeaders] = useState<string[]>([])
   const [rows, setRows] = useState<Record<string, string>[]>([])
@@ -166,7 +166,7 @@ export function SheetConnectWizard({
     accessToken: string,
     spreadsheetId: string,
     tabId: number,
-    forEntity: EntityKey,
+    forEntity: SheetEntityKey,
     previous?: Mapping
   ) {
     setWaiting("Reading the column headings…")
@@ -191,7 +191,7 @@ export function SheetConnectWizard({
       setMapping(kept)
       setDropped(gone)
     } else {
-      setMapping(suggestMapping(getEntity(forEntity), result.headers))
+      setMapping(suggestMapping(SHEET_ENTITIES[forEntity], result.headers))
       setDropped([])
     }
 
@@ -265,7 +265,7 @@ export function SheetConnectWizard({
     })
   }
 
-  const definition = getEntity(entity)
+  const definition = SHEET_ENTITIES[entity]
   // A synced expense needs a Reference, or an edit would count twice.
   const needed = (field: FieldDef) =>
     field.importance === "required" || (entity === "EXPENSES" && field.key === "external_id")
@@ -380,7 +380,7 @@ export function SheetConnectWizard({
             <div>
               <p className="mb-2 text-sm font-medium">What does this tab hold?</p>
               <div className="grid gap-3 sm:grid-cols-3">
-                {ENTITY_LIST.map((item) => (
+                {SHEET_ENTITY_LIST.map((item) => (
                   <button
                     key={item.key}
                     type="button"

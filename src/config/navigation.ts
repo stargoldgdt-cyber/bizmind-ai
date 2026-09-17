@@ -103,6 +103,8 @@ export const NAVIGATION: NavSection[] = [
         match: ["/catalog/products"],
       },
       { label: "SKU matching", href: "/catalog/mapping", icon: Link2, enabled: true },
+      // GCC Phase 7: operating expenses and net profit.
+      { label: "Operating expenses", href: "/ledger/expenses", icon: Receipt, enabled: true },
       { label: "Marketplace data quality", href: "/ledger/quality", icon: ShieldCheck, enabled: true },
     ],
   },
@@ -139,7 +141,7 @@ export const NAVIGATION: NavSection[] = [
         href: "/expenses",
         icon: Receipt,
         enabled: false,
-        note: "The expenses table and its import path exist. No listing UI yet.",
+        note: "Superseded by Marketplaces -> Operating expenses (GCC Phase 7), which classifies these expenses and shows net profit.",
       },
       {
         label: "Inventory",

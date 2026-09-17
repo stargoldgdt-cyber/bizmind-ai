@@ -334,6 +334,21 @@ gaps. See [GOOGLE_SHEETS.md](GOOGLE_SHEETS.md) for the connector they serve.
   `sync_reconcile_due`. Each derives its tenant from a job or account row;
   `sync_reconcile_due` takes no id and returns only a count.
 
+## 9c. What GCC Phase 8 (migration 0040) added
+
+- **Report exports to Google Sheets** run in the same session-less worker
+  (`sync/report-exports.ts`): from the scheduled route after the sync drain,
+  and straight after an owner or admin requests one, as a sheet connection
+  does with `drainSyncQueue()`. The person's request only inserts a queue row
+  through their own session.
+- The allowlist gains `report_export_claim`, `report_export_data`,
+  `report_export_attach` and `report_export_complete`. Each takes an export id
+  (the claim takes none) and derives the business from that row.
+- **Write scope (A5).** `src/services/reports/google-sheets-export.ts` is the
+  only code that writes to Google: it creates a new spreadsheet, and its fill
+  function accepts only the value the create function returns. The connector's
+  client stays GET-only. `npm run test:report-exports` enforces both.
+
 ## 10. Tests
 
 ```bash

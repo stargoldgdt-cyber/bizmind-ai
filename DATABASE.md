@@ -1008,6 +1008,24 @@ outside the marketplaces (B16).
 No rollback script: the tables are additive and the legacy expense path is
 untouched.
 
+## 7s. Expected payouts, cashflow, report exports (0039–0040)
+
+GCC Phase 8. Owner decision (2026-09-17): no bank source exists. A settlement's
+reported total — or a payout noon reports sending — is the **expected**
+marketplace payout. **Actual bank receipt** is a separate concept and is always
+`NOT_CONNECTED` until a bank source is connected.
+
+| Change | What it does |
+| --- | --- |
+| `expected_payouts(business, from, to, account)` | One row per settlement (source `SETTLEMENT_REPORT`) and per reported payment not tied to one (`MARKETPLACE_PAYMENT_REPORT`), from non-withdrawn files. `marketplace_status`: `ADDS_UP`, `DOES_NOT_ADD_UP`, `NO_TOTAL` (no amount invented), `MARKETPLACE_PAYMENT`. `bank_receipt_status` always `NOT_CONNECTED`, amount and date NULL |
+| `expected_cashflow(business, from, to)` | Per month of expected date and currency: expected payouts, inflow, the part in doubt, payouts without an amount; bank side NOT_CONNECTED |
+| `report_exports` | A request to copy a catalogue report into a NEW Google Sheet: status, attempts, lease, the created `spreadsheet_id`/`spreadsheet_url` (set once; a trigger refuses repointing). RLS: members read, nobody writes |
+| `report_export_request(business, report, month)` | OWNER/ADMIN, Google connected, at most three in flight, audited. Takes no spreadsheet |
+| `report_export_claim`, `report_export_data`, `report_export_attach`, `report_export_complete` | service_role only (sync worker). Take an export id, never a business id. `data` returns that export's business's figures from the same readers as the screens; `attach` records the created sheet once, with its own link; `complete` never retries after a sheet exists; success is audited |
+
+Readers are invoker; no bank table exists. No rollback script: 0039 adds
+readers only, 0040 one table.
+
 ---
 
 ## 8. Regenerating types

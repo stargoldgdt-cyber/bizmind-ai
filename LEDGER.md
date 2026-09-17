@@ -177,6 +177,10 @@ applies to past lines without touching them.
 - `npm run test:ledger-dashboard` (offline, part of `npm run verify`): month
   ranges, the exact and injection-safe CSV export, and the screens' wiring.
 - noon suites: see [NOON.md §5](NOON.md).
+- `npm run test:payouts`, `npm run test:reports`, `npm run test:report-exports`
+  (offline, in verify) and `npm run test:payouts-ledger`,
+  `npm run test:report-exports-ledger` (live): expected payouts, reports and
+  the Google Sheets write scope (DATABASE.md §7s).
 - `npm run test:expenses` (offline, in verify) and `npm run test:expenses-ledger`
   (live, needs the worker key): expenses, Net Profit and the Products and
   Product-cost Sheet tabs (DATABASE.md §7r).

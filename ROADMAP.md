@@ -23,7 +23,7 @@ against a real file or a hand-worked dataset. noon follows the dashboard
 | — | **Owner validation**, from Phase 4 onward: compare Sales, Fees, Fulfillment, Advertising, Refunds, VAT, Payouts and Profit with the marketplace reports; each mismatch becomes a rule correction | Reported mismatches corrected | Continuous |
 | **6** | Product master, SKU aliases + suggester + confirmation queue, dated COGS, product/SKU/category P&L | Gross Profit Final; cross-marketplace model checks reproduced; B7, B16 answered | ✅ Built and verified live, 2026-09-17 (migration 0035, 59 live checks). B16 decided, B7 kept, B17 default recorded. Gross Profit is Final once SKUs are matched and costs entered; the owner's cross-marketplace model checks wait for real costs (entered on screen, or via Phase 7 Sheets) |
 | **7** | Expense refactor + categories; Google Sheets dataset targets (COGS, product master, operating expenses; optional advertising, bank); schedule | Net Profit Final; existing expense tab keeps syncing; Sheets live suite green; B12, B14 answered | ✅ Built and verified live, 2026-09-17 (migrations 0036–0038; 35 new live checks; Sheets suite 204 green). Expenses classified automatically, Net Profit per currency, Products and Product-cost tabs. B12 and B14 keep their defaults. Optional advertising is an expense category; the bank tab moves to Phase 8 with bank transactions; SKU suggestions from Sheets are not built (suggestions come from BizMind) |
-| 8 | Bank accounts + statement import, payouts, matcher, reconciliation, cashflow; money flow, report catalogue, XLSX and Google Sheets export | Every reconciliation status produced by a fixture month; write-scope test green; B9 answered | — |
+| **8** | Bank accounts + statement import, payouts, matcher, reconciliation, cashflow; money flow, report catalogue, XLSX and Google Sheets export | Every reconciliation status produced by a fixture month; write-scope test green; B9 answered | ✅ Built and verified live, 2026-09-17 (migrations 0039–0040; 22 + 29 live checks; write-scope test 31 offline). **Owner decision:** no bank source exists — each settlement's reported total (noon: each reported payment) is the *expected* marketplace payout; *actual bank receipt* stays Not connected. Reconciliation is marketplace-side (adds up / does not / no total / marketplace payment). Report catalogue with Excel and Google Sheets export. B9 deferred until a bank source is connected; bank import and matcher not built |
 | 9 | AI intents over verified queries; alerts on ledger metrics | Guard + intent suites; live model check | — |
 | 10 | Legacy retirement: freeze old writers, drop deprecated tables, purge legacy customer PII | No reads found; backup taken; owner approval; B10 answered | — |
 
@@ -38,14 +38,16 @@ its default.
 
 ## 3. Manual steps for the owner
 
-1. ~~Apply migrations 0029–0038~~ — done (0038 on 2026-09-17).
+1. ~~Apply migrations 0029–0040~~ — done (0040 on 2026-09-17).
 1a. **Place any expense categories BizMind lists** under **Operating
    expenses**, so Net Profit can become final.
 1b. **Enter products and costs** under **Products and costs**, and match
    marketplace SKUs under **SKU matching**, so July Gross Profit can become
    final and be checked against your own model.
-2. **Supply a bank statement** sample before Phase 8. (Amazon settlements and
-   the noon Transaction View and invoices: supplied 2026-09-15.)
+2. ~~Supply a bank statement~~ — the owner has none for this workflow
+   (2026-09-17). Connect a real bank source later to see actual receipts.
+2a. **Try one Google Sheets export** from **Reports** once Google is
+   connected: the real Google round trip is not covered by the automated tests.
 3. **Confirm with an accountant** that VAT on each account's marketplace fees
    is recoverable, before setting it in BizMind (B1 is decided; the per-account
    setting is the accountant's confirmation). Set it under **Marketplace

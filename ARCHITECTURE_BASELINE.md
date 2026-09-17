@@ -43,7 +43,7 @@ Where this file and an older document disagree, this file wins.
 | ~~B6~~ | **Resolved 2026-09-15:** fingerprint + parsed source rows; original files not kept; no buyer PII in source rows | — |
 | B7 | COGS for sales before the first cost entry | Cost unknown; explicit audited backfill only — **Kept 2026-09-17 (Phase 6):** a sale with no cost in force on its date keeps Gross Profit incomplete; a back-dated cost entry is the audited backfill |
 | B8 | Same settlement id, different content | Refused, naming the file already counting it — **Kept as decided 2026-09-15** |
-| B9 | Reconciliation tolerance and date window | Exact amount, ±7 days, editable |
+| B9 | Reconciliation tolerance and date window | Exact amount, ±7 days, editable — **Deferred 2026-09-17 (Phase 8):** applies only once a bank source is connected; none exists yet |
 | B10 | When legacy customer PII is purged | At legacy retirement |
 | ~~B11~~ | **Resolved 2026-09-15:** Viewer read-only; Staff import only; Admin import + SKU mappings + COGS + expenses; Owner everything incl. integrations, reconciliation, configuration | — |
 | B12 | Sheets change notifications in V1 | Schedule + Sync now only — **Kept 2026-09-17 (Phase 7)** for the new Products and Product-cost tabs too |
@@ -73,8 +73,8 @@ Google Sheets → dataset targets → products · product_costs · expenses · b
 | `settlements`, `payouts` | 1 ✅ | Immutable (manual payouts voidable, Phase 6) |
 | `catalog_products`, `sku_aliases` (confirmed and rejected decisions), `product_costs` | 6 ✅ | Confirmed matches only, suggestions computed; dated, append-only costs; COGS and Gross Profit at calculation time (migration 0035). Legacy `products` stays until Phase 10 |
 | `expenses` (unchanged), `expense_categories`, `expense_category_rules` | 7 ✅ | Classified at calculation time; unknown names keep Net Profit incomplete (migration 0037). `adjustments` not built |
-| `bank_accounts`, `bank_transactions`, `reconciliations`, `reconciliation_links` | 6 | Suggested, confirmed by a person |
-| `quality_issues`, `report_exports` | 3 / 7 | Never deleted; exports append-only |
+| `bank_accounts`, `bank_transactions`, `reconciliations`, `reconciliation_links` | later | Not built: the owner has no bank source (2026-09-17). Expected payouts (`expected_payouts()`, 0039) are read from settlements and reported payments; actual bank receipt is NOT_CONNECTED |
+| `report_exports` | 8 ✅ | Google Sheets exports; the created spreadsheet is recorded once, never repointed (0040). `quality_issues` stays computed (`ledger_data_quality()`) |
 
 Ledger sides: `PNL`, `CASH` (never revenue), `TAX` (separate), `MEMO`, plus
 `UNMAPPED` lines that count nowhere and are always reported.

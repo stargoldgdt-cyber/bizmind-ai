@@ -114,7 +114,8 @@ Non-negotiable:
    browser.
 
    Two such jobs exist: the webhook receiver and the sync worker, neither of
-   which has a session. The key is confined to two modules under
+   which has a session. (The sync worker also runs queued report exports to
+   Google Sheets, GCC Phase 8.) The key is confined to two modules under
    `src/services/integrations/security/`, `callTrusted()` can only reach
    tenant-resolving functions, and **a call carrying a business id is
    refused** — because those functions derive their own tenant and there must
@@ -333,7 +334,7 @@ GCC 5   noon adapter                       ✅ built, July reproduced from real 
         Owner validation against marketplace reports, from GCC 4 onward
 GCC 6   Product master, SKU mapping, dated COGS  ✅ built, verified live (59 checks) — DATABASE.md §7q
 GCC 7   Expenses + Google Sheets dataset targets  ✅ built, verified live (35 checks) — DATABASE.md §7r
-GCC 8   Settlements, payouts, bank, reconciliation, cashflow, reports
+GCC 8   Expected payouts, cashflow, reports + exports  ✅ built, verified live — DATABASE.md §7s (no bank source yet)
 GCC 9   AI intents + alerts on the ledger
 GCC 10  Legacy retirement
 ```
@@ -375,6 +376,9 @@ Update the relevant documentation in the same commit as the change.
   marketplace fees is never a P&L expense; non-recoverable VAT is its own
   expense line; while the treatment is unknown, P&L contribution is incomplete,
   never shown as final, and never assumed (B1).
+- Do not present an expected marketplace payout as money received. Actual
+  bank receipt stays "Not connected" until a real bank source exists; never
+  invent bank transactions.
 - Do not merge the six views of money: P&L (economic profit), tax ledger (VAT,
   input VAT), cashflow (actual cash), settlement (marketplace calculation),
   payout (marketplace-reported payment), bank (actual receipt). They link only

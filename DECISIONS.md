@@ -1878,3 +1878,43 @@ twice.
 **Fix applied the same day (0038):** 0037's sync batch set a ledger-only
 column, so product and cost syncs were refused until 0038. The live suite found
 it before any real sheet was connected.
+
+---
+
+## 2026-09-17 — Expected payouts, no bank source, and report exports (GCC Phase 8)
+
+**Decided by the owner:** there is no bank statement (PDF, paper or export) for
+this workflow.
+
+- The marketplace's own report is the source of the **expected payout**: an
+  Amazon settlement's reported total; for noon, which has no settlements, each
+  "Payment Disbursal" noon reports sending.
+- **Expected marketplace payout** and **actual bank receipt** are separate
+  concepts in the data and on every screen and report. Actual bank receipt is
+  "Not connected" until a real bank source is connected. No bank transaction is
+  created, imported or assumed, and nothing is built around PDF statements.
+- Expected payouts are cash *planning*: grouped by the date the marketplace
+  gives, never labelled as received.
+
+**Defaults recorded:**
+
+- **Reconciliation, for now, is marketplace-side:** a settlement adds up (total
+  = its lines), does not add up (the payout is in doubt), or states no total
+  (no amount is invented); a noon payment is reported, not tied to a total.
+- **B9 (tolerance and date window) is deferred** until a bank source exists;
+  its default is unchanged.
+- **Reports:** five catalogue reports (marketplace profit, product profit,
+  expenses and net profit, expected payouts and cashflow, open data quality),
+  as Excel downloads and Google Sheets copies. A figure is written as a number
+  only when no digit would be lost (Excel keeps 15), otherwise as exact text; a
+  blank is not final and its status says why.
+- **Google Sheets export (A5):** a person requests it; the background worker
+  creates a NEW spreadsheet, records it before writing, fills it with RAW
+  values (never evaluated), and never writes to any other spreadsheet. A retry
+  never creates a second one. Owner or admin only, Google connected, at most
+  three in flight, audited. Existing exports are never updated afterwards.
+- **Not built:** bank accounts, statement import, the payout-to-bank matcher.
+
+**Why:** the owner's rule keeps an expected amount from ever reading as money
+in the bank, and the export design keeps BizMind's Google permission confined
+to files it made.

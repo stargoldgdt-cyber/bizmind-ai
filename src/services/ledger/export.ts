@@ -97,6 +97,14 @@ export function ledgerExportRows(input: LedgerExportInput): CsvCell[][] {
       [text("Non-recoverable VAT on fees"), money(s.non_recoverable_vat), text(figures)],
       [text("Contribution (before COGS and operating expenses)"), money(s.contribution), text(STATUS(s.contribution_status))],
       [text("Contribution before open items (informational, not final)"), money(s.contribution_before_open_items), text("Informational")],
+      [text("Cost of goods sold (units sold x dated cost)"), money(s.cogs), text(STATUS(s.gross_profit_status))],
+      [text("Gross profit (contribution - COGS)"), money(s.gross_profit), text(STATUS(s.gross_profit_status))],
+      [text("Gross profit before open items (informational, not final)"), money(s.gross_profit_before_open_items), text("Informational")],
+      [],
+      [text("UNITS"), text("Quantity")],
+      [text("Units sold"), money(s.units_sold)],
+      [text("Units whose SKU is not mapped to a product"), money(s.units_without_product)],
+      [text("Units whose product has no cost on the sale date"), money(s.units_without_cost)],
       [],
       [text("TAX (not in profit unless the VAT setting says so)"), text("Amount")],
       [text(`VAT setting for fees: ${s.input_vat_treatment}`)],
@@ -110,6 +118,7 @@ export function ledgerExportRows(input: LedgerExportInput): CsvCell[][] {
       [text("Waiting for the VAT setting"), count(s.conditional_lines)],
       [text("Unreadable rows in these files"), count(s.row_errors)],
       [text("Reasons incomplete"), text(s.incomplete_reasons.join(" / ") || "none")],
+      [text("Reasons gross profit is incomplete"), text(s.gross_profit_reasons.join(" / ") || "none")],
     )
   }
 

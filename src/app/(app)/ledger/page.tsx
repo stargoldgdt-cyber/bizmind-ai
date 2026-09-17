@@ -46,7 +46,7 @@ export const metadata: Metadata = {
 }
 
 /**
- * Marketplace profit: the live dashboard on the ledger (GCC Phases 4-5).
+ * Marketplace profit: the live dashboard on the ledger (GCC Phases 4-6).
  *
  * PERFORMS NO CALCULATIONS. Every figure is computed by the P&L engine in SQL
  * (pnl_summary, pnl_breakdown, pnl_settlements) and arrives as exact text.
@@ -56,6 +56,8 @@ export const metadata: Metadata = {
  * unreadable, fee VAT is not separated or the VAT setting is Unknown, the
  * affected figures carry an Incomplete label and contribution shows no number
  * -- only an informational figure labelled "not final" (decision B1).
+ * Gross profit (contribution - COGS, decision B16) is likewise shown only
+ * when contribution is final and every sold unit has a product and a cost.
  *
  * One account, or every account in one currency added up by the engine.
  * Accounts in different currencies are never combined (A12). The choice and
@@ -274,6 +276,40 @@ function OpenItems({
         </section>
       )}
 
+      {(s.gross_profit_reasons.includes("SKU_NOT_MAPPED") || s.gross_profit_reasons.includes("COST_MISSING")) && (
+        <section role="status" className="rounded-xl border border-warning/40 bg-warning-subtle px-5 py-4">
+          <div className="flex gap-3">
+            <CircleAlert className="mt-0.5 size-4 shrink-0 text-warning-strong" aria-hidden />
+            <div className="grid gap-2 text-sm">
+              <p className="font-medium">Gross profit for {month.label} needs product costs</p>
+              <ul className="grid gap-1.5">
+                {s.gross_profit_reasons.includes("SKU_NOT_MAPPED") && (
+                  <li>
+                    {formatNumber(s.units_without_product, 4)} unit(s) sold under SKUs not yet matched to one of your
+                    products.{" "}
+                    <Link href="/catalog/mapping" className="font-medium underline underline-offset-4">
+                      Match SKUs
+                    </Link>
+                  </li>
+                )}
+                {s.gross_profit_reasons.includes("COST_MISSING") && (
+                  <li>
+                    {formatNumber(s.units_without_cost, 4)} unit(s) sold of products with no cost in {s.currency} on
+                    the sale date.{" "}
+                    <Link href="/catalog" className="font-medium underline underline-offset-4">
+                      Add costs
+                    </Link>
+                  </li>
+                )}
+                <li className="text-muted-foreground">
+                  Sales without a known cost: {money(s.sales_without_cost)}.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </section>
+      )}
+
       {s.review_lines > 0 && (
         <section className="flex gap-3 rounded-xl border border-info/40 bg-info-subtle px-5 py-3 text-sm">
           <Info className="mt-0.5 size-4 shrink-0 text-info-strong" aria-hidden />
@@ -303,7 +339,7 @@ function HeadlineFigures({ s, hrefs }: { s: PnlSummaryRow; hrefs?: Partial<Recor
   const money = (value: string | null | undefined) => formatMoney(value, s.currency)
   const figures = s.figures_status
   return (
-    <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <FigureCard label="Gross sales" value={money(s.gross_sales)} status={figures} href={hrefs?.gross} />
       <FigureCard label="Net sales" value={money(s.net_sales)} status={figures} note="After refunds and seller-funded discounts" />
       <FigureCard label="Marketplace fees" value={money(s.marketplace_fees)} status={figures} href={hrefs?.fees} />
@@ -316,6 +352,25 @@ function HeadlineFigures({ s, hrefs }: { s: PnlSummaryRow; hrefs?: Partial<Recor
         emphasis
         href={hrefs?.profit}
         note={contributionNote(s)}
+      />
+      <FigureCard
+        label="Cost of goods sold"
+        value={s.gross_profit === null ? "Incomplete" : money(s.cogs)}
+        status={s.gross_profit_status}
+        note={`${formatNumber(s.units_sold, 4)} units sold${s.gross_profit === null ? `; costed so far: ${money(s.cogs)} — not final` : ""}`}
+        href={hrefs?.products}
+      />
+      <FigureCard
+        label="Gross profit"
+        value={s.gross_profit === null ? "Incomplete" : money(s.gross_profit)}
+        status={s.gross_profit_status}
+        emphasis
+        href={hrefs?.products}
+        note={
+          s.gross_profit === null
+            ? `From what is known so far: ${money(s.gross_profit_before_open_items)} — not final`
+            : "Contribution minus cost of goods sold"
+        }
       />
     </section>
   )
@@ -333,6 +388,56 @@ const STATEMENT_ROWS: { label: string; value: (s: PnlSummaryRow) => string | nul
   { label: "Other marketplace costs", value: (s) => s.other_marketplace_costs, group: "OTHER_MARKETPLACE_COSTS" },
   { label: "Non-recoverable VAT on fees", value: (s) => s.non_recoverable_vat },
 ]
+
+function GrossProfitRows({
+  columns,
+  href,
+}: {
+  columns: PnlSummaryRow[]
+  href?: string
+}) {
+  const cell = (s: PnlSummaryRow, value: string) =>
+    s.gross_profit === null ? (
+      <span className="inline-flex items-center gap-1 font-sans text-xs text-warning-strong">
+        <CircleAlert className="size-3.5" aria-hidden />
+        Incomplete
+      </span>
+    ) : (
+      <>{formatMoney(value, s.currency)}</>
+    )
+  const link = href ? (
+    <TableCell className="w-28 text-right">
+      <Link href={href} className="text-xs font-medium underline-offset-4 hover:underline">
+        Products
+      </Link>
+    </TableCell>
+  ) : null
+  return (
+    <>
+      <TableRow>
+        <TableCell className="text-sm">Cost of goods sold</TableCell>
+        {columns.map((s, index) => (
+          <TableCell key={`cogs-${index}`} className="text-right font-mono text-sm tabular-nums">
+            {cell(s, s.cogs)}
+          </TableCell>
+        ))}
+        {link}
+      </TableRow>
+      <TableRow className="bg-muted/40">
+        <TableCell className="text-sm font-semibold">
+          Gross profit
+          <span className="block text-[11px] font-normal text-muted-foreground">Before operating expenses</span>
+        </TableCell>
+        {columns.map((s, index) => (
+          <TableCell key={`gp-${index}`} className="text-right font-mono text-sm font-semibold tabular-nums">
+            {cell(s, s.gross_profit ?? "")}
+          </TableCell>
+        ))}
+        {link}
+      </TableRow>
+    </>
+  )
+}
 
 function ContributionCell({ s }: { s: PnlSummaryRow }) {
   return s.contribution === null ? (
@@ -363,6 +468,7 @@ function MonthView({
   const money = (value: string | null | undefined) => formatMoney(value, s.currency)
   const lines = (params: Record<string, string | null | undefined>) =>
     ledgerHref("/ledger/lines", { account: account.id, month: month.key, ...params })
+  const productsHref = ledgerHref("/ledger/products", { account: account.id, month: month.key })
 
   return (
     <div className="grid gap-6">
@@ -376,6 +482,7 @@ function MonthView({
           fulfillment: lines({ group: "FULFILLMENT" }),
           advertising: lines({ group: "ADVERTISING" }),
           profit: lines({ view: "profit" }),
+          products: productsHref,
         }}
       />
 
@@ -429,6 +536,7 @@ function MonthView({
                   </Link>
                 </TableCell>
               </TableRow>
+              <GrossProfitRows columns={[s]} href={productsHref} />
             </TableBody>
           </Table>
         </div>
@@ -622,7 +730,10 @@ function CombinedView({
   return (
     <div className="grid gap-6">
       <OpenItems s={total} month={month} isOwner={isOwner} />
-      <HeadlineFigures s={total} />
+      <HeadlineFigures
+        s={total}
+        hrefs={{ products: ledgerHref("/ledger/products", { account: `${ALL_PREFIX}${total.currency}`, month: month.key }) }}
+      />
 
       <section className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="border-b border-border px-5 py-4">
@@ -677,8 +788,9 @@ function CombinedView({
                   </TableCell>
                 ))}
               </TableRow>
+              <GrossProfitRows columns={columns} />
               <TableRow>
-                <TableCell className="text-xs text-muted-foreground">Status</TableCell>
+                <TableCell className="text-xs text-muted-foreground">Contribution status</TableCell>
                 {columns.map((column, index) => (
                   <TableCell key={`status-${column.marketplace_account_id ?? "total"}-${index}`} className="text-right">
                     <StatusLabel status={column.contribution_status} />

@@ -961,6 +961,62 @@ export type Database = {
         Relationships: []
       }
 
+      /* ---- Product master, SKU mapping, dated costs (migration 0035) ----- */
+
+      catalog_products: {
+        Row: {
+          id: string
+          business_id: string
+          name: string
+          sku_code: string | null
+          category: string | null
+          brand: string | null
+          status: "ACTIVE" | "ARCHIVED"
+          created_at: string
+          updated_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+
+      sku_aliases: {
+        Row: {
+          id: string
+          business_id: string
+          marketplace_code: string
+          raw_sku: string
+          product_id: string
+          status: "CONFIRMED" | "REJECTED"
+          note: string | null
+          decided_by: string | null
+          decided_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+
+      product_costs: {
+        Row: {
+          id: string
+          business_id: string
+          product_id: string
+          currency: string
+          unit_cost: Numeric
+          effective_from: string
+          note: string | null
+          created_by: string | null
+          created_at: string
+          retired_at: string | null
+          retired_by: string | null
+          retire_reason: string | null
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+
       settlements: {
         Row: {
           id: string
@@ -1840,6 +1896,23 @@ export type Database = {
           classification_status: ClassificationStatusDb
           rule_includes_vat: boolean
           rule_separates_vat: boolean
+          /** Migration 0035. */
+          quantity: string | null
+          quantity_basis: "REPORTED" | "DERIVED_LINE_COUNT" | null
+          attribution: LedgerAttributionDb
+        }
+        Relationships: []
+      }
+
+      ledger_product_lines: {
+        Row: Database["public"]["Views"]["ledger_classified_lines"]["Row"] & {
+          product_id: string | null
+          product_name: string | null
+          product_category: string | null
+          is_cost_line: boolean
+          cogs_status: "COSTED" | "NO_COST" | "NO_PRODUCT" | "NOT_APPLICABLE"
+          unit_cost: string | null
+          cogs: string | null
         }
         Relationships: []
       }
@@ -2013,6 +2086,25 @@ export type Database = {
           incomplete_reasons: ("UNKNOWN_LINES" | "VAT_TREATMENT_UNKNOWN" | "FEE_VAT_NOT_SEPARATED" | "ROW_ERRORS")[]
           /** How many accounts the row covers (1 unless combined). */
           accounts: number
+          /* ---- Migration 0035: COGS and Gross Profit (B16) ---- */
+          units_sold: string
+          cogs: string
+          units_without_product: string
+          units_without_cost: string
+          sales_without_cost: string
+          /** Contribution - COGS; NULL unless gross_profit_status is FINAL. */
+          gross_profit: string | null
+          gross_profit_status: FigureStatusDb
+          /** Informational only: never label it as the final gross profit. */
+          gross_profit_before_open_items: string
+          gross_profit_reasons: (
+            | "UNKNOWN_LINES"
+            | "VAT_TREATMENT_UNKNOWN"
+            | "FEE_VAT_NOT_SEPARATED"
+            | "ROW_ERRORS"
+            | "SKU_NOT_MAPPED"
+            | "COST_MISSING"
+          )[]
         }[]
       }
 
@@ -2105,6 +2197,120 @@ export type Database = {
           payout_amount: string | null
           payout_date: string | null
         }[]
+      }
+
+      /* ---- Product master and Gross Profit (migration 0035) -------------- */
+
+      pnl_by_product: {
+        Args: { p_from: string; p_to: string; p_account_id?: string | null; p_business_id?: string | null }
+        Returns: {
+          currency: string
+          row_kind: "PRODUCT" | "UNMAPPED_SKU" | "NOT_ALLOCATED"
+          product_id: string | null
+          product_name: string | null
+          product_category: string | null
+          raw_sku: string | null
+          marketplace_code: string | null
+          lines: number
+          units_sold: string
+          net_sales: string
+          other_income: string
+          costs: string
+          /** NULL unless every sold unit of the product has a cost. */
+          cogs: string | null
+          contribution: string
+          gross_profit: string | null
+          gross_margin_percent: string | null
+          cogs_status: "COSTED" | "PARTLY_COSTED" | "NO_COST" | "NO_PRODUCT" | "NOT_APPLICABLE"
+        }[]
+      }
+
+      sku_mapping_queue: {
+        Args: { p_business_id: string }
+        Returns: {
+          marketplace_code: string
+          raw_sku: string
+          accounts: string
+          currencies: string
+          lines: number
+          units_sold: string
+          net_sales: string
+          first_seen: string
+          last_seen: string
+          sample_title: string | null
+          suggestions: { product_id: string; name: string; reason: "SAME_SKU_CODE" | "MAPPED_ON_OTHER_MARKETPLACE" }[]
+        }[]
+      }
+
+      catalog_product_overview: {
+        Args: { p_business_id: string }
+        Returns: {
+          product_id: string
+          name: string
+          sku_code: string | null
+          category: string | null
+          brand: string | null
+          status: "ACTIVE" | "ARCHIVED"
+          mapped_skus: number
+          current_costs: { currency: string; unit_cost: string; effective_from: string }[]
+          created_at: string
+        }[]
+      }
+
+      catalog_product_create: {
+        Args: {
+          p_business_id: string
+          p_name: string
+          p_sku_code?: string | null
+          p_category?: string | null
+          p_brand?: string | null
+        }
+        Returns: string
+      }
+
+      catalog_product_update: {
+        Args: {
+          p_product_id: string
+          p_name?: string | null
+          p_sku_code?: string | null
+          p_category?: string | null
+          p_brand?: string | null
+          p_status?: "ACTIVE" | "ARCHIVED" | null
+        }
+        Returns: undefined
+      }
+
+      sku_alias_decide: {
+        Args: {
+          p_business_id: string
+          p_marketplace_code: string
+          p_raw_sku: string
+          p_product_id: string
+          p_decision: "CONFIRMED" | "REJECTED"
+          p_note?: string | null
+        }
+        Returns: string
+      }
+
+      sku_alias_remove: {
+        Args: { p_alias_id: string }
+        Returns: undefined
+      }
+
+      product_cost_add: {
+        Args: {
+          p_product_id: string
+          p_currency: string
+          p_unit_cost: string
+          p_effective_from: string
+          p_note?: string | null
+        }
+        Returns: string
+      }
+
+      product_cost_retire: {
+        Args: { p_cost_id: string; p_reason?: string | null }
+        Returns: undefined
       }
 
       classification_rule_impact: {
@@ -2676,6 +2882,9 @@ export type LedgerLine = Database["public"]["Views"]["ledger_lines"]["Row"]
 export type ClassificationCategoryRow = T["classification_categories"]["Row"]
 export type ClassificationRule = T["classification_rules"]["Row"]
 export type LedgerClassifiedLine = Database["public"]["Views"]["ledger_classified_lines"]["Row"]
+export type CatalogProduct = T["catalog_products"]["Row"]
+export type SkuAlias = T["sku_aliases"]["Row"]
+export type ProductCost = T["product_costs"]["Row"]
 
 /** A business plus the calling user's role in it. */
 export type BusinessWithRole = Business & { role: BusinessRole }

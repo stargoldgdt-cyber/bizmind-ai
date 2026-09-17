@@ -120,6 +120,15 @@ const summary: PnlSummaryRow = {
   row_errors: 0,
   incomplete_reasons: ["VAT_TREATMENT_UNKNOWN"],
   accounts: 1,
+  units_sold: "1000.0000",
+  cogs: "0.0000",
+  units_without_product: "1000.0000",
+  units_without_cost: "0.0000",
+  sales_without_cost: "61429.1100",
+  gross_profit: null,
+  gross_profit_status: "INCOMPLETE",
+  gross_profit_before_open_items: "36552.7600",
+  gross_profit_reasons: ["VAT_TREATMENT_UNKNOWN", "SKU_NOT_MAPPED"],
 }
 const exported = buildCsv(
   ledgerExportRows({

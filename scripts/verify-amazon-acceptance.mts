@@ -250,6 +250,30 @@ try {
     JSON.stringify(nonRecoverable)
   )
 
+  /* ------------------------------------------------------------------------ */
+  section("4. JULY 2026 BY PRODUCT (migration 0035)")
+
+  check(
+    "No products yet: 296 units sold, gross profit incomplete because SKUs are not matched",
+    nonRecoverable?.units_sold === "296.0000" && nonRecoverable?.gross_profit === null &&
+      JSON.stringify(nonRecoverable?.gross_profit_reasons) === JSON.stringify(["SKU_NOT_MAPPED"]),
+    JSON.stringify(nonRecoverable)
+  )
+  const productRows: Json[] = (await call("/rest/v1/rpc/pnl_by_product", {
+    method: "POST", body: JSON.stringify(period),
+  }, token)).body ?? []
+  const productTotal = productRows.reduce((total, row) => total + units(row.contribution), BigInt(0))
+  check(
+    `The ${productRows.length} product rows add up to the account's contribution (36432.97)`,
+    show(productTotal) === "36432.97",
+    show(productTotal)
+  )
+  check(
+    "Only SKU rows and one row not allocated to a product; no product rows yet",
+    productRows.filter((row) => row.row_kind === "NOT_ALLOCATED").length === 1 &&
+      productRows.every((row) => row.row_kind !== "PRODUCT")
+  )
+
   const monthsOffered: Json[] = (await call("/rest/v1/rpc/pnl_periods", {
     method: "POST", body: JSON.stringify({ p_business_id: businessId }),
   }, token)).body ?? []

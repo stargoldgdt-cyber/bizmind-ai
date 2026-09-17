@@ -21,11 +21,14 @@ export function LedgerFilters({
   months,
   accountId,
   monthKey,
+  basePath = "/ledger",
 }: {
   accounts: { id: string; label: string; detail: string }[]
   months: { key: string; label: string }[]
   accountId: string
   monthKey: string | null
+  /** The screen the choice reloads: the overview or product profit. */
+  basePath?: "/ledger" | "/ledger/products"
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -34,7 +37,7 @@ export function LedgerFilters({
     startTransition(() => {
       const query = new URLSearchParams({ account })
       if (month) query.set("month", month)
-      router.push(`/ledger?${query.toString()}`)
+      router.push(`${basePath}?${query.toString()}`)
     })
 
   return (

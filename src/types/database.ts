@@ -2020,12 +2020,19 @@ export type Database = {
       }
 
       ledger_data_quality: {
-        Args: { p_from?: string | null; p_to?: string | null; p_account_id?: string | null }
+        Args: {
+          p_from?: string | null
+          p_to?: string | null
+          p_account_id?: string | null
+          /** Migration 0033: limit to one of the caller's businesses. */
+          p_business_id?: string | null
+        }
         Returns: {
           issue_kind: "UNKNOWN_CODE" | "UNDER_REVIEW" | "VAT_TREATMENT_UNKNOWN" | "ROW_ERRORS" | "SETTLEMENT_MISMATCH"
           severity: "WARNING" | "INFO"
           marketplace_account_id: string
           account_label: string
+          marketplace_code: string
           currency: string
           format_id: string | null
           /** The marketplace code, or the settlement id for a mismatch. */
@@ -2036,6 +2043,43 @@ export type Database = {
           amount: string | null
           files: number
           detail: string
+        }[]
+      }
+
+      /* ---- The ledger dashboard's readers (migration 0033) --------------- */
+
+      pnl_periods: {
+        Args: { p_business_id?: string | null }
+        Returns: {
+          marketplace_account_id: string
+          account_label: string
+          marketplace_code: string
+          currency: string
+          /** First day of the month, "YYYY-MM-01" (UTC). */
+          month: string
+          lines: number
+        }[]
+      }
+
+      pnl_settlements: {
+        Args: { p_from: string; p_to: string; p_account_id: string }
+        Returns: {
+          settlement_id: string
+          source_file_id: string
+          file_name: string
+          external_settlement_id: string
+          period_start: string | null
+          period_end: string | null
+          currency: string
+          reported_total: string | null
+          /** Every line of the settlement. */
+          lines_total: string
+          /** Only the lines posted in the period. */
+          lines_in_period: string
+          lines_in_period_count: number
+          reconciles: boolean
+          payout_amount: string | null
+          payout_date: string | null
         }[]
       }
 

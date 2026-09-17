@@ -38,6 +38,7 @@ export const ONBOARDING_ROUTE = "/onboarding"
  */
 export const PROTECTED_PREFIXES = [
   "/dashboard",
+  "/ledger",
   "/ask",
   "/alerts",
   "/sales",

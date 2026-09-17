@@ -427,7 +427,46 @@ try {
   check("an anonymous caller cannot run the P&L engine", !anon.ok, say(anon))
 
   /* ------------------------------------------------------------------------ */
-  section("7. A WITHDRAWN FILE COUNTS TOWARDS NOTHING")
+  section("7. THE DASHBOARD'S READERS (migration 0033)")
+
+  const periods = rows(await rpc("pnl_periods", { p_business_id: businessId }, owner))
+  check(
+    "pnl_periods offers July 2026 with the file's 13 lines",
+    periods.length === 1 && periods[0].marketplace_account_id === accountId &&
+      periods[0].month === "2026-07-01" && periods[0].lines === 13 && periods[0].marketplace_code === "AMAZON",
+    JSON.stringify(periods)
+  )
+
+  const julySettlements = rows(await rpc("pnl_settlements", JULY, owner))
+  const settlement = julySettlements[0]
+  check(
+    "pnl_settlements: reported 66.5000 = all its lines 66.5000, 13 of them in July, payout 66.5000",
+    julySettlements.length === 1 && settlement.reported_total === "66.5000" && settlement.lines_total === "66.5000" &&
+      settlement.lines_in_period === "66.5000" && settlement.lines_in_period_count === 13 &&
+      settlement.reconciles === true && settlement.payout_amount === "66.5000" &&
+      String(settlement.file_name).endsWith(".txt"),
+    JSON.stringify(julySettlements)
+  )
+  const august = rows(await rpc("pnl_settlements", { ...JULY, p_from: "2026-08-01T00:00:00Z", p_to: "2026-09-01T00:00:00Z" }, owner))
+  check("a month the settlement does not touch lists nothing", august.length === 0, JSON.stringify(august))
+
+  const scoped = rows(await rpc("ledger_data_quality", { p_business_id: businessId }, owner))
+  check(
+    "data quality for this business names the marketplace on every item",
+    scoped.length > 0 && scoped.every((i) => i.marketplace_code === "AMAZON" && i.marketplace_account_id === accountId),
+    JSON.stringify(scoped)
+  )
+  const otherBusiness = rows(await rpc("ledger_data_quality", { p_business_id: "00000000-0000-0000-0000-000000000000" }, owner))
+  check("filtering by another business id returns none of this business's items", otherBusiness.length === 0)
+
+  check("another business sees no months", rows(await rpc("pnl_periods", { p_business_id: businessId }, rival)).length === 0)
+  check("nor any settlement", rows(await rpc("pnl_settlements", JULY, rival)).length === 0)
+  check("nor any data quality item, even naming this business", rows(await rpc("ledger_data_quality", { p_business_id: businessId }, rival)).length === 0)
+  const anonPeriods = await rpc("pnl_periods", { p_business_id: businessId }, ANON_KEY)
+  check("an anonymous caller cannot list months", !anonPeriods.ok, say(anonPeriods))
+
+  /* ------------------------------------------------------------------------ */
+  section("8. A WITHDRAWN FILE COUNTS TOWARDS NOTHING")
 
   const withdrawn = await rpc("ledger_file_withdraw", { p_source_file_id: fileId, p_reason: "Verification" }, owner)
   check("withdrawn: no figures for July", withdrawn.ok && (await summaryAs(owner)) === undefined, say(withdrawn))

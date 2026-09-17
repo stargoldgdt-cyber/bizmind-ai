@@ -249,6 +249,27 @@ try {
     nonRecoverable?.contribution === "36432.9700" && nonRecoverable?.non_recoverable_vat === "-119.7900",
     JSON.stringify(nonRecoverable)
   )
+
+  const monthsOffered: Json[] = (await call("/rest/v1/rpc/pnl_periods", {
+    method: "POST", body: JSON.stringify({ p_business_id: businessId }),
+  }, token)).body ?? []
+  check(
+    "The dashboard offers July 2026 with its 1,154 lines",
+    monthsOffered.some((m) => m.month === "2026-07-01" && m.lines === 1154),
+    JSON.stringify(monthsOffered)
+  )
+
+  const julySettlements: Json[] = (await call("/rest/v1/rpc/pnl_settlements", {
+    method: "POST", body: JSON.stringify(period),
+  }, token)).body ?? []
+  const julyLineCount = julySettlements.reduce((total, s) => total + s.lines_in_period_count, 0)
+  check(
+    `July touches ${julySettlements.length} settlement(s); each adds up to Amazon's total and its payout`,
+    julySettlements.length > 0 &&
+      julySettlements.every((s) => s.reconciles === true && s.payout_amount === s.reported_total),
+    JSON.stringify(julySettlements)
+  )
+  check("Their July lines are the same 1,154", julyLineCount === 1154, String(julyLineCount))
 } catch (error) {
   failed += 1
   console.log(`\n  FAIL  stopped early: ${(error as Error).message}`)

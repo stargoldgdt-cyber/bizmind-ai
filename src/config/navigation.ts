@@ -12,6 +12,7 @@ import {
   PieChart,
   Plug,
   Receipt,
+  Scale,
   ShieldCheck,
   ShoppingCart,
   Store,
@@ -78,6 +79,20 @@ export type NavSection = {
 }
 
 export const NAVIGATION: NavSection[] = [
+  {
+    heading: "Marketplaces",
+    items: [
+      // GCC Phase 4: the dashboard on the marketplace ledger.
+      {
+        label: "Marketplace profit",
+        href: "/ledger",
+        icon: Scale,
+        enabled: true,
+        match: ["/ledger/lines"],
+      },
+      { label: "Marketplace data quality", href: "/ledger/quality", icon: ShieldCheck, enabled: true },
+    ],
+  },
   {
     heading: "Overview",
     items: [

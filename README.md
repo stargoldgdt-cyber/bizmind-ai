@@ -78,6 +78,9 @@ Full instructions, including how secrets are handled, are in
 | `npm run test:report-exports` | The Google Sheets write scope: only sheets BizMind created, offline |
 | `npm run test:payouts-ledger` | Every expected-payout status from one fixture month, against the real database |
 | `npm run test:report-exports-ledger` | The export queue and write scope against the real database (needs `SUPABASE_SERVICE_ROLE_KEY`) |
+| `npm run test:ledger-ask` | Ask BizMind on the ledger: facts and guards with a fake model, offline |
+| `npm run test:ledger-alerts` | Alerts on ledger figures, every skip reason, against the real database |
+| `npm run ai:check-ledger` | One real model answer per ledger question, through every guard (needs `OPENAI_API_KEY`) |
 | `npm run test:integration-live` | Tenant isolation and idempotency, live |
 | `npm run test:automation` | Alert rules, thresholds and the migration guards, no database |
 | `npm run test:automation-live` | Proves a rule stays silent when it should, live |

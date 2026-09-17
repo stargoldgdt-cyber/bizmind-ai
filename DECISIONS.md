@@ -1918,3 +1918,28 @@ this workflow.
 **Why:** the owner's rule keeps an expected amount from ever reading as money
 in the bank, and the export design keeps BizMind's Google permission confined
 to files it made.
+
+---
+
+## 2026-09-17 — AI questions and alerts on the ledger (GCC Phase 9)
+
+**Defaults recorded:**
+
+- **Questions stay a fixed list** (six), each bound to the ledger readers it
+  needs. No free-text box: a question the facts cannot answer is not offered.
+- **The facts say what is not final and what is only expected.** A reply that
+  calls a not-final figure final, or an expected payout received, is
+  discarded like one with an invented number. The figures are shown with every
+  answer, whether or not a reply is published.
+- **Ledger alerts watch one currency** (every marketplace account in it) over
+  a rolling window of days, like the legacy rules. A not-final figure is
+  skipped with its reasons, never judged; missing figures are never zero; a
+  percentage change needs a non-zero figure before; counts are value-only.
+- **Fees and advertising are watched as positive amounts** so "above" means
+  "costing more".
+- **Starter rules are offered per currency, never switched on automatically**;
+  every threshold is a starting guess.
+- **The legacy dashboard, Ask page and rules are unchanged** until Phase 10.
+
+**Why:** the same compute-first rule as every screen, with the two ledger
+facts an owner is most likely to misread made impossible to misstate.

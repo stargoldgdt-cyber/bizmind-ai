@@ -335,7 +335,7 @@ GCC 5   noon adapter                       ✅ built, July reproduced from real 
 GCC 6   Product master, SKU mapping, dated COGS  ✅ built, verified live (59 checks) — DATABASE.md §7q
 GCC 7   Expenses + Google Sheets dataset targets  ✅ built, verified live (35 checks) — DATABASE.md §7r
 GCC 8   Expected payouts, cashflow, reports + exports  ✅ built, verified live — DATABASE.md §7s (no bank source yet)
-GCC 9   AI intents + alerts on the ledger
+GCC 9   AI intents + alerts on the ledger     ✅ built, verified — AI.md §11, AUTOMATION.md §11
 GCC 10  Legacy retirement
 ```
 

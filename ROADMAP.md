@@ -24,7 +24,7 @@ against a real file or a hand-worked dataset. noon follows the dashboard
 | **6** | Product master, SKU aliases + suggester + confirmation queue, dated COGS, product/SKU/category P&L | Gross Profit Final; cross-marketplace model checks reproduced; B7, B16 answered | ✅ Built and verified live, 2026-09-17 (migration 0035, 59 live checks). B16 decided, B7 kept, B17 default recorded. Gross Profit is Final once SKUs are matched and costs entered; the owner's cross-marketplace model checks wait for real costs (entered on screen, or via Phase 7 Sheets) |
 | **7** | Expense refactor + categories; Google Sheets dataset targets (COGS, product master, operating expenses; optional advertising, bank); schedule | Net Profit Final; existing expense tab keeps syncing; Sheets live suite green; B12, B14 answered | ✅ Built and verified live, 2026-09-17 (migrations 0036–0038; 35 new live checks; Sheets suite 204 green). Expenses classified automatically, Net Profit per currency, Products and Product-cost tabs. B12 and B14 keep their defaults. Optional advertising is an expense category; the bank tab moves to Phase 8 with bank transactions; SKU suggestions from Sheets are not built (suggestions come from BizMind) |
 | **8** | Bank accounts + statement import, payouts, matcher, reconciliation, cashflow; money flow, report catalogue, XLSX and Google Sheets export | Every reconciliation status produced by a fixture month; write-scope test green; B9 answered | ✅ Built and verified live, 2026-09-17 (migrations 0039–0040; 22 + 29 live checks; write-scope test 31 offline). **Owner decision:** no bank source exists — each settlement's reported total (noon: each reported payment) is the *expected* marketplace payout; *actual bank receipt* stays Not connected. Reconciliation is marketplace-side (adds up / does not / no total / marketplace payment). Report catalogue with Excel and Google Sheets export. B9 deferred until a bank source is connected; bank import and matcher not built |
-| 9 | AI intents over verified queries; alerts on ledger metrics | Guard + intent suites; live model check | — |
+| **9** | AI intents over verified queries; alerts on ledger metrics | Guard + intent suites; live model check | ✅ Built and verified, 2026-09-17 (migration 0041). Six fixed ledger questions (`/ledger/ask`) with new guards against "received" and "final" claims (intent suite 31 offline; `npm run ai:check-ledger`: 2 of 2 real answers passed). Nine ledger alert metrics per currency; not-final figures are skipped with their reasons (22 live checks; legacy automation suite 47 green) |
 | 10 | Legacy retirement: freeze old writers, drop deprecated tables, purge legacy customer PII | No reads found; backup taken; owner approval; B10 answered | — |
 
 ## 2. Open decisions
@@ -38,7 +38,9 @@ its default.
 
 ## 3. Manual steps for the owner
 
-1. ~~Apply migrations 0029–0040~~ — done (0040 on 2026-09-17).
+1. ~~Apply migrations 0029–0041~~ — done (0041 on 2026-09-17).
+1c. **Add the marketplace starter alerts** you want under **Automations**, and
+   change their thresholds to what would actually worry you.
 1a. **Place any expense categories BizMind lists** under **Operating
    expenses**, so Net Profit can become final.
 1b. **Enter products and costs** under **Products and costs**, and match

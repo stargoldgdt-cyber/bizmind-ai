@@ -267,3 +267,25 @@ order with no recorded cost **raises** the reported gross margin, because
 revenue grows and cost does not. The owner's margin appears to improve at the
 moment their data got worse. That is what `suppress_when_incomplete` is for,
 and the test asserts the figure moved.
+
+## 11. Rules on ledger figures (GCC Phase 9, migration 0041)
+
+A rule can watch a `ledger_*` metric for one currency (all marketplace
+accounts in it). The same evaluator decides; the figure comes from
+`automation_ledger_value()`, which reads the same SQL as the marketplace
+screens.
+
+- **A figure that is not final is never judged.** The run is `SKIPPED` with
+  `INCOMPLETE_DATA:<reasons>`, explained in plain words on the rule. With
+  `suppress_when_incomplete` on, sales, fees and advertising wait too while a
+  line is unrecognised.
+- **No figures is `METRIC_NULL`, never zero.** A percentage change needs a
+  non-zero figure in the window before (`NO_PREVIOUS_VALUE`); counts are
+  watched by value only.
+- **Currency is part of the rule** and of the alert; amounts in different
+  currencies are never compared.
+- **Starter rules** (added per currency): unrecognised marketplace lines,
+  settlement does not add up, contribution below zero, advertising up more
+  than 30%, expected payouts down more than 25%. Thresholds are starting points.
+- Tests: `npm run test:automation` (offline) and `npm run test:ledger-alerts`
+  (live, every skip reason from one invented export).

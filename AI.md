@@ -274,3 +274,25 @@ the prompt says what the code enforces, and the one-door architecture.
   says "profit fell while revenue rose" must be true because the arithmetic
   says so, not because a model found the sentence plausible. The AI explains
   those findings. It does not produce them.
+
+## 11. Ask BizMind on the marketplace ledger (GCC Phase 9)
+
+`/ledger/ask` answers six fixed questions about one month, from the ledger's
+SQL readers only (`src/services/ai/ledger-facts.ts`,
+`answerLedgerQuestion()`):
+
+- **The browser sends a question key and a month.** The business comes from
+  the session; each question fetches only the readers it needs
+  (`QUESTION_NEEDS`), through the person's own session.
+- **The facts carry the ledger's rules in their text.** A figure that is not
+  final is written `NOT FINAL -- <reasons>`; an informational figure is
+  labelled `so far, NOT FINAL`; an expected payout is `expected, NOT received`
+  and the bank line reads `not connected`. Currencies are separate sections.
+- **Two guards on top of the number guard:** `claimsMoneyReceived()` discards a
+  reply that treats an expected payout as received; `claimsFinality()` discards
+  one that calls a figure final while any figure is not final. Reasons
+  `claimed_received`, `claimed_final`.
+- **The figures are always shown** with the answer, and still shown when the
+  model is off or the reply is discarded.
+- Tests: `npm run test:ledger-ask` (fake model, offline, in verify);
+  `npm run ai:check-ledger` (one real request per question, invented figures).

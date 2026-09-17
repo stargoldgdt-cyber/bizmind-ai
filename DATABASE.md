@@ -1026,6 +1026,21 @@ marketplace payout. **Actual bank receipt** is a separate concept and is always
 Readers are invoker; no bank table exists. No rollback script: 0039 adds
 readers only, 0040 one table.
 
+## 7t. Alerts on ledger figures (0041)
+
+GCC Phase 9.
+
+| Change | What it does |
+| --- | --- |
+| `canonical_metrics` | Nine `ledger_*` metrics (computed): net sales, marketplace fees and advertising (positive amounts), contribution, gross profit, net profit, expected payouts, unrecognised lines, settlements that do not add up |
+| `automation_rules.ledger_currency` | The currency a ledger rule watches; required for a `ledger_*` metric and refused otherwise (`automation_rules_ledger_metric_currency_check`) |
+| `alerts.currency` | A ledger alert's currency, copied from its rule |
+| `automation_ledger_value(business, metric, currency, from, to, suppress)` | Definer, callable by nobody but the evaluator. Reads `pnl_summary`, `pnl_net_profit`, `expected_payouts`; returns the value or why it cannot be judged (`METRIC_NULL`, `INCOMPLETE_DATA` with the ledger's reasons) |
+| `automation_evaluate_rule()` | 0017's function plus a ledger branch: skip reasons `NO_CURRENCY`, `NO_PREVIOUS_VALUE`, `INCOMPLETE_DATA:<reasons>`; percentage change computed in SQL; counts never change-watched; alert text names the figure and currency. Legacy rules unchanged |
+
+No rollback script: the columns are additive; recreating 0017's evaluator
+removes the ledger branch.
+
 ---
 
 ## 8. Regenerating types

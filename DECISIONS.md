@@ -1789,3 +1789,44 @@ unfinished may look final.
 **Why:** noon exports cover date ranges rather than settlements, state VAT
 only on invoices, and mix two contracts in one file. Each rule keeps the
 figures exact, keeps unconfirmed meanings visible, and never counts a row twice.
+
+---
+
+## 2026-09-17 — Gross Profit, product costs and SKU matching (GCC Phase 6)
+
+**Decided by the owner (B16):** costs are taken in this order —
+
+```
+Net sales − marketplace fees − fulfilment − advertising = Contribution
+Contribution − COGS                                      = Gross Profit
+Gross Profit − operating expenses (Phase 7)              = Net Profit
+```
+
+**Defaults recorded (conservative, changeable later):**
+
+- **B7 kept.** A sale with no cost in force on its date has no COGS; Gross
+  Profit stays incomplete (`COST_MISSING`). Entering a cost with an earlier
+  date is the explicit backfill, and the audit log marks it as back-dated.
+- **B17: a refund does not give back COGS.** COGS counts units sold (Product
+  sales lines with a quantity). Whether returned stock is resellable is not in
+  the files.
+- **Costs are dated and append-only (A8).** The latest cost that started on or
+  before a sale's UTC date, in the account's currency, values it. A wrong cost
+  is withdrawn, never edited. No currency conversion.
+- **SKU matching is always a person's decision (A10).** BizMind suggests a
+  product when its own SKU code matches after ignoring case and punctuation,
+  or when the same SKU is already matched on another marketplace. A rejected
+  suggestion is not offered again. Matching a SKU to a different product
+  replaces the old match. A match applies to every period.
+- **Gross Profit is final only when** contribution is final and every unit
+  sold has a matched product and a cost (`SKU_NOT_MAPPED` otherwise).
+- **Product profit allocates nothing (A7).** A product carries only lines the
+  marketplace attributed to one of its order lines; order- and account-level
+  lines form one "not allocated" row, so all rows add up to the account.
+
+**Why:** these keep every Gross Profit figure traceable to a dated cost and a
+confirmed match, and never let an unknown look like zero.
+
+**Not yet proven:** the owner's cross-marketplace model checks need the owner's
+real product costs; they are validated once those are entered (on screen or
+through the Phase 7 Google Sheets targets).

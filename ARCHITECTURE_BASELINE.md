@@ -41,7 +41,7 @@ Where this file and an older document disagree, this file wins.
 | B4 | Noon mappings, `balance_transfer`, invoices/credit notes | No noon adapter — **Resolved 2026-09-17 (Phase 5):** mappings built from the real files (NOON.md); invoices supply fee VAT and output VAT; `balance_transfer` is Cash / Transfer under review until its purpose is confirmed |
 | B5 | Is a noon fee line joined to a single-SKU order "reliable attribution"? | No, order level |
 | ~~B6~~ | **Resolved 2026-09-15:** fingerprint + parsed source rows; original files not kept; no buyer PII in source rows | — |
-| B7 | COGS for sales before the first cost entry | Cost unknown; explicit audited backfill only |
+| B7 | COGS for sales before the first cost entry | Cost unknown; explicit audited backfill only — **Kept 2026-09-17 (Phase 6):** a sale with no cost in force on its date keeps Gross Profit incomplete; a back-dated cost entry is the audited backfill |
 | B8 | Same settlement id, different content | Refused, naming the file already counting it — **Kept as decided 2026-09-15** |
 | B9 | Reconciliation tolerance and date window | Exact amount, ±7 days, editable |
 | B10 | When legacy customer PII is purged | At legacy retirement |
@@ -50,7 +50,8 @@ Where this file and an older document disagree, this file wins.
 | B13 | Carrefour capability | Contract only |
 | B14 | Existing orders, sheets, expenses | Orders read-only legacy; expenses/products carry over; no conversion to ledger rows |
 | B15 | Marketplace take rate definition | Not defined and not shown. The historical 19.1% could not be reproduced exactly from the July files (DECISIONS.md) |
-| B16 | Gross Profit: Contribution − COGS, or Net Sales − COGS | Decided before Phase 6; until then Gross and Net Profit show Incomplete |
+| ~~B16~~ | **Resolved 2026-09-17:** Gross Profit = Contribution (net sales − marketplace fees − fulfilment − advertising) − COGS; Net Profit = Gross Profit − operating expenses (Phase 7). Built in Phase 6 | — |
+| B17 | Does a refund give back the unit's COGS? | No (V1): the returned stock's condition is not known. COGS counts units sold only |
 
 ## C. The model, in one screen
 
@@ -69,7 +70,7 @@ Google Sheets → dataset targets → products · product_costs · expenses · b
 | `financial_transactions` | 1 ✅ | Immutable; one writer; composite-key lineage |
 | `classification_categories`, `classification_rules`, `tax_profiles.input_vat_treatment` | 3 ✅ | The model; versioned rules applied at calculation time; the account's VAT setting (B1) |
 | `settlements`, `payouts` | 1 ✅ | Immutable (manual payouts voidable, Phase 6) |
-| `products` (refactor), `sku_aliases`, `sku_alias_rejections`, `product_costs` | 4 | Confirmed aliases only; dated costs |
+| `catalog_products`, `sku_aliases` (confirmed and rejected decisions), `product_costs` | 6 ✅ | Confirmed matches only, suggestions computed; dated, append-only costs; COGS and Gross Profit at calculation time (migration 0035). Legacy `products` stays until Phase 10 |
 | `expenses` (refactor), `expense_categories`, `adjustments` | 5 | Adjustments native, immutable |
 | `bank_accounts`, `bank_transactions`, `reconciliations`, `reconciliation_links` | 6 | Suggested, confirmed by a person |
 | `quality_issues`, `report_exports` | 3 / 7 | Never deleted; exports append-only |

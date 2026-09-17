@@ -331,7 +331,7 @@ GCC 3   Automatic classification + P&L engine  ✅ built, verified live (51 chec
 GCC 4   Live dashboard + validation view   ✅ built, verified live — /ledger
 GCC 5   noon adapter                       ✅ built, July reproduced from real files — NOON.md
         Owner validation against marketplace reports, from GCC 4 onward
-GCC 6   Product master, SKU mapping, dated COGS
+GCC 6   Product master, SKU mapping, dated COGS  ✅ built, verified live (59 checks) — DATABASE.md §7q
 GCC 7   Expenses + Google Sheets dataset targets
 GCC 8   Settlements, payouts, bank, reconciliation, cashflow, reports
 GCC 9   AI intents + alerts on the ledger

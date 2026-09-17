@@ -963,6 +963,28 @@ GCC Phase 5. Details: [NOON.md](NOON.md).
 No rollback script: to undo, retire the noon rules and set NOON back to
 `SAMPLES_REQUIRED`; the added columns and checks are harmless unused.
 
+## 7q. Product master, SKU matching, dated COGS (0035)
+
+GCC Phase 6. Gross Profit = Contribution − COGS (B16).
+
+| Change | What it does |
+| --- | --- |
+| `catalog_products` | The business's products: name, own SKU code (unique per business after normalising), category, brand, ACTIVE/ARCHIVED |
+| `sku_aliases` | A person's decision that a marketplace SKU is (CONFIRMED) or is not (REJECTED) a product. One confirmed product per SKU per marketplace; confirming another replaces it |
+| `product_costs` | Unit cost per product per currency from a date. Append-only: a trigger allows only withdrawing; deleted only with the product or business |
+| `sku_normalize(text)` | Letters and digits, upper case. Used for the unique SKU code and for suggestions only |
+| `ledger_classified_lines` | Adds `quantity`, `quantity_basis`, `attribution` |
+| `ledger_product_lines` (view) | Each line with its confirmed product, the cost in force on its UTC date, and its COGS. Only Product sales lines with a quantity carry COGS (refunds do not give it back: B17) |
+| `pnl_summary(...)` | Recreated with `units_sold`, `cogs`, `units_without_product`, `units_without_cost`, `sales_without_cost`, `gross_profit` (NULL unless final), `gross_profit_status`, `gross_profit_before_open_items`, `gross_profit_reasons` (adds `SKU_NOT_MAPPED`, `COST_MISSING`) |
+| `pnl_by_product(from, to, account, business)` | One row per product, per unmatched SKU, and one `NOT_ALLOCATED` row for order- and marketplace-level lines (A7). Rows add up to the account's contribution |
+| `sku_mapping_queue(business)` | Unmatched SKUs with lines, units, sales, dates, a sample title and suggestions (`SAME_SKU_CODE`, `MAPPED_ON_OTHER_MARKETPLACE`), rejected pairs excluded |
+| `catalog_product_overview(business)` | Products with matched SKU count and today's cost per currency |
+| `catalog_product_create/update`, `sku_alias_decide/remove`, `product_cost_add/retire` | Definer writers: member + OWNER/ADMIN (B11), audited. A SKU must appear in the business's files; a cost is exact decimal text |
+
+RLS: members read; nobody writes the tables directly. Readers are security
+invoker. No rollback script: the tables are additive; recreating 0034's
+`pnl_summary()` undoes the figures.
+
 ---
 
 ## 8. Regenerating types

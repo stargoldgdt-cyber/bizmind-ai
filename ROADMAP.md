@@ -21,7 +21,7 @@ against a real file or a hand-worked dataset. noon follows the dashboard
 | **4** | Live dashboard + validation view: account and month filters; figures with Final / Incomplete status; category → subcategory breakdown; drill-down to source lines; Data Quality page; marketplace-reported totals alongside; CSV export of the validation view; owner/admin classification of Unknown codes (B2 amended) | The owner loads the July Amazon files and uses the dashboard | ✅ Built and verified live, 2026-09-17 (`/ledger`); the owner's own check is pending |
 | **5** | noon adapter: Transaction View + Invoices & Credit Notes, classified automatically; SAR contract as its own account; "NA" read as blank; buyer details stripped; overlapping exports refused; all accounts in one currency added up | July noon figures on the dashboard; B4, B5 answered | ✅ Built and verified live, 2026-09-17 ([NOON.md](NOON.md)). B4 answered except balance transfers (cash, under review); B5 keeps its default |
 | — | **Owner validation**, from Phase 4 onward: compare Sales, Fees, Fulfillment, Advertising, Refunds, VAT, Payouts and Profit with the marketplace reports; each mismatch becomes a rule correction | Reported mismatches corrected | Continuous |
-| 6 | Product master, SKU aliases + suggester + confirmation queue, dated COGS, product/SKU/category P&L | Gross Profit Final; cross-marketplace model checks reproduced; B7, B16 answered | — |
+| **6** | Product master, SKU aliases + suggester + confirmation queue, dated COGS, product/SKU/category P&L | Gross Profit Final; cross-marketplace model checks reproduced; B7, B16 answered | ✅ Built and verified live, 2026-09-17 (migration 0035, 59 live checks). B16 decided, B7 kept, B17 default recorded. Gross Profit is Final once SKUs are matched and costs entered; the owner's cross-marketplace model checks wait for real costs (entered on screen, or via Phase 7 Sheets) |
 | 7 | Expense refactor + categories; Google Sheets dataset targets (COGS, product master, operating expenses; optional advertising, bank); schedule | Net Profit Final; existing expense tab keeps syncing; Sheets live suite green; B12, B14 answered | — |
 | 8 | Bank accounts + statement import, payouts, matcher, reconciliation, cashflow; money flow, report catalogue, XLSX and Google Sheets export | Every reconciliation status produced by a fixture month; write-scope test green; B9 answered | — |
 | 9 | AI intents over verified queries; alerts on ledger metrics | Guard + intent suites; live model check | — |
@@ -32,11 +32,16 @@ against a real file or a hand-worked dataset. noon follows the dashboard
 See [ARCHITECTURE_BASELINE.md §B](ARCHITECTURE_BASELINE.md). B6 and B11 were
 resolved on 2026-09-15 and are implemented in Phase 1. B2, B3 and B8 were
 answered in Phase 2, and B1 before Phase 3 (DECISIONS.md, 2026-09-15). B2 was
-amended, and B15 (take rate) and B16 (Gross Profit) opened, the same day.
+amended, and B15 (take rate) and B16 (Gross Profit) opened, the same day. B16
+was decided on 2026-09-17 (Phase 6), and B17 (refunds and COGS) recorded with
+its default.
 
 ## 3. Manual steps for the owner
 
-1. ~~Apply migrations 0029–0034~~ — done (0034 on 2026-09-17).
+1. ~~Apply migrations 0029–0035~~ — done (0035 on 2026-09-17).
+1a. **Enter products and costs** under **Products and costs**, and match
+   marketplace SKUs under **SKU matching**, so July Gross Profit can become
+   final and be checked against your own model.
 2. **Supply a bank statement** sample before Phase 8. (Amazon settlements and
    the noon Transaction View and invoices: supplied 2026-09-15.)
 3. **Confirm with an accountant** that VAT on each account's marketplace fees

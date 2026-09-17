@@ -1830,3 +1830,51 @@ confirmed match, and never let an unknown look like zero.
 **Not yet proven:** the owner's cross-marketplace model checks need the owner's
 real product costs; they are validated once those are entered (on screen or
 through the Phase 7 Google Sheets targets).
+
+---
+
+## 2026-09-17 — Operating expenses, Net Profit and Sheets datasets (GCC Phase 7)
+
+**Built on the owner's B16 decision:** Net Profit = Gross Profit − operating
+expenses. Defaults recorded:
+
+- **Expenses are classified automatically, like marketplace lines.** An
+  expense's own category name is matched, at calculation time, to one of 16
+  BizMind categories in three cost classes: operating (reduces Net Profit),
+  advertising outside the marketplaces (reduces Net Profit), and not in profit
+  (stock purchases, which COGS already counts; marketplace fees and ads, which
+  the marketplace reports already hold; VAT and tax payments; owner drawings
+  and financing).
+- **Only exact, unambiguous names are recognised** (75 global rules). Names
+  that could hide a double count — "advertising", "marketing", "other",
+  "shipping", "freight" — are left for the owner, who places each once for the
+  business (owner or admin, audited). The business's own word always wins.
+- **Unknown means incomplete.** While an expense category is unplaced, Net
+  Profit shows no figure, only an informational one labelled not final. A month
+  with expenses but no marketplace figures is never final either.
+- **Expenses are business-wide (A7).** Net Profit is per currency, for all
+  marketplace accounts in it; never per account or per product.
+- **B18 (new, default): expense amounts are taken as entered.** BizMind does not
+  split recoverable VAT out of expenses; the owner records them net of VAT they
+  reclaim.
+- **B14 kept.** The expenses table, uploads and the existing synced expense tab
+  are unchanged. Legacy Products tabs keep writing legacy products.
+- **Google Sheets datasets (A4) are tab types on the existing sync path.** A
+  *Products* tab adds or updates products by the business's own SKU code and
+  never archives or deletes one. A *Product costs* tab adds dated costs; a
+  changed cost is withdrawn and replaced (audited, old and new value); an
+  undated cost applies from the day it is first synced (B7); a cost with more
+  than 4 decimals is refused, never rounded; an unknown SKU code becomes a
+  product named after it. Neither tab ever matches a marketplace SKU (A10), and
+  their sync batches cannot be withdrawn like old imports.
+- **B12 kept:** these tabs sync on the schedule and on "Sync now".
+- **Not built:** an advertising tab (advertising is an expense category), a bank
+  tab (Phase 8), SKU suggestions from Sheets.
+
+**Why:** the same rule as the marketplace ledger — classify what is certain,
+show what is not, and never let an unknown look like zero or a cost be counted
+twice.
+
+**Fix applied the same day (0038):** 0037's sync batch set a ledger-only
+column, so product and cost syncs were refused until 0038. The live suite found
+it before any real sheet was connected.

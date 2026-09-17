@@ -22,7 +22,7 @@ against a real file or a hand-worked dataset. noon follows the dashboard
 | **5** | noon adapter: Transaction View + Invoices & Credit Notes, classified automatically; SAR contract as its own account; "NA" read as blank; buyer details stripped; overlapping exports refused; all accounts in one currency added up | July noon figures on the dashboard; B4, B5 answered | ✅ Built and verified live, 2026-09-17 ([NOON.md](NOON.md)). B4 answered except balance transfers (cash, under review); B5 keeps its default |
 | — | **Owner validation**, from Phase 4 onward: compare Sales, Fees, Fulfillment, Advertising, Refunds, VAT, Payouts and Profit with the marketplace reports; each mismatch becomes a rule correction | Reported mismatches corrected | Continuous |
 | **6** | Product master, SKU aliases + suggester + confirmation queue, dated COGS, product/SKU/category P&L | Gross Profit Final; cross-marketplace model checks reproduced; B7, B16 answered | ✅ Built and verified live, 2026-09-17 (migration 0035, 59 live checks). B16 decided, B7 kept, B17 default recorded. Gross Profit is Final once SKUs are matched and costs entered; the owner's cross-marketplace model checks wait for real costs (entered on screen, or via Phase 7 Sheets) |
-| 7 | Expense refactor + categories; Google Sheets dataset targets (COGS, product master, operating expenses; optional advertising, bank); schedule | Net Profit Final; existing expense tab keeps syncing; Sheets live suite green; B12, B14 answered | — |
+| **7** | Expense refactor + categories; Google Sheets dataset targets (COGS, product master, operating expenses; optional advertising, bank); schedule | Net Profit Final; existing expense tab keeps syncing; Sheets live suite green; B12, B14 answered | ✅ Built and verified live, 2026-09-17 (migrations 0036–0038; 35 new live checks; Sheets suite 204 green). Expenses classified automatically, Net Profit per currency, Products and Product-cost tabs. B12 and B14 keep their defaults. Optional advertising is an expense category; the bank tab moves to Phase 8 with bank transactions; SKU suggestions from Sheets are not built (suggestions come from BizMind) |
 | 8 | Bank accounts + statement import, payouts, matcher, reconciliation, cashflow; money flow, report catalogue, XLSX and Google Sheets export | Every reconciliation status produced by a fixture month; write-scope test green; B9 answered | — |
 | 9 | AI intents over verified queries; alerts on ledger metrics | Guard + intent suites; live model check | — |
 | 10 | Legacy retirement: freeze old writers, drop deprecated tables, purge legacy customer PII | No reads found; backup taken; owner approval; B10 answered | — |
@@ -38,8 +38,10 @@ its default.
 
 ## 3. Manual steps for the owner
 
-1. ~~Apply migrations 0029–0035~~ — done (0035 on 2026-09-17).
-1a. **Enter products and costs** under **Products and costs**, and match
+1. ~~Apply migrations 0029–0038~~ — done (0038 on 2026-09-17).
+1a. **Place any expense categories BizMind lists** under **Operating
+   expenses**, so Net Profit can become final.
+1b. **Enter products and costs** under **Products and costs**, and match
    marketplace SKUs under **SKU matching**, so July Gross Profit can become
    final and be checked against your own model.
 2. **Supply a bank statement** sample before Phase 8. (Amazon settlements and

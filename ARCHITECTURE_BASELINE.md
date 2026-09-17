@@ -46,9 +46,10 @@ Where this file and an older document disagree, this file wins.
 | B9 | Reconciliation tolerance and date window | Exact amount, ±7 days, editable |
 | B10 | When legacy customer PII is purged | At legacy retirement |
 | ~~B11~~ | **Resolved 2026-09-15:** Viewer read-only; Staff import only; Admin import + SKU mappings + COGS + expenses; Owner everything incl. integrations, reconciliation, configuration | — |
-| B12 | Sheets change notifications in V1 | Schedule + Sync now only |
+| B12 | Sheets change notifications in V1 | Schedule + Sync now only — **Kept 2026-09-17 (Phase 7)** for the new Products and Product-cost tabs too |
 | B13 | Carrefour capability | Contract only |
-| B14 | Existing orders, sheets, expenses | Orders read-only legacy; expenses/products carry over; no conversion to ledger rows |
+| B14 | Existing orders, sheets, expenses | Orders read-only legacy; expenses/products carry over; no conversion to ledger rows — **Kept 2026-09-17 (Phase 7):** the `expenses` table, uploads and synced expense tabs are unchanged and are classified at calculation time; legacy Products tabs keep writing legacy `products` |
+| B18 | Do expense amounts include recoverable VAT? | Taken as entered: the owner records expenses net of any VAT they reclaim. BizMind does not split VAT out of expenses |
 | B15 | Marketplace take rate definition | Not defined and not shown. The historical 19.1% could not be reproduced exactly from the July files (DECISIONS.md) |
 | ~~B16~~ | **Resolved 2026-09-17:** Gross Profit = Contribution (net sales − marketplace fees − fulfilment − advertising) − COGS; Net Profit = Gross Profit − operating expenses (Phase 7). Built in Phase 6 | — |
 | B17 | Does a refund give back the unit's COGS? | No (V1): the returned stock's condition is not known. COGS counts units sold only |
@@ -71,7 +72,7 @@ Google Sheets → dataset targets → products · product_costs · expenses · b
 | `classification_categories`, `classification_rules`, `tax_profiles.input_vat_treatment` | 3 ✅ | The model; versioned rules applied at calculation time; the account's VAT setting (B1) |
 | `settlements`, `payouts` | 1 ✅ | Immutable (manual payouts voidable, Phase 6) |
 | `catalog_products`, `sku_aliases` (confirmed and rejected decisions), `product_costs` | 6 ✅ | Confirmed matches only, suggestions computed; dated, append-only costs; COGS and Gross Profit at calculation time (migration 0035). Legacy `products` stays until Phase 10 |
-| `expenses` (refactor), `expense_categories`, `adjustments` | 5 | Adjustments native, immutable |
+| `expenses` (unchanged), `expense_categories`, `expense_category_rules` | 7 ✅ | Classified at calculation time; unknown names keep Net Profit incomplete (migration 0037). `adjustments` not built |
 | `bank_accounts`, `bank_transactions`, `reconciliations`, `reconciliation_links` | 6 | Suggested, confirmed by a person |
 | `quality_issues`, `report_exports` | 3 / 7 | Never deleted; exports append-only |
 

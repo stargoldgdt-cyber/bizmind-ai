@@ -985,6 +985,29 @@ RLS: members read; nobody writes the tables directly. Readers are security
 invoker. No rollback script: the tables are additive; recreating 0034's
 `pnl_summary()` undoes the figures.
 
+## 7r. Operating expenses, Net Profit, Sheets datasets (0036–0038)
+
+GCC Phase 7. Net Profit = Gross Profit − operating expenses − advertising
+outside the marketplaces (B16).
+
+| Change | What it does |
+| --- | --- |
+| `import_entity` `CATALOG`, `PRODUCT_COSTS` (0036) | A synced product-master or product-cost tab. On its own because a new enum value cannot be used in the transaction that adds it |
+| `expense_categories` | 16 categories, each with a cost class: `OPERATING`, `ADVERTISING` (outside the marketplaces) or `NOT_PROFIT` (stock purchases, marketplace charges, tax payments, owner and financing) |
+| `expense_category_rules` | A category name (normalised by `expense_category_key()`) means a category. 75 global rules for exact, unambiguous names; a business's own rule wins. Retired, never edited |
+| `expense_lines` (view) | Every expense with its category, cost class and a negative `signed_amount`; `UNCLASSIFIED` when no rule knows the name |
+| `expense_summary`, `expense_breakdown`, `expense_periods`, `expense_category_queue` | Readers per currency and month; the queue lists unknown names |
+| `pnl_net_profit(from, to, business)` | Per currency: gross profit of every account (0035) less operating and outside-advertising expenses. `net_profit` NULL unless final; reasons add `EXPENSES_UNCLASSIFIED`, `NO_MARKETPLACE_DATA` |
+| `expense_category_classify`, `expense_category_rule_retire` | OWNER/ADMIN, audited |
+| `product_costs.source`, `.integration_account_id`; `product_costs_retired_check` relaxed | A cost from a sheet; a sync withdraws a changed cost without a person |
+| `sync_apply_catalog`, `sync_apply_product_costs`, `sync_dataset_batch` | Worker-only writers (service_role). Products matched by normalised SKU code, never archived or deleted; a changed dated cost is withdrawn and replaced; an undated cost applies from its first sync (B7); an unknown SKU code becomes a product. Audited |
+| `sync_jobs`, `integration_record_state` checks; `sync_record_state_commit`, `sync_record_issues`, `sync_reconcile_due` | Widened for the two new resources |
+| `import_batch_dataset_guard` | A product or cost sync batch cannot be withdrawn |
+| 0038 | `sync_dataset_batch()` no longer sets `source_kind`, which 0030 reserves for ledger files |
+
+No rollback script: the tables are additive and the legacy expense path is
+untouched.
+
 ---
 
 ## 8. Regenerating types

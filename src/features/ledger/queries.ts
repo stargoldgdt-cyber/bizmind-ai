@@ -83,6 +83,37 @@ export async function getLedgerMonth(
   }
 }
 
+export type CurrencyMonthData = {
+  /** All the business's accounts in the currency, added up in SQL. */
+  total: PnlSummaryRow | null
+  /** The same figures for each of those accounts, for comparison. */
+  perAccount: PnlSummaryRow[]
+}
+
+/** One month for every account in one currency. Never across currencies (A12). */
+export async function getCurrencyMonth(
+  businessId: string,
+  currency: string,
+  month: LedgerMonth
+): Promise<CurrencyMonthData> {
+  const supabase = await createClient()
+  const range = { p_from: month.from, p_to: month.to, p_business_id: businessId }
+
+  const [total, perAccount] = await Promise.all([
+    supabase.rpc("pnl_summary", { ...range, p_combine_by_currency: true }),
+    supabase.rpc("pnl_summary", range),
+  ])
+
+  for (const reply of [total, perAccount]) {
+    if (reply.error) throw new Error(`Could not load this month's figures: ${reply.error.message}`)
+  }
+
+  return {
+    total: (total.data ?? []).find((row) => row.currency === currency) ?? null,
+    perAccount: (perAccount.data ?? []).filter((row) => row.currency === currency),
+  }
+}
+
 /** Every open data-quality item in the business, all periods. */
 export async function getBusinessDataQuality(businessId: string): Promise<LedgerQualityRow[]> {
   const supabase = await createClient()

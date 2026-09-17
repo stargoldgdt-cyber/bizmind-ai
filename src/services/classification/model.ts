@@ -81,7 +81,8 @@ export type ClassificationStatus = "CLASSIFIED" | "UNDER_REVIEW" | "UNKNOWN"
 
 export type FigureStatus = "FINAL" | "INCOMPLETE"
 
-export type IncompleteReason = "UNKNOWN_LINES" | "VAT_TREATMENT_UNKNOWN" | "ROW_ERRORS"
+/** FEE_VAT_NOT_SEPARATED: fees include VAT that no invoice separates yet (migration 0034). */
+export type IncompleteReason = "UNKNOWN_LINES" | "VAT_TREATMENT_UNKNOWN" | "FEE_VAT_NOT_SEPARATED" | "ROW_ERRORS"
 
 /** The account's VAT setting (B1). */
 export const INPUT_VAT_TREATMENTS = ["UNKNOWN", "RECOVERABLE", "NON_RECOVERABLE"] as const
@@ -91,6 +92,7 @@ export type DataQualityKind =
   | "UNKNOWN_CODE"
   | "UNDER_REVIEW"
   | "VAT_TREATMENT_UNKNOWN"
+  | "FEE_VAT_NOT_SEPARATED"
   | "ROW_ERRORS"
   | "SETTLEMENT_MISMATCH"
 

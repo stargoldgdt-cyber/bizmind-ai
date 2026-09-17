@@ -83,10 +83,14 @@ const migration = readFileSync("supabase/migrations/0030_marketplace_ledger_foun
 section("1. ONLY THE ADAPTERS THAT ARE APPROVED ARE REGISTERED")
 
 check(
-  "the application registers exactly one adapter: Amazon (Phase 2)",
-  marketplaceAdapters.list().map((a) => a.marketplace).join(",") === "AMAZON"
+  "the application registers exactly the approved adapters: Amazon (Phase 2) and noon (Phase 5)",
+  marketplaceAdapters.list().map((a) => a.marketplace).join(",") === "AMAZON,NOON"
 )
-check("noon has no adapter yet", marketplaceAdapters.get("NOON") === null)
+check(
+  "noon reads its two report formats",
+  (marketplaceAdapters.get("NOON")?.formats.map((f) => f.id).sort().join(",") ?? "") ===
+    "noon.invoices_credit_notes,noon.transaction_view.item_level"
+)
 check("Carrefour has no adapter -- a contract only (A15)", marketplaceAdapters.get("CARREFOUR") === null)
 check(
   "only adapters.ts registers an adapter",
@@ -96,9 +100,9 @@ check(
     .join(",") === "src/services/marketplaces/adapters.ts"
 )
 check(
-  "src/services/marketplaces holds the contract, filter, builder, registry, door and the Amazon adapter",
+  "src/services/marketplaces holds the contract, filter, builder, registry, door and the Amazon and noon adapters",
   JSON.stringify(readdirSync("src/services/marketplaces").sort()) ===
-    JSON.stringify(["adapters.ts", "amazon", "apply.ts", "contract.ts", "customer-data.ts", "index.ts", "ledger-file.ts", "registry.ts"]),
+    JSON.stringify(["adapters.ts", "amazon", "apply.ts", "contract.ts", "customer-data.ts", "index.ts", "ledger-file.ts", "noon", "registry.ts"]),
   readdirSync("src/services/marketplaces").join(", ")
 )
 

@@ -119,6 +119,7 @@ const summary: PnlSummaryRow = {
   conditional_lines: 1,
   row_errors: 0,
   incomplete_reasons: ["VAT_TREATMENT_UNKNOWN"],
+  accounts: 1,
 }
 const exported = buildCsv(
   ledgerExportRows({

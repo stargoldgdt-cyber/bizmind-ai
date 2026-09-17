@@ -72,7 +72,7 @@ export default async function SettlementUploadPage() {
               <p className="font-medium">No account to upload into yet</p>
               <p className="mt-1 text-muted-foreground">
                 Settlement files are recorded against a marketplace account. Amazon
-                files can be uploaded today.
+                and noon files can be uploaded today.
               </p>
               <Button asChild size="sm" variant="outline" className="mt-4 rounded-4xl">
                 <Link href="/marketplaces">Marketplace accounts</Link>

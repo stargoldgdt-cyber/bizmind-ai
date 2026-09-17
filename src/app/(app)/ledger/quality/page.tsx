@@ -43,6 +43,7 @@ export const metadata: Metadata = {
 const SECTIONS: { kind: LedgerQualityRow["issue_kind"]; title: string }[] = [
   { kind: "UNKNOWN_CODE", title: "Codes BizMind does not recognise yet" },
   { kind: "VAT_TREATMENT_UNKNOWN", title: "VAT on fees waiting for a setting" },
+  { kind: "FEE_VAT_NOT_SEPARATED", title: "Fees that still include VAT" },
   { kind: "SETTLEMENT_MISMATCH", title: "Settlements that do not add up" },
   { kind: "ROW_ERRORS", title: "Rows that could not be read" },
   { kind: "UNDER_REVIEW", title: "Lines counted with a medium-confidence rule" },
@@ -113,7 +114,9 @@ export default async function LedgerQualityPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Account</TableHead>
-                        <TableHead>{kind === "SETTLEMENT_MISMATCH" ? "Settlement" : "Code"}</TableHead>
+                        <TableHead>
+                          {kind === "SETTLEMENT_MISMATCH" ? "Settlement" : kind === "FEE_VAT_NOT_SEPARATED" ? "Month" : "Code"}
+                        </TableHead>
                         <TableHead className="text-right">Lines</TableHead>
                         <TableHead className="text-right">
                           {kind === "SETTLEMENT_MISMATCH" ? "Difference" : "Amount"}
@@ -235,6 +238,12 @@ function IssueAction({
         </Link>
       ) : (
         <span className="text-xs text-muted-foreground">The owner sets this</span>
+      )
+    case "FEE_VAT_NOT_SEPARATED":
+      return (
+        <Link href="/imports/settlement" className="text-xs font-medium underline-offset-4 hover:underline">
+          Upload the VAT invoices
+        </Link>
       )
     case "ROW_ERRORS":
     case "SETTLEMENT_MISMATCH":

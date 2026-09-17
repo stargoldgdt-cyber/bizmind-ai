@@ -950,6 +950,10 @@ export type Database = {
           version: number
           supersedes_id: string | null
           status: "ACTIVE" | "RETIRED"
+          /** Migration 0034: the amount has VAT inside it the marketplace does not state. */
+          amount_includes_vat: boolean
+          /** Migration 0034: the line takes stated VAT back out (a VAT invoice). */
+          separates_included_vat: boolean
           created_at: string
         }
         Insert: never
@@ -1834,6 +1838,8 @@ export type Database = {
           default_treatment: PnlTreatmentDb | null
           pnl_treatment: PnlTreatmentDb | null
           classification_status: ClassificationStatusDb
+          rule_includes_vat: boolean
+          rule_separates_vat: boolean
         }
         Relationships: []
       }
@@ -1959,9 +1965,18 @@ export type Database = {
       }
 
       pnl_summary: {
-        Args: { p_from: string; p_to: string; p_account_id?: string | null }
+        Args: {
+          p_from: string
+          p_to: string
+          p_account_id?: string | null
+          /** Migration 0034. */
+          p_business_id?: string | null
+          /** Migration 0034: one row per currency instead of per account. */
+          p_combine_by_currency?: boolean
+        }
         Returns: {
-          marketplace_account_id: string
+          /** NULL on a combined (per-currency) row. */
+          marketplace_account_id: string | null
           account_label: string
           marketplace_code: string
           currency: string
@@ -1986,7 +2001,8 @@ export type Database = {
           input_vat_recoverable: string
           input_vat_unresolved: string
           output_vat: string
-          input_vat_treatment: InputVatTreatmentDb
+          /** MIXED on a combined row whose accounts differ. */
+          input_vat_treatment: InputVatTreatmentDb | "MIXED"
           lines: number
           unknown_lines: number
           unknown_amount: string
@@ -1994,7 +2010,9 @@ export type Database = {
           review_amount: string
           conditional_lines: number
           row_errors: number
-          incomplete_reasons: ("UNKNOWN_LINES" | "VAT_TREATMENT_UNKNOWN" | "ROW_ERRORS")[]
+          incomplete_reasons: ("UNKNOWN_LINES" | "VAT_TREATMENT_UNKNOWN" | "FEE_VAT_NOT_SEPARATED" | "ROW_ERRORS")[]
+          /** How many accounts the row covers (1 unless combined). */
+          accounts: number
         }[]
       }
 
@@ -2028,7 +2046,13 @@ export type Database = {
           p_business_id?: string | null
         }
         Returns: {
-          issue_kind: "UNKNOWN_CODE" | "UNDER_REVIEW" | "VAT_TREATMENT_UNKNOWN" | "ROW_ERRORS" | "SETTLEMENT_MISMATCH"
+          issue_kind:
+            | "UNKNOWN_CODE"
+            | "UNDER_REVIEW"
+            | "VAT_TREATMENT_UNKNOWN"
+            | "FEE_VAT_NOT_SEPARATED"
+            | "ROW_ERRORS"
+            | "SETTLEMENT_MISMATCH"
           severity: "WARNING" | "INFO"
           marketplace_account_id: string
           account_label: string

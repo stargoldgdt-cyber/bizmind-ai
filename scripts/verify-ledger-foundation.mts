@@ -210,11 +210,11 @@ try {
     say(markets)
   )
   check(
-    "only Amazon is AVAILABLE -- its adapter shipped in Phase 2 (0031); noon and Carrefour have none",
+    "only Amazon (Phase 2) and noon (Phase 5) are AVAILABLE; Carrefour has no adapter",
     rows(markets)
       .filter((m) => m.adapter_status === "AVAILABLE")
       .map((m) => m.code)
-      .join(",") === "AMAZON"
+      .join(",") === "AMAZON,NOON"
   )
   check(
     "a signed-in user cannot add a marketplace",

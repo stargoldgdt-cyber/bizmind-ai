@@ -114,6 +114,9 @@ export function SettlementUploader({
           />
           <p className="text-xs text-muted-foreground">
             Amazon: Seller Central → Payments → Reports repository → settlement report, Flat File V2 (.txt).
+            <br />
+            noon: Finance → Transaction View (item level) and Invoices and Credit Notes (.csv). Upload both
+            for each period; the invoices are where noon states the VAT inside its fees.
           </p>
         </div>
 

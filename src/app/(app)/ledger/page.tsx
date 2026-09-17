@@ -17,11 +17,14 @@ import { ONBOARDING_ROUTE } from "@/config/routes"
 import { getActiveBusiness, getUserBusinesses } from "@/features/businesses/queries"
 import { FigureCard } from "@/features/ledger/components/figure-card"
 import { LedgerFilters } from "@/features/ledger/components/ledger-filters"
+import { StatusLabel } from "@/features/ledger/components/status-label"
 import { firstParam, ledgerHref } from "@/features/ledger/params"
 import {
+  getCurrencyMonth,
   getLedgerMonth,
   getLedgerPeriods,
   listLedgerAccounts,
+  type CurrencyMonthData,
   type LedgerAccount,
   type LedgerMonthData,
 } from "@/features/ledger/queries"
@@ -43,20 +46,24 @@ export const metadata: Metadata = {
 }
 
 /**
- * Marketplace profit: the live dashboard on the ledger (GCC Phase 4).
+ * Marketplace profit: the live dashboard on the ledger (GCC Phases 4-5).
  *
  * PERFORMS NO CALCULATIONS. Every figure is computed by the P&L engine in SQL
  * (pnl_summary, pnl_breakdown, pnl_settlements) and arrives as exact text.
  * This page decides only what to show and how to say it.
  *
  * NOTHING INCOMPLETE LOOKS FINAL. While a code is unrecognised, a row is
- * unreadable or the VAT setting is Unknown, the affected figures carry an
- * Incomplete label and contribution shows no number -- only an informational
- * figure labelled "not final" (decision B1).
+ * unreadable, fee VAT is not separated or the VAT setting is Unknown, the
+ * affected figures carry an Incomplete label and contribution shows no number
+ * -- only an informational figure labelled "not final" (decision B1).
  *
- * Account and month live in the URL, so every view can be bookmarked and
- * checked against the marketplace's own report.
+ * One account, or every account in one currency added up by the engine.
+ * Accounts in different currencies are never combined (A12). The choice and
+ * the month live in the URL.
  */
+
+const ALL_PREFIX = "all-"
+
 export default async function LedgerOverviewPage(props: PageProps<"/ledger">) {
   const searchParams = await props.searchParams
 
@@ -75,24 +82,44 @@ export default async function LedgerOverviewPage(props: PageProps<"/ledger">) {
     getLedgerPeriods(activeBusiness.id),
   ])
 
-  const requested = firstParam(searchParams.account)
-  const account =
-    accounts.find((a) => a.id === requested) ??
-    accounts.find((a) => periods.some((p) => p.marketplace_account_id === a.id)) ??
-    accounts[0] ??
-    null
+  const byCurrency = new Map<string, LedgerAccount[]>()
+  for (const a of accounts) byCurrency.set(a.currency, [...(byCurrency.get(a.currency) ?? []), a])
+  const currencyGroups = [...byCurrency.entries()].filter(([, list]) => list.length > 1)
 
-  const monthOptions: LedgerMonth[] = account
-    ? periods
-        .filter((p) => p.marketplace_account_id === account.id)
-        .map((p) => parseLedgerMonth(monthKeyOf(p.month)))
-        .filter((m): m is LedgerMonth => m !== null)
-    : []
+  const requested = firstParam(searchParams.account)
+  const requestedCurrency = requested?.startsWith(ALL_PREFIX) ? requested.slice(ALL_PREFIX.length) : null
+  const combined = currencyGroups.find(([currency]) => currency === requestedCurrency)?.[0] ?? null
+
+  const account = combined
+    ? null
+    : (accounts.find((a) => a.id === requested) ??
+      accounts.find((a) => periods.some((p) => p.marketplace_account_id === a.id)) ??
+      accounts[0] ??
+      null)
+
+  const inScope = new Set(
+    combined ? (byCurrency.get(combined) ?? []).map((a) => a.id) : account ? [account.id] : []
+  )
+  const monthKeys = [...new Set(periods.filter((p) => inScope.has(p.marketplace_account_id)).map((p) => monthKeyOf(p.month)))]
+    .sort()
+    .reverse()
+  const monthOptions = monthKeys.map((key) => parseLedgerMonth(key)).filter((m): m is LedgerMonth => m !== null)
   const month = parseLedgerMonth(firstParam(searchParams.month)) ?? monthOptions[0] ?? null
   if (month && !monthOptions.some((m) => m.key === month.key)) monthOptions.unshift(month)
 
-  const data = account && month ? await getLedgerMonth(activeBusiness.id, account.id, month) : null
+  const single = account && month ? await getLedgerMonth(activeBusiness.id, account.id, month) : null
+  const group = combined && month ? await getCurrencyMonth(activeBusiness.id, combined, month) : null
   const canImport = activeBusiness.role !== "VIEWER"
+  const isOwner = activeBusiness.role === "OWNER"
+
+  const filterOptions = [
+    ...accounts.map((a) => ({ id: a.id, label: a.label, detail: `${a.marketplace_code} · ${a.currency}` })),
+    ...currencyGroups.map(([currency, list]) => ({
+      id: `${ALL_PREFIX}${currency}`,
+      label: `All ${currency} accounts`,
+      detail: `${list.length} accounts, added up`,
+    })),
+  ]
 
   return (
     <AppShell
@@ -106,12 +133,12 @@ export default async function LedgerOverviewPage(props: PageProps<"/ledger">) {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Marketplace profit</h1>
             <p className="mt-1 max-w-prose-comfortable text-sm text-muted-foreground">
-              Worked out from your marketplaces&apos; own settlement lines, classified
-              automatically. Every figure opens into the lines behind it.
+              Worked out from your marketplaces&apos; own reports, classified automatically. Every
+              figure opens into the lines behind it.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {data?.summary && account && month && (
+            {single?.summary && account && month && (
               <Button asChild variant="outline" className="rounded-4xl">
                 <a href={ledgerHref("/api/v1/ledger/export", { account: account.id, month: month.key })}>
                   <Download className="size-4" aria-hidden />
@@ -123,14 +150,14 @@ export default async function LedgerOverviewPage(props: PageProps<"/ledger">) {
               <Button asChild className="rounded-4xl">
                 <Link href="/imports/settlement">
                   <Upload className="size-4" aria-hidden />
-                  Upload a settlement
+                  Upload a report
                 </Link>
               </Button>
             )}
           </div>
         </div>
 
-        {!account ? (
+        {accounts.length === 0 ? (
           <EmptyState
             title="Add a marketplace account first"
             body="Figures are worked out per marketplace account, in its own currency."
@@ -140,45 +167,185 @@ export default async function LedgerOverviewPage(props: PageProps<"/ledger">) {
         ) : (
           <>
             <LedgerFilters
-              accounts={accounts.map((a) => ({
-                id: a.id,
-                label: a.label,
-                detail: `${a.marketplace_code} · ${a.currency}`,
-              }))}
+              accounts={filterOptions}
               months={monthOptions.map((m) => ({ key: m.key, label: m.label }))}
-              accountId={account.id}
+              accountId={combined ? `${ALL_PREFIX}${combined}` : (account?.id ?? "")}
               monthKey={month?.key ?? null}
             />
 
-            {!month || !data ? (
+            {!month ? (
               <EmptyState
-                title="No settlement lines for this account yet"
-                body="Upload a settlement file for this account and its figures appear here."
+                title="No marketplace lines for this choice yet"
+                body="Upload a marketplace report for this account and its figures appear here."
                 href="/imports/settlement"
-                action="Upload a settlement"
+                action="Upload a report"
               />
-            ) : !data.summary ? (
-              <EmptyState
-                title={`No lines were posted in ${month.label}`}
-                body="Choose another month, or upload the settlement that covers this one."
-                href="/imports/settlement"
-                action="Upload a settlement"
-              />
-            ) : (
-              <MonthView
-                summary={data.summary}
-                data={data}
-                account={account}
-                month={month}
-                isOwner={activeBusiness.role === "OWNER"}
-              />
-            )}
+            ) : combined && group ? (
+              !group.total ? (
+                <NoLines month={month} />
+              ) : (
+                <CombinedView data={group} total={group.total} month={month} isOwner={isOwner} />
+              )
+            ) : single && account ? (
+              !single.summary ? (
+                <NoLines month={month} />
+              ) : (
+                <MonthView summary={single.summary} data={single} account={account} month={month} isOwner={isOwner} />
+              )
+            ) : null}
           </>
         )}
       </div>
     </AppShell>
   )
 }
+
+/* ---- what is still open ----------------------------------------------------- */
+
+function OpenItems({
+  s,
+  month,
+  isOwner,
+  reviewHref,
+}: {
+  s: PnlSummaryRow
+  month: LedgerMonth
+  isOwner: boolean
+  reviewHref?: string
+}) {
+  const money = (value: string | null | undefined) => formatMoney(value, s.currency)
+  const reasons = s.incomplete_reasons
+  const incomplete = s.contribution_status === "INCOMPLETE" || s.figures_status === "INCOMPLETE"
+
+  return (
+    <>
+      {incomplete && (
+        <section role="status" className="rounded-xl border border-warning/40 bg-warning-subtle px-5 py-4">
+          <div className="flex gap-3">
+            <CircleAlert className="mt-0.5 size-4 shrink-0 text-warning-strong" aria-hidden />
+            <div className="grid gap-2 text-sm">
+              <p className="font-medium">Some figures for {month.label} are not final yet</p>
+              <ul className="grid gap-1.5">
+                {reasons.includes("VAT_TREATMENT_UNKNOWN") && (
+                  <li>
+                    VAT treatment unknown: {money(unsignedAmount(s.input_vat_unresolved))} of VAT charged on
+                    fees is not counted either way, so contribution has no final figure.{" "}
+                    {isOwner ? (
+                      <Link href="/marketplaces" className="font-medium underline underline-offset-4">
+                        Set VAT on fees
+                      </Link>
+                    ) : (
+                      "Ask the owner to set VAT on fees."
+                    )}
+                  </li>
+                )}
+                {reasons.includes("FEE_VAT_NOT_SEPARATED") && (
+                  <li>
+                    Fees in {month.label} still include VAT that has not been separated, so fees and
+                    contribution are not final. Upload the marketplace&apos;s VAT invoices for the month
+                    (noon: Invoices and Credit Notes).{" "}
+                    <Link href="/imports/settlement" className="font-medium underline underline-offset-4">
+                      Upload them
+                    </Link>
+                  </li>
+                )}
+                {reasons.includes("UNKNOWN_LINES") && (
+                  <li>
+                    {formatNumber(s.unknown_lines)} line{s.unknown_lines === 1 ? " uses" : "s use"} a code
+                    BizMind does not recognise yet ({money(s.unknown_amount)}), so every figure is
+                    incomplete.{" "}
+                    <Link href="/ledger/quality" className="font-medium underline underline-offset-4">
+                      Review in data quality
+                    </Link>
+                  </li>
+                )}
+                {reasons.includes("ROW_ERRORS") && (
+                  <li>
+                    {formatNumber(s.row_errors)} row{s.row_errors === 1 ? "" : "s"} in these files could not
+                    be read.{" "}
+                    <Link href="/imports" className="font-medium underline underline-offset-4">
+                      See the files
+                    </Link>
+                  </li>
+                )}
+              </ul>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {s.review_lines > 0 && (
+        <section className="flex gap-3 rounded-xl border border-info/40 bg-info-subtle px-5 py-3 text-sm">
+          <Info className="mt-0.5 size-4 shrink-0 text-info-strong" aria-hidden />
+          <p>
+            {formatNumber(s.review_lines)} line{s.review_lines === 1 ? " is" : "s are"} counted with a
+            medium-confidence rule ({money(s.review_amount)}).{" "}
+            <Link href={reviewHref ?? "/ledger/quality"} className="font-medium underline underline-offset-4">
+              Check them
+            </Link>
+          </p>
+        </section>
+      )}
+    </>
+  )
+}
+
+function contributionNote(s: PnlSummaryRow): string {
+  if (s.contribution !== null) return "Before product costs and operating expenses"
+  const onlyVatSetting = s.incomplete_reasons.length === 1 && s.incomplete_reasons[0] === "VAT_TREATMENT_UNKNOWN"
+  return `${onlyVatSetting ? "Contribution before fee-VAT treatment" : "From recognised lines only"}: ${formatMoney(
+    s.contribution_before_open_items,
+    s.currency
+  )} — not final`
+}
+
+function HeadlineFigures({ s, hrefs }: { s: PnlSummaryRow; hrefs?: Partial<Record<string, string>> }) {
+  const money = (value: string | null | undefined) => formatMoney(value, s.currency)
+  const figures = s.figures_status
+  return (
+    <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <FigureCard label="Gross sales" value={money(s.gross_sales)} status={figures} href={hrefs?.gross} />
+      <FigureCard label="Net sales" value={money(s.net_sales)} status={figures} note="After refunds and seller-funded discounts" />
+      <FigureCard label="Marketplace fees" value={money(s.marketplace_fees)} status={figures} href={hrefs?.fees} />
+      <FigureCard label="Fulfillment and storage" value={money(s.fulfillment)} status={figures} href={hrefs?.fulfillment} />
+      <FigureCard label="Advertising" value={money(s.advertising)} status={figures} href={hrefs?.advertising} />
+      <FigureCard
+        label="Contribution"
+        value={s.contribution === null ? "Incomplete" : money(s.contribution)}
+        status={s.contribution_status}
+        emphasis
+        href={hrefs?.profit}
+        note={contributionNote(s)}
+      />
+    </section>
+  )
+}
+
+const STATEMENT_ROWS: { label: string; value: (s: PnlSummaryRow) => string | null; group?: string; total?: boolean }[] = [
+  { label: "Gross sales", value: (s) => s.gross_sales, group: "GROSS_SALES" },
+  { label: "Sales refunds and returns", value: (s) => s.sales_refunds, group: "SALES_REFUNDS" },
+  { label: "Seller-funded discounts", value: (s) => s.seller_discounts, group: "SELLER_DISCOUNTS" },
+  { label: "Net sales", value: (s) => s.net_sales, total: true },
+  { label: "Other income", value: (s) => s.other_income, group: "OTHER_INCOME" },
+  { label: "Marketplace fees", value: (s) => s.marketplace_fees, group: "MARKETPLACE_FEES" },
+  { label: "Fulfillment and storage", value: (s) => s.fulfillment, group: "FULFILLMENT" },
+  { label: "Advertising", value: (s) => s.advertising, group: "ADVERTISING" },
+  { label: "Other marketplace costs", value: (s) => s.other_marketplace_costs, group: "OTHER_MARKETPLACE_COSTS" },
+  { label: "Non-recoverable VAT on fees", value: (s) => s.non_recoverable_vat },
+]
+
+function ContributionCell({ s }: { s: PnlSummaryRow }) {
+  return s.contribution === null ? (
+    <span className="inline-flex items-center gap-1 font-sans text-xs text-warning-strong">
+      <CircleAlert className="size-3.5" aria-hidden />
+      Incomplete
+    </span>
+  ) : (
+    <>{formatMoney(s.contribution, s.currency)}</>
+  )
+}
+
+/* ---- one account ------------------------------------------------------------- */
 
 function MonthView({
   summary: s,
@@ -197,122 +364,20 @@ function MonthView({
   const lines = (params: Record<string, string | null | undefined>) =>
     ledgerHref("/ledger/lines", { account: account.id, month: month.key, ...params })
 
-  const reasons = s.incomplete_reasons
-  const onlyVatOpen = reasons.length === 1 && reasons[0] === "VAT_TREATMENT_UNKNOWN"
-  const incomplete = s.contribution_status === "INCOMPLETE" || s.figures_status === "INCOMPLETE"
-  const figures = s.figures_status
-
-  const statement: { label: string; value: string | null; href?: string; total?: boolean; hidden?: boolean }[] = [
-    { label: "Gross sales", value: s.gross_sales, href: lines({ group: "GROSS_SALES" }) },
-    { label: "Sales refunds and returns", value: s.sales_refunds, href: lines({ group: "SALES_REFUNDS" }) },
-    { label: "Seller-funded discounts", value: s.seller_discounts, href: lines({ group: "SELLER_DISCOUNTS" }) },
-    { label: "Net sales", value: s.net_sales, total: true },
-    { label: "Other income", value: s.other_income, href: lines({ group: "OTHER_INCOME" }) },
-    { label: "Marketplace fees", value: s.marketplace_fees, href: lines({ group: "MARKETPLACE_FEES" }) },
-    { label: "Fulfillment and storage", value: s.fulfillment, href: lines({ group: "FULFILLMENT" }) },
-    { label: "Advertising", value: s.advertising, href: lines({ group: "ADVERTISING" }) },
-    {
-      label: "Other marketplace costs",
-      value: s.other_marketplace_costs,
-      href: lines({ group: "OTHER_MARKETPLACE_COSTS" }),
-    },
-    {
-      label: "Non-recoverable VAT on fees",
-      value: s.non_recoverable_vat,
-      href: lines({ category: "INPUT_VAT" }),
-      hidden: s.input_vat_treatment !== "NON_RECOVERABLE",
-    },
-  ]
-
   return (
     <div className="grid gap-6">
-      {/* ---- what is still open ------------------------------------------ */}
-      {incomplete && (
-        <section role="status" className="rounded-xl border border-warning/40 bg-warning-subtle px-5 py-4">
-          <div className="flex gap-3">
-            <CircleAlert className="mt-0.5 size-4 shrink-0 text-warning-strong" aria-hidden />
-            <div className="grid gap-2 text-sm">
-              <p className="font-medium">Some figures for {month.label} are not final yet</p>
-              <ul className="grid gap-1.5">
-                {reasons.includes("VAT_TREATMENT_UNKNOWN") && (
-                  <li>
-                    VAT treatment unknown: {money(unsignedAmount(s.input_vat_unresolved))} of VAT
-                    charged on fees is not counted either way, so contribution has no final
-                    figure.{" "}
-                    {isOwner ? (
-                      <Link href="/marketplaces" className="font-medium underline underline-offset-4">
-                        Set VAT on fees
-                      </Link>
-                    ) : (
-                      "Ask the owner to set VAT on fees."
-                    )}
-                  </li>
-                )}
-                {reasons.includes("UNKNOWN_LINES") && (
-                  <li>
-                    {formatNumber(s.unknown_lines)} line{s.unknown_lines === 1 ? " uses" : "s use"} a
-                    code BizMind does not recognise yet ({money(s.unknown_amount)}), so every figure is
-                    incomplete.{" "}
-                    <Link href="/ledger/quality" className="font-medium underline underline-offset-4">
-                      Review in data quality
-                    </Link>
-                  </li>
-                )}
-                {reasons.includes("ROW_ERRORS") && (
-                  <li>
-                    {formatNumber(s.row_errors)} row{s.row_errors === 1 ? "" : "s"} in these files could
-                    not be read.{" "}
-                    <Link href="/imports" className="font-medium underline underline-offset-4">
-                      See the files
-                    </Link>
-                  </li>
-                )}
-              </ul>
-            </div>
-          </div>
-        </section>
-      )}
+      <OpenItems s={s} month={month} isOwner={isOwner} reviewHref={lines({ view: "review" })} />
 
-      {s.review_lines > 0 && (
-        <section className="flex gap-3 rounded-xl border border-info/40 bg-info-subtle px-5 py-3 text-sm">
-          <Info className="mt-0.5 size-4 shrink-0 text-info-strong" aria-hidden />
-          <p>
-            {formatNumber(s.review_lines)} line{s.review_lines === 1 ? " is" : "s are"} counted with a
-            medium-confidence rule ({money(s.review_amount)}).{" "}
-            <Link href={lines({ view: "review" })} className="font-medium underline underline-offset-4">
-              Check them
-            </Link>
-          </p>
-        </section>
-      )}
-
-      {/* ---- the headline figures ---------------------------------------- */}
-      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <FigureCard label="Gross sales" value={money(s.gross_sales)} status={figures} href={lines({ group: "GROSS_SALES" })} />
-        <FigureCard
-          label="Net sales"
-          value={money(s.net_sales)}
-          status={figures}
-          note="After refunds and seller-funded discounts"
-        />
-        <FigureCard label="Marketplace fees" value={money(s.marketplace_fees)} status={figures} href={lines({ group: "MARKETPLACE_FEES" })} />
-        <FigureCard label="Fulfillment and storage" value={money(s.fulfillment)} status={figures} href={lines({ group: "FULFILLMENT" })} />
-        <FigureCard label="Advertising" value={money(s.advertising)} status={figures} href={lines({ group: "ADVERTISING" })} />
-        <FigureCard
-          label="Contribution"
-          value={s.contribution === null ? "Incomplete" : money(s.contribution)}
-          status={s.contribution_status}
-          emphasis
-          href={lines({ view: "profit" })}
-          note={
-            s.contribution === null
-              ? `${onlyVatOpen ? "Contribution before fee-VAT treatment" : "From recognised lines only"}: ${money(
-                  s.contribution_before_open_items
-                )} — not final`
-              : "Before product costs and operating expenses"
-          }
-        />
-      </section>
+      <HeadlineFigures
+        s={s}
+        hrefs={{
+          gross: lines({ group: "GROSS_SALES" }),
+          fees: lines({ group: "MARKETPLACE_FEES" }),
+          fulfillment: lines({ group: "FULFILLMENT" }),
+          advertising: lines({ group: "ADVERTISING" }),
+          profit: lines({ view: "profit" }),
+        }}
+      />
 
       {/* ---- the statement ----------------------------------------------- */}
       <section className="overflow-hidden rounded-xl border border-border bg-card">
@@ -326,21 +391,28 @@ function MonthView({
         <div className="overflow-x-auto [&_td:first-child]:pl-5 [&_td:last-child]:pr-5 [&_th:first-child]:pl-5 [&_th:last-child]:pr-5">
           <Table>
             <TableBody>
-              {statement
-                .filter((row) => !row.hidden)
-                .map((row) => (
+              {STATEMENT_ROWS.filter(
+                (row) => row.label !== "Non-recoverable VAT on fees" || s.input_vat_treatment === "NON_RECOVERABLE"
+              ).map((row) => {
+                const href = row.group
+                  ? lines({ group: row.group })
+                  : row.total
+                    ? undefined
+                    : lines({ category: "INPUT_VAT" })
+                return (
                   <TableRow key={row.label} className={row.total ? "bg-muted/40" : undefined}>
                     <TableCell className={row.total ? "text-sm font-semibold" : "text-sm"}>{row.label}</TableCell>
-                    <TableCell className="text-right font-mono text-sm tabular-nums">{money(row.value)}</TableCell>
+                    <TableCell className="text-right font-mono text-sm tabular-nums">{money(row.value(s))}</TableCell>
                     <TableCell className="w-28 text-right">
-                      {row.href && (
-                        <Link href={row.href} className="text-xs font-medium underline-offset-4 hover:underline">
+                      {href && (
+                        <Link href={href} className="text-xs font-medium underline-offset-4 hover:underline">
                           Lines
                         </Link>
                       )}
                     </TableCell>
                   </TableRow>
-                ))}
+                )
+              })}
               <TableRow className="bg-muted/40">
                 <TableCell className="text-sm font-semibold">
                   Contribution
@@ -349,14 +421,7 @@ function MonthView({
                   </span>
                 </TableCell>
                 <TableCell className="text-right font-mono text-sm font-semibold tabular-nums">
-                  {s.contribution === null ? (
-                    <span className="inline-flex items-center gap-1 font-sans text-xs text-warning-strong">
-                      <CircleAlert className="size-3.5" aria-hidden />
-                      Incomplete
-                    </span>
-                  ) : (
-                    money(s.contribution)
-                  )}
+                  <ContributionCell s={s} />
                 </TableCell>
                 <TableCell className="w-28 text-right">
                   <Link href={lines({ view: "profit" })} className="text-xs font-medium underline-offset-4 hover:underline">
@@ -373,8 +438,9 @@ function MonthView({
       <section className="rounded-xl border border-border bg-card px-5 py-4">
         <h2 className="text-sm font-semibold">VAT, kept apart from profit</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          VAT on fees for this account: <span className="font-medium text-foreground">{INPUT_VAT_TREATMENT_LABEL[s.input_vat_treatment]}</span>.
-          {" "}Recoverable VAT stays on the tax side; non-recoverable VAT is shown above as a cost.
+          VAT on fees for this account:{" "}
+          <span className="font-medium text-foreground">{INPUT_VAT_TREATMENT_LABEL[s.input_vat_treatment] ?? s.input_vat_treatment}</span>.{" "}
+          Recoverable VAT stays on the tax side; non-recoverable VAT is shown above as a cost.
         </p>
         <dl className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <TaxFigure label="Input VAT on fees, recoverable" value={money(s.input_vat_recoverable)} />
@@ -391,8 +457,8 @@ function MonthView({
         <div className="border-b border-border px-5 py-4">
           <h2 className="text-sm font-semibold">Where every line went</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Each marketplace code is classified automatically. Nothing is left out: lines BizMind
-            does not recognise are listed with their amount.
+            Each marketplace code is classified automatically. Nothing is left out: lines BizMind does
+            not recognise are listed with their amount.
           </p>
         </div>
         <div className="overflow-x-auto [&_td:first-child]:pl-5 [&_td:last-child]:pr-5 [&_th:first-child]:pl-5 [&_th:last-child]:pr-5">
@@ -460,7 +526,10 @@ function MonthView({
           </p>
         </div>
         {data.settlements.length === 0 ? (
-          <p className="px-5 py-6 text-sm text-muted-foreground">No settlement touches this month.</p>
+          <p className="px-5 py-6 text-sm text-muted-foreground">
+            No settlement report covers this month. Some marketplaces (such as noon) report
+            transactions and payments without settlement totals.
+          </p>
         ) : (
           <div className="overflow-x-auto [&_td:first-child]:pl-5 [&_td:last-child]:pr-5 [&_th:first-child]:pl-5 [&_th:last-child]:pr-5">
             <Table>
@@ -489,7 +558,9 @@ function MonthView({
                     <TableCell className="text-right font-mono text-sm tabular-nums">{money(st.reported_total)}</TableCell>
                     <TableCell className="text-right font-mono text-sm tabular-nums">{money(st.lines_total)}</TableCell>
                     <TableCell>
-                      {st.reconciles ? (
+                      {st.reported_total === null ? (
+                        <span className="text-xs text-muted-foreground">No total reported</span>
+                      ) : st.reconciles ? (
                         <span className="inline-flex items-center gap-1 text-xs font-medium text-success-strong">
                           <CircleCheck className="size-3.5" aria-hidden />
                           Adds up
@@ -532,12 +603,113 @@ function MonthView({
   )
 }
 
+/* ---- every account in one currency ------------------------------------------ */
+
+function CombinedView({
+  data,
+  total,
+  month,
+  isOwner,
+}: {
+  data: CurrencyMonthData
+  total: PnlSummaryRow
+  month: LedgerMonth
+  isOwner: boolean
+}) {
+  const money = (value: string | null | undefined) => formatMoney(value, total.currency)
+  const columns = [...data.perAccount, total]
+
+  return (
+    <div className="grid gap-6">
+      <OpenItems s={total} month={month} isOwner={isOwner} />
+      <HeadlineFigures s={total} />
+
+      <section className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="border-b border-border px-5 py-4">
+          <h2 className="text-sm font-semibold">
+            {month.label}: {formatNumber(total.accounts)} {total.currency} accounts side by side
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Each account as the engine worked it out, and their total. Open an account to see its lines.
+          </p>
+        </div>
+        <div className="overflow-x-auto [&_td:first-child]:pl-5 [&_td:last-child]:pr-5 [&_th:first-child]:pl-5 [&_th:last-child]:pr-5">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Figure</TableHead>
+                {data.perAccount.map((row) => (
+                  <TableHead key={row.marketplace_account_id} className="text-right">
+                    <Link
+                      href={ledgerHref("/ledger", { account: row.marketplace_account_id, month: month.key })}
+                      className="underline-offset-4 hover:underline"
+                    >
+                      {row.account_label}
+                    </Link>
+                    <span className="block text-[11px] font-normal text-muted-foreground">{row.marketplace_code}</span>
+                  </TableHead>
+                ))}
+                <TableHead className="text-right">Total</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {STATEMENT_ROWS.map((row) => (
+                <TableRow key={row.label} className={row.total ? "bg-muted/40" : undefined}>
+                  <TableCell className={row.total ? "text-sm font-semibold" : "text-sm"}>{row.label}</TableCell>
+                  {columns.map((column, index) => (
+                    <TableCell
+                      key={`${row.label}-${column.marketplace_account_id ?? "total"}-${index}`}
+                      className="text-right font-mono text-sm tabular-nums"
+                    >
+                      {money(row.value(column))}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+              <TableRow className="bg-muted/40">
+                <TableCell className="text-sm font-semibold">Contribution</TableCell>
+                {columns.map((column, index) => (
+                  <TableCell
+                    key={`contribution-${column.marketplace_account_id ?? "total"}-${index}`}
+                    className="text-right font-mono text-sm font-semibold tabular-nums"
+                  >
+                    <ContributionCell s={column} />
+                  </TableCell>
+                ))}
+              </TableRow>
+              <TableRow>
+                <TableCell className="text-xs text-muted-foreground">Status</TableCell>
+                {columns.map((column, index) => (
+                  <TableCell key={`status-${column.marketplace_account_id ?? "total"}-${index}`} className="text-right">
+                    <StatusLabel status={column.contribution_status} />
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableBody>
+          </Table>
+        </div>
+      </section>
+    </div>
+  )
+}
+
 function TaxFigure({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <dt className="text-[11px] text-muted-foreground">{label}</dt>
       <dd className="font-mono text-lg font-semibold tabular-nums">{value}</dd>
     </div>
+  )
+}
+
+function NoLines({ month }: { month: LedgerMonth }) {
+  return (
+    <EmptyState
+      title={`No lines were posted in ${month.label}`}
+      body="Choose another month, or upload the report that covers this one."
+      href="/imports/settlement"
+      action="Upload a report"
+    />
   )
 }
 

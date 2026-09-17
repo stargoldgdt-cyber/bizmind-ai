@@ -190,6 +190,15 @@ check("no new table stores a person's identity", !/email|phone|address|customer|
   MIGRATION.slice(MIGRATION.indexOf("create table public.expense_categories"), MIGRATION.indexOf("-- 2. Expenses, classified"))
 ))
 
+const FIX = read("supabase/migrations/0042_withdrawn_expenses_fix.sql")
+check("0042: the expense view skips withdrawn expenses", FIX.includes("where e.withdrawn_at is null;"))
+check("0042: classifying looks only at expenses that still count", FIX.includes("      and e.withdrawn_at is null\n"))
+check("0042: the view keeps 0037's columns (only the filter changes)",
+  FIX.slice(FIX.indexOf("create or replace view"), FIX.indexOf("where e.withdrawn_at is null;")).replace("create or replace view", "create view")
+    .replace(/\n-- .*$/gm, "").trim() ===
+    MIGRATION.slice(MIGRATION.indexOf("create view public.expense_lines"), MIGRATION.indexOf("left join public.expense_categories c on c.code = r.category_code;"))
+      .concat("left join public.expense_categories c on c.code = r.category_code").trim())
+
 /* -------------------------------------------------------------------------- */
 section("6. SCREENS AND MENU")
 

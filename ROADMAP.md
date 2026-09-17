@@ -38,7 +38,7 @@ its default.
 
 ## 3. Manual steps for the owner
 
-1. ~~Apply migrations 0029–0041~~ — done (0041 on 2026-09-17).
+1. ~~Apply migrations 0029–0042~~ — done (0042 on 2026-09-17).
 1c. **Add the marketplace starter alerts** you want under **Automations**, and
    change their thresholds to what would actually worry you.
 1a. **Place any expense categories BizMind lists** under **Operating

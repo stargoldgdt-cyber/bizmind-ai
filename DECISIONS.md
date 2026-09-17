@@ -1943,3 +1943,14 @@ to files it made.
 
 **Why:** the same compute-first rule as every screen, with the two ledger
 facts an owner is most likely to misread made impossible to misstate.
+
+---
+
+## 2026-09-17 — Fix: withdrawn expenses no longer count (migration 0042)
+
+Found in the audit of the legacy dashboard. Withdrawing an import marks its
+expenses `withdrawn_at` rather than deleting them (0027). The legacy analytics
+skipped them; Phase 7's `expense_lines` did not, so operating expenses and Net
+Profit still included expenses from a withdrawn import. 0042 adds the filter;
+the records are kept for the audit trail. `npm run test:expenses-ledger` now
+withdraws a synced expense import and checks every figure.

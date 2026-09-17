@@ -1004,6 +1004,7 @@ outside the marketplaces (B16).
 | `sync_jobs`, `integration_record_state` checks; `sync_record_state_commit`, `sync_record_issues`, `sync_reconcile_due` | Widened for the two new resources |
 | `import_batch_dataset_guard` | A product or cost sync batch cannot be withdrawn |
 | 0038 | `sync_dataset_batch()` no longer sets `source_kind`, which 0030 reserves for ledger files |
+| 0042 | `expense_lines` skips expenses whose import was withdrawn (`withdrawn_at`, 0027), so every expense reader, Net Profit and the ledger alerts stop counting them; `expense_category_classify()` looks only at expenses that still count |
 
 No rollback script: the tables are additive and the legacy expense path is
 untouched.

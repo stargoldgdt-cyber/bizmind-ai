@@ -456,6 +456,36 @@ try {
   check("both months are offered", periods.length === 2, JSON.stringify(periods))
 
   /* ------------------------------------------------------------------------ */
+  section("3b. A WITHDRAWN EXPENSE IMPORT NO LONGER COUNTS (migration 0042)")
+
+  const expenseBatch = rows(await read(
+    `/rest/v1/import_batches?select=id&integration_account_id=eq.${expenseTab}&entity=eq.EXPENSES&status=eq.COMPLETED&order=created_at.desc&limit=1`,
+    owner
+  ))[0]
+  const withdrawnExpenses = await rpc("import_batch_withdraw", { p_batch_id: expenseBatch?.id, p_reason: "Verification" }, owner)
+  check("the owner withdraws the synced expense import", withdrawnExpenses.ok, say(withdrawnExpenses))
+  const afterWithdraw = await net()
+  check(
+    "its expenses leave every figure: net profit is gross profit, 37.5000, and FINAL",
+    afterWithdraw?.operating_expenses === "0.0000" && afterWithdraw?.external_advertising === "0.0000" &&
+      afterWithdraw?.not_in_profit === "0.0000" && afterWithdraw?.expense_lines === 0 &&
+      afterWithdraw?.net_profit === "37.5000" && afterWithdraw?.net_profit_status === "FINAL",
+    JSON.stringify(afterWithdraw)
+  )
+  check("August has no expenses left either", (await net(AUGUST)) === undefined, JSON.stringify(await net(AUGUST)))
+  check("no expense month or unplaced category is offered",
+    rows(await rpc("expense_periods", { p_business_id: businessId }, owner)).length === 0 &&
+      rows(await rpc("expense_category_queue", { p_business_id: businessId }, owner)).length === 0)
+  const onlyWithdrawn = await rpc("expense_category_classify", {
+    p_business_id: businessId, p_category_name: "Rent", p_category_code: "OFFICE",
+  }, owner)
+  check("a category used only by withdrawn expenses cannot be classified",
+    !onlyWithdrawn.ok && say(onlyWithdrawn).includes("No expense"), say(onlyWithdrawn))
+  const stillStored = rows(await read(`/rest/v1/expenses?select=id,withdrawn_at&business_id=eq.${businessId}`, owner))
+  check("the withdrawn expenses are kept for the record, not deleted",
+    stillStored.length === 6 && stillStored.every((e) => e.withdrawn_at !== null), JSON.stringify(stillStored.length))
+
+  /* ------------------------------------------------------------------------ */
   section("4. NOTHING CROSSES BUSINESSES")
 
   check("another business sees no net profit", rows(await rpc("pnl_net_profit", JULY, rival)).length === 0)

@@ -175,3 +175,35 @@ const OUT_OF_SCOPE = [
 export function claimsToAct(reply: string): boolean {
   return OUT_OF_SCOPE.some((pattern) => pattern.test(reply))
 }
+
+/**
+ * Refuses a reply that treats an expected payout as money received (GCC
+ * Phase 9). No bank source is connected, so BizMind cannot know what reached
+ * the bank, and an owner told otherwise may spend money that has not arrived.
+ *
+ * Deliberately strict: a sentence that merely brushes against these phrases
+ * loses the paragraph, which is the right direction to fail in.
+ */
+const RECEIPT_CLAIMS = [
+  /\byou(?:'ve| have)?\s+(?:already\s+)?received\b/i,
+  /\b(?:has|have|had|was|were)\s+(?:already\s+)?(?:been\s+)?(?:received|deposited|credited|paid into)\b/i,
+  /\b(?:reached|landed in|arrived in|deposited (?:in|into)|credited to)\s+your (?:bank|account)\b/i,
+  /\bin your bank(?: account)? (?:now|already)\b/i,
+]
+
+export function claimsMoneyReceived(reply: string): boolean {
+  return RECEIPT_CLAIMS.some((pattern) => pattern.test(reply))
+}
+
+/**
+ * Refuses a reply that calls a not-final figure final (GCC Phase 9).
+ * Only applied when the facts contain a figure that is NOT FINAL.
+ */
+const FINALITY_CLAIMS = [
+  /\b(?:your|the)\s+(?:final|confirmed)\s+(?:contribution|gross profit|net profit|profit)\b/i,
+  /\b(?:contribution|gross profit|net profit|profit)\s+(?:is|was)\s+(?:final|confirmed)\b/i,
+]
+
+export function claimsFinality(reply: string): boolean {
+  return FINALITY_CLAIMS.some((pattern) => pattern.test(reply))
+}

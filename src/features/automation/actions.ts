@@ -61,14 +61,23 @@ export async function addRuleFromTemplateAction(
   rawInput: unknown
 ): Promise<ActionResult> {
   const parsed = z
-    .object({ templateId: z.string().min(1).max(60) })
+    .object({
+      templateId: z.string().min(1).max(60),
+      currency: z.string().regex(/^[A-Z]{3}$/).optional(),
+    })
     .safeParse(rawInput)
   if (!parsed.success) return { ok: false, error: "That rule could not be read." }
 
   const business = await getActiveBusiness()
   if (!business) return { ok: false, error: "No business selected." }
 
-  const result = await createRuleFromTemplate(business.id, parsed.data.templateId)
+  // A marketplace starter rule watches the business currency unless another
+  // of the business's currencies is chosen; the database checks the rest.
+  const result = await createRuleFromTemplate(
+    business.id,
+    parsed.data.templateId,
+    parsed.data.currency ?? business.currency
+  )
   if (!result.ok) return { ok: false, error: result.error }
 
   revalidatePath("/alerts")

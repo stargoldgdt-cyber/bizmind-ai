@@ -21,12 +21,15 @@ import "server-only"
 
 import { complete, isAiConfigured, type AiUnavailableReason } from "./client"
 import { buildFactSheet, renderFactSheet, type FactSheetInput } from "./facts"
-import { claimsToAct, claimsToCalculate, guardNumbers } from "./guard"
+import { claimsFinality, claimsMoneyReceived, claimsToAct, claimsToCalculate, guardNumbers } from "./guard"
+import { buildLedgerFactText, type LedgerFactInput, type LedgerQuestion } from "./ledger-facts"
 import {
   briefSystemPrompt,
   briefUserPrompt,
   explainSystemPrompt,
   explainUserPrompt,
+  ledgerSystemPrompt,
+  ledgerUserPrompt,
   narrativeSystemPrompt,
   narrativeUserPrompt,
 } from "./prompts"
@@ -38,6 +41,8 @@ export type SuppressionReason =
   | "claimed_to_calculate"
   | "out_of_scope"
   | "wrong_shape"
+  | "claimed_received"
+  | "claimed_final"
 
 export type Narration =
   | { ok: true; text: string; model: string }
@@ -70,6 +75,10 @@ const MESSAGES: Record<SuppressionReason, string> = {
     "An explanation was discarded because it strayed into advice BizMind does not give. Your figures above are unaffected.",
   wrong_shape:
     "An explanation was produced but not in the form BizMind publishes, so it was discarded. Your figures above are unaffected.",
+  claimed_received:
+    "An explanation was discarded because it described an expected payout as money received. No bank is connected, so BizMind cannot know that. Your figures above are unaffected.",
+  claimed_final:
+    "An explanation was discarded because it described a figure that is not final as final. Your figures above are unaffected.",
 }
 
 /** The shape both features share when there is nothing to show. */
@@ -90,7 +99,9 @@ async function narrate(
   system: string,
   user: string,
   factSheetText: string,
-  maxOutputTokens: number
+  maxOutputTokens: number,
+  /** Extra checks for one feature; the shared ones always run first. */
+  extraCheck?: (reply: string) => SuppressionReason | null
 ): Promise<Narration> {
   if (!isAiConfigured()) return suppress("not_configured")
 
@@ -115,6 +126,12 @@ async function narrate(
   if (claimsToAct(result.text)) {
     console.warn("[ai] discarded a reply that claimed to act or gave regulated advice")
     return suppress("out_of_scope")
+  }
+
+  const extra = extraCheck?.(result.text) ?? null
+  if (extra !== null) {
+    console.warn(`[ai] discarded a reply: ${extra}`)
+    return suppress(extra)
   }
 
   return { ok: true, text: result.text, model: result.model }
@@ -248,4 +265,32 @@ export async function briefForPeriod(input: FactSheetInput): Promise<BriefResult
   }
 
   return { ok: true, brief, model: narration.model }
+}
+
+/* ==========================================================================
+ * ASK BIZMIND, ON THE MARKETPLACE LEDGER (GCC Phase 9)
+ * ==========================================================================
+ * One fixed question, one month's verified ledger figures. On top of the
+ * shared checks, a reply is discarded if it treats an expected payout as
+ * received, or -- when any figure is not final -- calls a figure final.
+ * ======================================================================== */
+
+export type LedgerAnswer = {
+  /** The exact facts shown to the model, displayed whatever happens to the prose. */
+  facts: string
+  narration: Narration
+}
+
+export async function answerLedgerQuestion(
+  question: LedgerQuestion,
+  input: LedgerFactInput
+): Promise<LedgerAnswer> {
+  const facts = buildLedgerFactText(question, input)
+  const hasIncomplete = facts.includes("NOT FINAL")
+  const narration = await narrate(ledgerSystemPrompt(), ledgerUserPrompt(facts), facts, 500, (reply) => {
+    if (claimsMoneyReceived(reply)) return "claimed_received"
+    if (hasIncomplete && claimsFinality(reply)) return "claimed_final"
+    return null
+  })
+  return { facts, narration }
 }

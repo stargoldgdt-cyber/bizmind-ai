@@ -97,12 +97,23 @@ export async function createRule(
 /** Creates a rule from one of the starter templates. */
 export async function createRuleFromTemplate(
   businessId: string,
-  templateId: string
+  templateId: string,
+  /** For a marketplace (ledger) starter rule: the currency to watch. */
+  currency?: string
 ): Promise<RuleResult> {
   const template = getRuleTemplate(templateId)
 
   if (!template) {
     return { ok: false, error: "That starter rule does not exist." }
+  }
+
+  if (template.ledger) {
+    if (!currency) return { ok: false, error: "Choose which currency to watch." }
+    return createRule(businessId, {
+      ...template.rule,
+      name: `${template.rule.name} (${currency})`,
+      ledger_currency: currency,
+    })
   }
 
   return createRule(businessId, template.rule)

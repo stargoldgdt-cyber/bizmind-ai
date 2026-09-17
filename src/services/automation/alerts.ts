@@ -108,8 +108,10 @@ export type PresentedAlert = {
  * value while displaying it would be reporting a different number from the one
  * it fired on.
  */
-export function presentAlert(alert: Alert, currency: string): PresentedAlert {
+export function presentAlert(alert: Alert, businessCurrency: string): PresentedAlert {
   const metric = getCanonicalMetric(alert.metric)
+  // A ledger alert carries its own currency (migration 0041).
+  const currency = alert.currency ?? businessCurrency
   const kind = metric?.kind ?? "money"
 
   const format = (value: string): string => {

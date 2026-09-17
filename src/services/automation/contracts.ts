@@ -94,7 +94,7 @@ export const COMPARABLE_ANALYTICS_KEYS = [
  * Offering it would be offering a promise the product cannot keep.
  */
 export function watchableMetrics(): CanonicalMetric[] {
-  return Object.values(CANONICAL_METRICS).filter((m) => m.analyticsKey)
+  return Object.values(CANONICAL_METRICS).filter((m) => m.analyticsKey || m.ledger)
 }
 
 /** Whether a rule on this metric with this operator could ever produce a verdict. */
@@ -106,6 +106,16 @@ export function canWatch(
 
   if (!metric) {
     return { ok: false, reason: `"${metricKey}" is not a BizMind metric.` }
+  }
+
+  if (metric.ledger) {
+    if (isChangeOperator(operator) && metric.kind === "count") {
+      return {
+        ok: false,
+        reason: `${metric.label} is a count, so it is watched by its value, not by a percentage change.`,
+      }
+    }
+    return { ok: true }
   }
 
   if (!metric.analyticsKey) {
@@ -208,6 +218,16 @@ const baseRuleShape = {
    * for one channel), so it is a choice rather than a prohibition.
    */
   suppress_when_incomplete: z.boolean(),
+
+  /**
+   * GCC Phase 9: the currency a ledger rule watches (every marketplace account
+   * in it). Required for a ledger metric and refused otherwise; amounts in
+   * different currencies are never compared.
+   */
+  ledger_currency: z
+    .string()
+    .regex(/^[A-Z]{3}$/, "Choose a currency.")
+    .nullish(),
 }
 
 /** Shared by create and update: the checks that need more than one field. */
@@ -217,6 +237,7 @@ function refineRule<T extends z.ZodType>(schema: T) {
       metric: string
       operator: AutomationOperator
       threshold: string
+      ledger_currency?: string | null
     }
 
     const watchable = canWatch(rule.metric, rule.operator)
@@ -233,6 +254,20 @@ function refineRule<T extends z.ZodType>(schema: T) {
     // way the rule would never fire, silently, which is the failure this whole
     // product exists to avoid. Checked by DIGIT COUNT, never by arithmetic.
     const metric = getCanonicalMetric(rule.metric)
+    if (metric?.ledger && !rule.ledger_currency) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["ledger_currency"],
+        message: "Choose which currency's marketplace accounts to watch.",
+      })
+    }
+    if (metric && !metric.ledger && rule.ledger_currency) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["ledger_currency"],
+        message: "Only a marketplace figure is watched in a currency.",
+      })
+    }
     if (
       metric?.kind === "ratio" &&
       !isChangeOperator(rule.operator) &&
@@ -287,9 +322,34 @@ export const SKIP_REASON_EXPLANATIONS: Record<string, string> = {
   NO_COMPARISON:
     "This figure has no period-on-period comparison, so it cannot be watched " +
     "for a percentage change.",
+  NO_CURRENCY: "This marketplace rule has no currency, so there was nothing to watch.",
+  NO_PREVIOUS_VALUE:
+    "There was no figure for the period before (or it was zero), so a " +
+    "percentage change could not be measured. BizMind does not guess one.",
 }
 
+/** Why a ledger figure was not final, in the owner's language. */
+const LEDGER_REASON: Record<string, string> = {
+  UNKNOWN_LINES: "some marketplace lines are not recognised",
+  VAT_TREATMENT_UNKNOWN: "VAT on marketplace fees has no setting",
+  FEE_VAT_NOT_SEPARATED: "marketplace fees still include VAT",
+  ROW_ERRORS: "some marketplace rows could not be read",
+  SKU_NOT_MAPPED: "some SKUs are not matched to a product",
+  COST_MISSING: "some products have no cost for the sale date",
+  NO_MARKETPLACE_DATA: "there are no marketplace figures",
+  EXPENSES_UNCLASSIFIED: "some expense categories are not placed yet",
+}
+
+/**
+ * A skip reason may carry the ledger's own reasons after a colon
+ * ("INCOMPLETE_DATA:SKU_NOT_MAPPED,COST_MISSING", migration 0041).
+ */
 export function explainSkip(reason: string | null): string | null {
   if (!reason) return null
-  return SKIP_REASON_EXPLANATIONS[reason] ?? "The check did not reach a verdict."
+  const [code, detail] = reason.split(":", 2)
+  if (code === "INCOMPLETE_DATA" && detail) {
+    const why = detail.split(",").map((r) => LEDGER_REASON[r] ?? r).join("; ")
+    return `This figure is not final (${why}), so BizMind did not judge it. It will be checked again once that is fixed.`
+  }
+  return SKIP_REASON_EXPLANATIONS[code] ?? "The check did not reach a verdict."
 }

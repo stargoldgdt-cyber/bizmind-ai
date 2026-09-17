@@ -34,6 +34,9 @@ type TemplateOption = {
   concern: string
   rationale: string
   alreadyAdded: boolean
+  /** GCC Phase 9: a marketplace rule, added per currency. */
+  ledger: boolean
+  missingCurrencies: string[]
 }
 
 export function RulePanel({
@@ -115,20 +118,42 @@ export function RulePanel({
                     {template.rationale}
                   </p>
 
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="mt-4 self-start rounded-4xl"
-                    disabled={pending}
-                    onClick={() =>
-                      startTransition(async () => {
-                        await addRuleFromTemplateAction({ templateId: template.id })
-                      })
-                    }
-                  >
-                    <Plus className="size-4" aria-hidden />
-                    Add this rule
-                  </Button>
+                  {template.ledger ? (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {template.missingCurrencies.map((currency) => (
+                        <Button
+                          key={currency}
+                          size="sm"
+                          variant="outline"
+                          className="rounded-4xl"
+                          disabled={pending}
+                          onClick={() =>
+                            startTransition(async () => {
+                              await addRuleFromTemplateAction({ templateId: template.id, currency })
+                            })
+                          }
+                        >
+                          <Plus className="size-4" aria-hidden />
+                          Add for {currency} marketplaces
+                        </Button>
+                      ))}
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-4 self-start rounded-4xl"
+                      disabled={pending}
+                      onClick={() =>
+                        startTransition(async () => {
+                          await addRuleFromTemplateAction({ templateId: template.id })
+                        })
+                      }
+                    >
+                      <Plus className="size-4" aria-hidden />
+                      Add this rule
+                    </Button>
+                  )}
                 </li>
               ))}
           </ul>
@@ -176,6 +201,7 @@ function RuleRow({
             <span className="font-mono tabular-nums text-foreground">
               {rule.threshold}
             </span>
+            {rule.ledger_currency && <> for your {rule.ledger_currency} marketplace accounts</>}
             , measured over {rule.period_days} days.
           </p>
         </div>

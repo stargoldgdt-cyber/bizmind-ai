@@ -5,6 +5,7 @@ import { AppShell } from "@/components/layout/app-shell"
 import { ONBOARDING_ROUTE } from "@/config/routes"
 import { getActiveBusiness, getUserBusinesses } from "@/features/businesses/queries"
 import { RulePanel } from "@/features/automation/components/rule-panel"
+import { listLedgerAccounts } from "@/features/ledger/queries"
 import { createClient, getCurrentUser } from "@/lib/supabase/server"
 import { listRuleRuns, listRules, RULE_TEMPLATES } from "@/services/automation"
 
@@ -33,10 +34,16 @@ export default async function AutomationsPage() {
   if (!activeBusiness) redirect(ONBOARDING_ROUTE)
 
   const supabase = await createClient()
-  const [{ data: profile }, rules] = await Promise.all([
+  const [{ data: profile }, rules, accounts] = await Promise.all([
     supabase.from("profiles").select("full_name").eq("id", user!.id).maybeSingle(),
     listRules(activeBusiness.id),
+    listLedgerAccounts(activeBusiness.id),
   ])
+
+  // Marketplace rules watch one currency at a time: the currencies of the
+  // business's marketplace accounts, or its own currency before it has any.
+  const currencies = [...new Set(accounts.map((a) => a.currency))].sort()
+  if (currencies.length === 0) currencies.push(activeBusiness.currency)
 
   const runsByRule = Object.fromEntries(
     await Promise.all(
@@ -71,7 +78,14 @@ export default async function AutomationsPage() {
               name: template.rule.name,
               concern: template.concern,
               rationale: template.rationale,
-              alreadyAdded: rules.some((rule) => rule.name === template.rule.name),
+              ledger: template.ledger === true,
+              // A marketplace rule can be added once per currency.
+              missingCurrencies: template.ledger
+                ? currencies.filter((c) => !rules.some((rule) => rule.name === `${template.rule.name} (${c})`))
+                : [],
+              alreadyAdded: template.ledger
+                ? currencies.every((c) => rules.some((rule) => rule.name === `${template.rule.name} (${c})`))
+                : rules.some((rule) => rule.name === template.rule.name),
             }))}
             canEdit={canEdit}
           />

@@ -1740,6 +1740,8 @@ export type Database = {
           evaluate_every_minutes: number
           next_run_at: string
           suppress_when_incomplete: boolean
+          /** Migration 0041: the currency a ledger metric is watched in. */
+          ledger_currency: string | null
           /** Always true in V1: nothing executes, so nothing acts unapproved. */
           requires_approval: boolean
           created_by: string | null
@@ -1758,6 +1760,7 @@ export type Database = {
           cooldown_hours?: number
           evaluate_every_minutes?: number
           suppress_when_incomplete?: boolean
+          ledger_currency?: string | null
           created_by?: string | null
         }
         Update: {
@@ -1772,6 +1775,7 @@ export type Database = {
           cooldown_hours?: number
           evaluate_every_minutes?: number
           suppress_when_incomplete?: boolean
+          ledger_currency?: string | null
         }
         Relationships: [
           {
@@ -1843,6 +1847,8 @@ export type Database = {
            */
           operator: AutomationOperator
           status: AlertStatus
+          /** Migration 0041: a ledger alert's currency; null for a legacy alert. */
+          currency: string | null
           acknowledged_by: string | null
           acknowledged_at: string | null
         }

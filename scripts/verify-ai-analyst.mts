@@ -501,6 +501,8 @@ const reasons = [
   "not_configured", "no_credit", "rate_limited", "timed_out", "refused",
   "failed", "invented_figures", "claimed_to_calculate", "out_of_scope",
   "wrong_shape",
+  // GCC Phase 9, ledger answers.
+  "claimed_received", "claimed_final",
 ]
 check(
   "every possible reason has an owner-facing message",

@@ -21,7 +21,7 @@ export function ExpenseMonthPicker({
   months: { key: string; label: string }[]
   monthKey: string
   /** The screen the choice reloads. */
-  basePath?: "/ledger/expenses" | "/ledger/payouts" | "/ledger/reports"
+  basePath?: "/ledger/expenses" | "/ledger/payouts" | "/ledger/reports" | "/ledger/ask"
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()

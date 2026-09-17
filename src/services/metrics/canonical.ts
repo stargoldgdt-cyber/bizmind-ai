@@ -53,6 +53,11 @@ export type CanonicalMetric = {
    * exists. Present only for metrics the dashboard publishes today.
    */
   analyticsKey?: string
+  /**
+   * GCC Phase 9: computed from the marketplace ledger by
+   * `automation_ledger_value()`, for one currency. Watched by alert rules.
+   */
+  ledger?: true
 }
 
 /**
@@ -289,6 +294,96 @@ export const CANONICAL_METRICS: Record<string, CanonicalMetric> = {
       "The share of orders that have a recorded channel fee. Below 100% means some orders had no fee recorded, so profit and margin are overstated by an unknown amount.",
     higherIsBetter: true,
     analyticsKey: "fee_coverage",
+  },
+
+  /* ---- The marketplace ledger (GCC Phase 9) -------------------------------
+   * Computed in SQL from the ledger, per currency, by the same readers as the
+   * marketplace screens. Watched by alert rules only; never mapped from a
+   * source column. */
+  ledger_net_sales: {
+    key: "ledger_net_sales",
+    label: "Net sales (marketplaces)",
+    kind: "money",
+    origin: "computed",
+    definition: "Marketplace sales after refunds and seller-funded discounts, for every account in the currency.",
+    higherIsBetter: true,
+    ledger: true,
+  },
+  ledger_marketplace_fees: {
+    key: "ledger_marketplace_fees",
+    label: "Marketplace fees",
+    kind: "money",
+    origin: "computed",
+    definition: "Referral, closing and other marketplace fees, as a positive amount.",
+    higherIsBetter: false,
+    ledger: true,
+  },
+  ledger_advertising: {
+    key: "ledger_advertising",
+    label: "Marketplace advertising",
+    kind: "money",
+    origin: "computed",
+    definition: "Advertising charged by the marketplaces, as a positive amount.",
+    higherIsBetter: false,
+    ledger: true,
+  },
+  ledger_contribution: {
+    key: "ledger_contribution",
+    label: "Contribution (marketplaces)",
+    kind: "money",
+    origin: "computed",
+    definition: "Net sales less marketplace fees, fulfilment and advertising. Only judged when final.",
+    higherIsBetter: true,
+    caveat: "Not judged while any marketplace line is unrecognised or VAT on fees has no setting.",
+    ledger: true,
+  },
+  ledger_gross_profit: {
+    key: "ledger_gross_profit",
+    label: "Gross profit (marketplaces)",
+    kind: "money",
+    origin: "computed",
+    definition: "Contribution less the cost of goods sold. Only judged when final.",
+    higherIsBetter: true,
+    caveat: "Not judged while a SKU is unmatched or a product has no cost.",
+    ledger: true,
+  },
+  ledger_net_profit: {
+    key: "ledger_net_profit",
+    label: "Net profit",
+    kind: "money",
+    origin: "computed",
+    definition: "Gross profit less operating expenses and advertising outside the marketplaces. Only judged when final.",
+    higherIsBetter: true,
+    caveat: "Not judged while an expense category is unplaced.",
+    ledger: true,
+  },
+  ledger_expected_payouts: {
+    key: "ledger_expected_payouts",
+    label: "Expected marketplace payouts",
+    kind: "money",
+    origin: "computed",
+    definition: "What the marketplaces report they will pay, by expected date. Never money received.",
+    higherIsBetter: true,
+    caveat: "Expected, not received: no bank source is connected.",
+    ledger: true,
+  },
+  ledger_unknown_lines: {
+    key: "ledger_unknown_lines",
+    label: "Unrecognised marketplace lines",
+    kind: "count",
+    origin: "computed",
+    definition: "Marketplace lines whose code BizMind does not recognise yet. They keep figures incomplete.",
+    higherIsBetter: false,
+    ledger: true,
+  },
+  ledger_settlements_mismatched: {
+    key: "ledger_settlements_mismatched",
+    label: "Settlements that do not add up",
+    kind: "count",
+    origin: "computed",
+    definition: "Settlements whose reported total differs from the sum of their lines.",
+    higherIsBetter: false,
+    ledger: true,
   },
 }
 

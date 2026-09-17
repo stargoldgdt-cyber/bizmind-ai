@@ -11,8 +11,10 @@ import "server-only"
  * See AI.md for the rules this layer exists to enforce.
  */
 
-export { briefForPeriod, explainMetric, explainPeriod, parseBrief } from "./analyst"
-export type { BriefResult, BusinessBrief, Narration, SuppressionReason } from "./analyst"
+export { answerLedgerQuestion, briefForPeriod, explainMetric, explainPeriod, parseBrief } from "./analyst"
+export type { BriefResult, BusinessBrief, LedgerAnswer, Narration, SuppressionReason } from "./analyst"
+export { isLedgerQuestion, LEDGER_QUESTIONS, QUESTION_NEEDS } from "./ledger-facts"
+export type { LedgerFactInput, LedgerQuestion } from "./ledger-facts"
 export { aiModel, isAiConfigured } from "./client"
 export { buildFactSheet, renderFactSheet } from "./facts"
 export type { Fact, FactSheet, FactSheetInput } from "./facts"

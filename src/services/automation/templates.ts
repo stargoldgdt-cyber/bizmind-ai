@@ -35,6 +35,8 @@ export type RuleTemplate = {
   /** Why this threshold, stated plainly so it can be argued with. */
   rationale: string
   rule: CreateRuleInput
+  /** GCC Phase 9: watches the marketplace ledger, in a currency chosen when it is added. */
+  ledger?: true
 }
 
 export const RULE_TEMPLATES: RuleTemplate[] = [
@@ -168,6 +170,116 @@ export const RULE_TEMPLATES: RuleTemplate[] = [
     },
   },
 ]
+
+/**
+ * Marketplace starter rules (GCC Phase 9), on the ledger. The currency is
+ * filled in when the rule is added. As above, every threshold is a starting
+ * point for the owner to change, not a recommendation.
+ */
+const LEDGER_TEMPLATES: RuleTemplate[] = [
+  {
+    id: "ledger_unknown_lines",
+    ledger: true,
+    concern: "A marketplace started reporting something BizMind does not recognise.",
+    rationale:
+      "Any unrecognised line keeps your marketplace figures incomplete until it is " +
+      "classified, so even one is worth knowing about.",
+    rule: {
+      name: "Unrecognised marketplace lines",
+      description: "Alerts when the last 30 days contain any marketplace line BizMind does not recognise.",
+      metric: "ledger_unknown_lines",
+      operator: "GT",
+      threshold: "0",
+      period_days: 30,
+      severity: "WARNING",
+      cooldown_hours: 24,
+      evaluate_every_minutes: 360,
+      suppress_when_incomplete: false,
+    },
+  },
+  {
+    id: "ledger_settlement_mismatch",
+    ledger: true,
+    concern: "A settlement's total does not match its lines.",
+    rationale:
+      "A settlement that does not add up puts its expected payout in doubt, so it " +
+      "is worth checking against the marketplace's own report straight away.",
+    rule: {
+      name: "Settlement does not add up",
+      description: "Alerts when a settlement expected in the last 30 days does not add up to its lines.",
+      metric: "ledger_settlements_mismatched",
+      operator: "GT",
+      threshold: "0",
+      period_days: 30,
+      severity: "CRITICAL",
+      cooldown_hours: 24,
+      evaluate_every_minutes: 360,
+      suppress_when_incomplete: false,
+    },
+  },
+  {
+    id: "ledger_contribution_negative",
+    ledger: true,
+    concern: "My marketplaces are costing more than they bring in.",
+    rationale:
+      "A negative contribution over 30 days means fees, fulfilment and ads are " +
+      "larger than net sales. It is only judged when the figure is final.",
+    rule: {
+      name: "Marketplace contribution below zero",
+      description: "Alerts when final contribution over the last 30 days is below zero.",
+      metric: "ledger_contribution",
+      operator: "LT",
+      threshold: "0",
+      period_days: 30,
+      severity: "CRITICAL",
+      cooldown_hours: 72,
+      evaluate_every_minutes: 720,
+      suppress_when_incomplete: true,
+    },
+  },
+  {
+    id: "ledger_advertising_up",
+    ledger: true,
+    concern: "Marketplace ad spend is climbing.",
+    rationale:
+      "Compares marketplace advertising over the last 30 days with the 30 before. " +
+      "A 30% rise is worth a look whether or not it was planned.",
+    rule: {
+      name: "Marketplace advertising up more than 30%",
+      description: "Compares marketplace advertising over the last 30 days with the 30 days before.",
+      metric: "ledger_advertising",
+      operator: "CHANGE_PCT_GT",
+      threshold: "30",
+      period_days: 30,
+      severity: "WARNING",
+      cooldown_hours: 168,
+      evaluate_every_minutes: 1440,
+      suppress_when_incomplete: true,
+    },
+  },
+  {
+    id: "ledger_expected_payouts_down",
+    ledger: true,
+    concern: "Less money is expected from the marketplaces than before.",
+    rationale:
+      "Compares expected marketplace payouts over the last 30 days with the 30 " +
+      "before. Expected, not received: no bank is connected.",
+    rule: {
+      name: "Expected payouts down more than 25%",
+      description: "Compares expected marketplace payouts over the last 30 days with the 30 days before.",
+      metric: "ledger_expected_payouts",
+      operator: "CHANGE_PCT_LT",
+      threshold: "-25",
+      period_days: 30,
+      severity: "WARNING",
+      cooldown_hours: 168,
+      evaluate_every_minutes: 1440,
+      suppress_when_incomplete: true,
+    },
+  },
+]
+
+RULE_TEMPLATES.push(...LEDGER_TEMPLATES)
 
 export function getRuleTemplate(id: string): RuleTemplate | undefined {
   return RULE_TEMPLATES.find((t) => t.id === id)

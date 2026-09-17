@@ -109,6 +109,8 @@ export const NAVIGATION: NavSection[] = [
       // GCC Phase 8: expected marketplace payouts; no bank source yet.
       { label: "Payouts and cashflow", href: "/ledger/payouts", icon: Landmark, enabled: true },
       { label: "Reports", href: "/ledger/reports", icon: FileSpreadsheet, enabled: true },
+      // GCC Phase 9: questions answered from verified ledger figures.
+      { label: "Ask about marketplaces", href: "/ledger/ask", icon: Sparkles, enabled: true },
       { label: "Marketplace data quality", href: "/ledger/quality", icon: ShieldCheck, enabled: true },
     ],
   },

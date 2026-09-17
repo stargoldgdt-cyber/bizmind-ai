@@ -154,15 +154,35 @@ check(
 const offered = watchableMetrics()
 
 check(
-  "watchableMetrics offers only metrics the analytics engine publishes",
-  offered.every((m) => m.analyticsKey !== undefined) && offered.length > 0,
+  "watchableMetrics offers only metrics the analytics engine or the ledger publishes (Phase 9)",
+  offered.every((m) => m.analyticsKey !== undefined || m.ledger === true) && offered.length > 0,
   `${offered.length} offered`
 )
 
 check(
   "it offers every one of them",
   offered.length ===
-    Object.values(CANONICAL_METRICS).filter((m) => m.analyticsKey).length
+    Object.values(CANONICAL_METRICS).filter((m) => m.analyticsKey || m.ledger).length
+)
+
+check(
+  "a ledger rule needs a currency, and a legacy rule may not have one",
+  !createRuleSchema.safeParse({ ...VALID, metric: "ledger_contribution" }).success &&
+    createRuleSchema.safeParse({ ...VALID, metric: "ledger_contribution", ledger_currency: "AED" }).success &&
+    !createRuleSchema.safeParse({ ...VALID, ledger_currency: "AED" }).success
+)
+
+check(
+  "a ledger count is watched by value, never by a percentage change",
+  !createRuleSchema.safeParse({
+    ...VALID, metric: "ledger_unknown_lines", operator: "CHANGE_PCT_GT", ledger_currency: "AED",
+  }).success
+)
+
+check(
+  "an incomplete ledger figure is explained with its reasons",
+  (explainSkip("INCOMPLETE_DATA:SKU_NOT_MAPPED,COST_MISSING") ?? "").includes("not matched to a product") &&
+    (explainSkip("INCOMPLETE_DATA:SKU_NOT_MAPPED,COST_MISSING") ?? "").includes("no cost")
 )
 
 check(
@@ -309,12 +329,16 @@ check(
 section("4. THE STARTER RULES ARE HONEST")
 /* ========================================================================== */
 
+// A marketplace starter rule is completed with a currency when it is added.
+const ruleOf = (template: (typeof RULE_TEMPLATES)[number]) =>
+  template.ledger ? { ...template.rule, ledger_currency: "AED" } : template.rule
+
 for (const template of RULE_TEMPLATES) {
   check(
     `template "${template.id}" is a rule that would validate`,
-    createRuleSchema.safeParse(template.rule).success,
+    createRuleSchema.safeParse(ruleOf(template)).success,
     JSON.stringify(
-      createRuleSchema.safeParse(template.rule).success
+      createRuleSchema.safeParse(ruleOf(template)).success
         ? {}
         : createRuleSchema.safeParse(template.rule)
     ).slice(0, 160)

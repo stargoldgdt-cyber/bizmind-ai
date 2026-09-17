@@ -3,16 +3,18 @@ import { NextResponse } from "next/server"
 import { signaturesMatch } from "@/lib/crypto"
 import { callTrusted } from "@/services/integrations/security/privileged"
 import { drainSyncQueue } from "@/services/integrations/sync/drain"
+import { runReportExports } from "@/services/integrations/sync/report-exports"
 
 /**
  * The scheduled entry point for background sync.
  *
- * Two jobs, in order:
+ * Three jobs, in order:
  *   1. The safety net. Google does not promise to deliver every change
  *      notification, so a connected sheet that has been quiet for 15 minutes
  *      is queued for a check. An unchanged sheet costs one small request.
  *   2. Drain the queue: every due page of every due job, until it is empty or
  *      the time budget is spent.
+ *   3. Report exports to Google Sheets that people queued (migration 0040).
  *
  * Authentication is the automation route's, for the same reasons: a shared
  * value in `Authorization: Bearer`, compared in constant time, and the route
@@ -53,10 +55,12 @@ export async function POST(request: Request) {
     })
 
     const result = await drainSyncQueue({ budgetMs: DRAIN_BUDGET_MS })
+    // 3. Report exports to Google Sheets that were queued and not yet done.
+    const exports = await runReportExports({ workerId: `cron-${Date.now()}` })
 
     // Counts only. Nothing here names a business or a sheet -- this response
     // goes into a scheduler's logs, which are not ours.
-    return NextResponse.json({ status: "ok", reconciled: reconciled ?? 0, ...result })
+    return NextResponse.json({ status: "ok", reconciled: reconciled ?? 0, ...result, exports })
   } catch (error) {
     console.error("[sync] scheduled run failed", error instanceof Error ? error.name : "unknown")
     return NextResponse.json({ status: "error" }, { status: 500 })

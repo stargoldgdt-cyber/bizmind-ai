@@ -78,6 +78,15 @@ const TRUSTED_FUNCTIONS = [
   "sync_apply_catalog",
   "sync_apply_product_costs",
   /**
+   * GCC Phase 8 report exports (migration 0040). Each takes an EXPORT id and
+   * derives the business from that row; the claim takes none and returns only
+   * what it claimed.
+   */
+  "report_export_claim",
+  "report_export_data",
+  "report_export_attach",
+  "report_export_complete",
+  /**
    * Automation (migration 0016).
    *
    * `automation_claim_due` is the one function here that deliberately reads

@@ -6,6 +6,7 @@ import {
   Building2,
   FileSpreadsheet,
   Gauge,
+  Landmark,
   LayoutDashboard,
   Link2,
   type LucideIcon,
@@ -105,6 +106,9 @@ export const NAVIGATION: NavSection[] = [
       { label: "SKU matching", href: "/catalog/mapping", icon: Link2, enabled: true },
       // GCC Phase 7: operating expenses and net profit.
       { label: "Operating expenses", href: "/ledger/expenses", icon: Receipt, enabled: true },
+      // GCC Phase 8: expected marketplace payouts; no bank source yet.
+      { label: "Payouts and cashflow", href: "/ledger/payouts", icon: Landmark, enabled: true },
+      { label: "Reports", href: "/ledger/reports", icon: FileSpreadsheet, enabled: true },
       { label: "Marketplace data quality", href: "/ledger/quality", icon: ShieldCheck, enabled: true },
     ],
   },

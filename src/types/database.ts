@@ -83,6 +83,15 @@ export type ReturnStatus =
 /** CATALOG and PRODUCT_COSTS: Google Sheets dataset syncs (migration 0036). */
 export type ImportEntity = "ORDERS" | "PRODUCTS" | "EXPENSES" | "LEDGER" | "CATALOG" | "PRODUCT_COSTS"
 
+/** Where an expected payout comes from (migration 0039). */
+export type ExpectedPayoutSource = "SETTLEMENT_REPORT" | "MARKETPLACE_PAYMENT_REPORT"
+
+/** The marketplace-side check of an expected payout (migration 0039). */
+export type ExpectedPayoutStatus = "ADDS_UP" | "DOES_NOT_ADD_UP" | "NO_TOTAL" | "MARKETPLACE_PAYMENT"
+
+/** No bank source exists in V1; the type leaves room for one without implying it. */
+export type BankReceiptStatus = "NOT_CONNECTED"
+
 /** Whether an expense reduces Net Profit (migration 0037). */
 export type ExpenseCostClass = "OPERATING" | "ADVERTISING" | "NOT_PROFIT"
 
@@ -1018,6 +1027,32 @@ export type Database = {
           /** Migration 0037. */
           source: "MANUAL" | "SHEETS"
           integration_account_id: string | null
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+
+      /* ---- Report exports to Google Sheets (migration 0040) ------------- */
+
+      report_exports: {
+        Row: {
+          id: string
+          business_id: string
+          report_key: "marketplace-profit" | "product-profit" | "net-profit" | "payouts" | "data-quality"
+          month_key: string | null
+          destination: "GOOGLE_SHEETS"
+          requested_by: string | null
+          status: "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED"
+          attempts: number
+          lease_until: string | null
+          /** The spreadsheet BizMind created for this export. Set once. */
+          spreadsheet_id: string | null
+          spreadsheet_url: string | null
+          error: string | null
+          created_at: string
+          started_at: string | null
+          finished_at: string | null
         }
         Insert: never
         Update: never
@@ -2261,6 +2296,58 @@ export type Database = {
           reconciles: boolean
           payout_amount: string | null
           payout_date: string | null
+        }[]
+      }
+
+      /* ---- Report exports (migration 0040). The worker functions are not typed:
+       * they are reachable only through callTrusted(). ---------------------- */
+
+      report_export_request: {
+        Args: { p_business_id: string; p_report_key: string; p_month_key?: string | null }
+        Returns: string
+      }
+
+      /* ---- Expected payouts and cashflow (migration 0039) ---------------- */
+
+      expected_payouts: {
+        Args: { p_business_id: string; p_from?: string | null; p_to?: string | null; p_account_id?: string | null }
+        Returns: {
+          payout_key: string
+          source: ExpectedPayoutSource
+          marketplace_account_id: string
+          account_label: string
+          marketplace_code: string
+          currency: string
+          reference: string | null
+          source_file_id: string | null
+          file_name: string | null
+          period_start: string | null
+          period_end: string | null
+          expected_date: string | null
+          /** What the marketplace reports it will pay. Never money received. */
+          expected_amount: string | null
+          settlement_lines_total: string | null
+          settlement_lines: number | null
+          marketplace_status: ExpectedPayoutStatus
+          /** Always NOT_CONNECTED until a real bank source is connected. */
+          bank_receipt_status: BankReceiptStatus
+          bank_receipt_amount: string | null
+          bank_receipt_date: string | null
+        }[]
+      }
+
+      expected_cashflow: {
+        Args: { p_business_id: string; p_from?: string | null; p_to?: string | null }
+        Returns: {
+          month: string
+          currency: string
+          expected_payouts: number
+          expected_inflow: string
+          payouts_in_doubt: number
+          amount_in_doubt: string
+          payouts_without_amount: number
+          bank_receipt_status: BankReceiptStatus
+          bank_received: string | null
         }[]
       }
 

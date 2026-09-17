@@ -16,9 +16,12 @@ import {
 export function ExpenseMonthPicker({
   months,
   monthKey,
+  basePath = "/ledger/expenses",
 }: {
   months: { key: string; label: string }[]
   monthKey: string
+  /** The screen the choice reloads. */
+  basePath?: "/ledger/expenses" | "/ledger/payouts" | "/ledger/reports"
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -29,7 +32,7 @@ export function ExpenseMonthPicker({
         <Label htmlFor="expense-month">Month</Label>
         <Select
           value={monthKey}
-          onValueChange={(value) => startTransition(() => router.push(`/ledger/expenses?month=${value}`))}
+          onValueChange={(value) => startTransition(() => router.push(`${basePath}?month=${value}`))}
         >
           <SelectTrigger id="expense-month" className="w-48">
             <SelectValue />

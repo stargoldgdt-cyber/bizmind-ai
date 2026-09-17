@@ -274,6 +274,28 @@ try {
       productRows.every((row) => row.row_kind !== "PRODUCT")
   )
 
+  /* ------------------------------------------------------------------------ */
+  section("5. EXPECTED PAYOUTS (migration 0039)")
+
+  const expected: Json[] = (await call("/rest/v1/rpc/expected_payouts", {
+    method: "POST", body: JSON.stringify({ p_business_id: businessId }),
+  }, token)).body ?? []
+  for (const p of expected) {
+    console.log(`  info  ${p.reference}: expected ${p.expected_amount} ${p.currency} on ${String(p.expected_date).slice(0, 10)} -- ${p.marketplace_status}; bank ${p.bank_receipt_status}`)
+  }
+  // The owner's own statement of these settlements' payouts (2026-09-17).
+  const OWNER_EXPECTED = ["11199.0800", "14081.1000", "1688.1700", "24323.3800"] // sorted as text
+  check(
+    "Each settlement's expected payout is its reported total, as the owner stated",
+    JSON.stringify(expected.map((p) => p.expected_amount).sort()) === JSON.stringify(OWNER_EXPECTED) &&
+      expected.every((p) => p.source === "SETTLEMENT_REPORT" && p.marketplace_status === "ADDS_UP"),
+    JSON.stringify(expected.map((p) => [p.expected_amount, p.marketplace_status]))
+  )
+  check(
+    "None is shown as received: the bank side is not connected",
+    expected.every((p) => p.bank_receipt_status === "NOT_CONNECTED" && p.bank_receipt_amount === null)
+  )
+
   const monthsOffered: Json[] = (await call("/rest/v1/rpc/pnl_periods", {
     method: "POST", body: JSON.stringify({ p_business_id: businessId }),
   }, token)).body ?? []

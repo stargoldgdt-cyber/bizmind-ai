@@ -51,3 +51,31 @@ export async function createMarketplaceAccountAction(input: unknown): Promise<Cr
   revalidatePath("/imports/settlement")
   return { ok: true, id: data }
 }
+
+const inputVatSchema = z.object({
+  accountId: z.string().uuid(),
+  treatment: z.enum(["UNKNOWN", "RECOVERABLE", "NON_RECOVERABLE"]),
+})
+
+export type SetInputVatResult = { ok: true } | { ok: false; error: string }
+
+/**
+ * The account's VAT setting for marketplace fees (decision B1). The database
+ * checks that the caller owns the account's business and records the change
+ * in the audit log; ledger lines never change when this does.
+ */
+export async function setInputVatTreatmentAction(input: unknown): Promise<SetInputVatResult> {
+  const parsed = inputVatSchema.safeParse(input)
+  if (!parsed.success) return { ok: false, error: "Choose Recoverable, Non-recoverable or Unknown." }
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("tax_profile_set_input_vat", {
+    p_account_id: parsed.data.accountId,
+    p_treatment: parsed.data.treatment,
+  })
+
+  if (error) return { ok: false, error: error.message }
+
+  revalidatePath("/marketplaces")
+  return { ok: true }
+}

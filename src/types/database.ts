@@ -86,6 +86,18 @@ export type ImportEntity = "ORDERS" | "PRODUCTS" | "EXPENSES" | "LEDGER"
 export type LedgerSideDb = "PNL" | "CASH" | "TAX" | "MEMO"
 export type LedgerAttributionDb = "ORDER_LINE" | "ORDER" | "MARKETPLACE"
 
+/** The classification model (migration 0032, src/services/classification/model.ts). */
+export type FinancialTypeDb = "REVENUE" | "EXPENSE" | "TAX" | "CASH" | "MEMO"
+export type PnlTreatmentDb =
+  | "INCREASE_REVENUE"
+  | "DECREASE_REVENUE"
+  | "INCREASE_EXPENSE"
+  | "NO_PNL_IMPACT"
+  | "CONDITIONAL"
+export type ClassificationStatusDb = "CLASSIFIED" | "UNDER_REVIEW" | "UNKNOWN"
+export type FigureStatusDb = "FINAL" | "INCOMPLETE"
+export type InputVatTreatmentDb = "UNKNOWN" | "RECOVERABLE" | "NON_RECOVERABLE"
+
 export type ImportStatus =
   | "DRAFT"
   | "READY"
@@ -852,6 +864,8 @@ export type Database = {
           vat_registration: "UNKNOWN" | "REGISTERED" | "NOT_REGISTERED"
           /** Only UNCONFIGURED exists until an accountant confirms a treatment. */
           treatment: "UNCONFIGURED"
+          /** How VAT on marketplace fees counts in profit (B1, migration 0032). */
+          input_vat_treatment: InputVatTreatmentDb
           note: string | null
           updated_by: string | null
           created_at: string
@@ -894,6 +908,44 @@ export type Database = {
           quantity_rule: "NONE" | "REPORTED" | "COUNT_LINE"
           attribution: LedgerAttributionDb
           confidence: "SAMPLE_VERIFIED" | "SELLER_ANALYSIS" | "DOCUMENTED" | "PROVISIONAL"
+          evidence: string
+          version: number
+          supersedes_id: string | null
+          status: "ACTIVE" | "RETIRED"
+          created_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+
+      /* ---- Classification (migration 0032) ------------------------------ */
+
+      classification_categories: {
+        Row: {
+          code: string
+          financial_type: FinancialTypeDb
+          label: string
+          default_treatment: PnlTreatmentDb
+          metric_group: string
+          sort_order: number
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+
+      classification_rules: {
+        Row: {
+          id: string
+          scope: "GLOBAL" | "BUSINESS"
+          business_id: string | null
+          marketplace_code: string
+          format_id: string
+          match_key: string
+          category: string
+          subcategory: string
+          confidence: "HIGH" | "MEDIUM"
           evidence: string
           version: number
           supersedes_id: string | null
@@ -1746,6 +1798,45 @@ export type Database = {
         }
         Relationships: []
       }
+
+      /* Every counting line classified through the rules active now (0032). */
+      ledger_classified_lines: {
+        Row: {
+          id: number
+          business_id: string
+          marketplace_account_id: string
+          marketplace_code: string
+          account_label: string
+          source_file_id: string
+          format_id: string | null
+          source_row_id: number
+          line_index: number
+          match_key: string
+          source_type: string | null
+          source_subtype: string | null
+          source_description: string | null
+          amount: string
+          currency: string
+          posted_at: string
+          order_ref: string | null
+          raw_sku: string | null
+          import_side: LedgerSideDb | null
+          import_category: string
+          rule_id: string | null
+          rule_scope: "GLOBAL" | "BUSINESS" | null
+          rule_confidence: "HIGH" | "MEDIUM" | null
+          rule_version: number | null
+          financial_type: FinancialTypeDb | null
+          category: string | null
+          category_label: string | null
+          subcategory: string | null
+          metric_group: string | null
+          default_treatment: PnlTreatmentDb | null
+          pnl_treatment: PnlTreatmentDb | null
+          classification_status: ClassificationStatusDb
+        }
+        Relationships: []
+      }
     }
 
     Functions: {
@@ -1857,6 +1948,127 @@ export type Database = {
           p_vat_registration: "UNKNOWN" | "REGISTERED" | "NOT_REGISTERED"
           p_note?: string | null
         }
+        Returns: undefined
+      }
+
+      /* ---- Classification and the P&L engine (migration 0032) ----------- */
+
+      tax_profile_set_input_vat: {
+        Args: { p_account_id: string; p_treatment: InputVatTreatmentDb }
+        Returns: undefined
+      }
+
+      pnl_summary: {
+        Args: { p_from: string; p_to: string; p_account_id?: string | null }
+        Returns: {
+          marketplace_account_id: string
+          account_label: string
+          marketplace_code: string
+          currency: string
+          period_from: string
+          period_to: string
+          gross_sales: string
+          sales_refunds: string
+          seller_discounts: string
+          net_sales: string
+          other_income: string
+          marketplace_fees: string
+          fulfillment: string
+          advertising: string
+          other_marketplace_costs: string
+          non_recoverable_vat: string
+          /** NULL unless contribution_status is FINAL. */
+          contribution: string | null
+          contribution_status: FigureStatusDb
+          /** Informational only: never label it as the final contribution. */
+          contribution_before_open_items: string
+          figures_status: FigureStatusDb
+          input_vat_recoverable: string
+          input_vat_unresolved: string
+          output_vat: string
+          input_vat_treatment: InputVatTreatmentDb
+          lines: number
+          unknown_lines: number
+          unknown_amount: string
+          review_lines: number
+          review_amount: string
+          conditional_lines: number
+          row_errors: number
+          incomplete_reasons: ("UNKNOWN_LINES" | "VAT_TREATMENT_UNKNOWN" | "ROW_ERRORS")[]
+        }[]
+      }
+
+      pnl_breakdown: {
+        Args: { p_from: string; p_to: string; p_account_id?: string | null }
+        Returns: {
+          marketplace_account_id: string
+          account_label: string
+          currency: string
+          financial_type: FinancialTypeDb | null
+          category: string | null
+          category_label: string | null
+          subcategory: string | null
+          /** Set only for UNKNOWN lines, so the code can be named. */
+          match_key: string | null
+          classification_status: ClassificationStatusDb
+          pnl_treatment: PnlTreatmentDb | null
+          metric_group: string | null
+          sort_order: number | null
+          lines: number
+          total: string
+        }[]
+      }
+
+      ledger_data_quality: {
+        Args: { p_from?: string | null; p_to?: string | null; p_account_id?: string | null }
+        Returns: {
+          issue_kind: "UNKNOWN_CODE" | "UNDER_REVIEW" | "VAT_TREATMENT_UNKNOWN" | "ROW_ERRORS" | "SETTLEMENT_MISMATCH"
+          severity: "WARNING" | "INFO"
+          marketplace_account_id: string
+          account_label: string
+          currency: string
+          format_id: string | null
+          /** The marketplace code, or the settlement id for a mismatch. */
+          reference: string | null
+          category: string | null
+          subcategory: string | null
+          lines: number
+          amount: string | null
+          files: number
+          detail: string
+        }[]
+      }
+
+      classification_rule_impact: {
+        Args: { p_business_id: string; p_marketplace_code: string; p_format_id: string; p_match_key: string }
+        Returns: {
+          marketplace_account_id: string
+          account_label: string
+          currency: string
+          month: string
+          lines: number
+          amount: string
+          classification_status: ClassificationStatusDb
+          category: string | null
+          subcategory: string | null
+        }[]
+      }
+
+      classification_rule_classify: {
+        Args: {
+          p_business_id: string
+          p_marketplace_code: string
+          p_format_id: string
+          p_match_key: string
+          p_category: string
+          p_subcategory: string
+          p_note?: string | null
+        }
+        Returns: string
+      }
+
+      classification_rule_retire: {
+        Args: { p_rule_id: string }
         Returns: undefined
       }
 
@@ -2393,6 +2605,9 @@ export type Settlement = T["settlements"]["Row"]
 export type Payout = T["payouts"]["Row"]
 export type FinancialTransaction = T["financial_transactions"]["Row"]
 export type LedgerLine = Database["public"]["Views"]["ledger_lines"]["Row"]
+export type ClassificationCategoryRow = T["classification_categories"]["Row"]
+export type ClassificationRule = T["classification_rules"]["Row"]
+export type LedgerClassifiedLine = Database["public"]["Views"]["ledger_classified_lines"]["Row"]
 
 /** A business plus the calling user's role in it. */
 export type BusinessWithRole = Business & { role: BusinessRole }

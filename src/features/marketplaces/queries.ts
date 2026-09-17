@@ -12,6 +12,7 @@ export type MarketplaceAccountView = MarketplaceAccount & {
   adapter_status: Marketplace["adapter_status"]
   vat_registration: TaxProfile["vat_registration"] | null
   tax_treatment: TaxProfile["treatment"] | null
+  input_vat_treatment: TaxProfile["input_vat_treatment"]
 }
 
 export async function listMarketplaces(): Promise<Marketplace[]> {
@@ -47,5 +48,6 @@ export async function listMarketplaceAccounts(): Promise<MarketplaceAccountView[
     adapter_status: byCode.get(account.marketplace_code)?.adapter_status ?? "CONTRACT_ONLY",
     vat_registration: taxByAccount.get(account.id)?.vat_registration ?? null,
     tax_treatment: taxByAccount.get(account.id)?.treatment ?? null,
+    input_vat_treatment: taxByAccount.get(account.id)?.input_vat_treatment ?? "UNKNOWN",
   }))
 }

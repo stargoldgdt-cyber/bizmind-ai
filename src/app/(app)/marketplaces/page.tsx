@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table"
 import { ONBOARDING_ROUTE } from "@/config/routes"
 import { getActiveBusiness, getUserBusinesses } from "@/features/businesses/queries"
+import { InputVatTreatmentSelect } from "@/features/marketplaces/components/input-vat-treatment-select"
 import { MarketplaceAccountForm } from "@/features/marketplaces/components/marketplace-account-form"
 import { listMarketplaceAccounts, listMarketplaces } from "@/features/marketplaces/queries"
 import { createClient, getCurrentUser } from "@/lib/supabase/server"
@@ -31,10 +32,11 @@ export const metadata: Metadata = {
  * decision (B11); everyone in the business can see them.
  */
 
-const VAT_LABEL: Record<string, string> = {
-  UNKNOWN: "Not recorded",
-  REGISTERED: "VAT registered",
-  NOT_REGISTERED: "Not VAT registered",
+/** VAT on marketplace fees (decision B1). */
+const INPUT_VAT_LABEL: Record<string, string> = {
+  UNKNOWN: "Unknown",
+  RECOVERABLE: "Recoverable",
+  NON_RECOVERABLE: "Non-recoverable",
 }
 
 export default async function MarketplacesPage() {
@@ -97,7 +99,7 @@ export default async function MarketplacesPage() {
                     <TableHead>Marketplace</TableHead>
                     <TableHead>Country</TableHead>
                     <TableHead>Currency</TableHead>
-                    <TableHead>VAT</TableHead>
+                    <TableHead>VAT on fees</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -115,9 +117,17 @@ export default async function MarketplacesPage() {
                       </TableCell>
                       <TableCell className="text-sm">{account.country}</TableCell>
                       <TableCell className="font-mono text-sm">{account.currency}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {VAT_LABEL[account.vat_registration ?? "UNKNOWN"]}
-                        <span className="block text-[11px]">Treatment not configured</span>
+                      <TableCell className="text-sm">
+                        {isOwner ? (
+                          <InputVatTreatmentSelect
+                            accountId={account.id}
+                            value={account.input_vat_treatment}
+                          />
+                        ) : (
+                          <span className="text-muted-foreground">
+                            {INPUT_VAT_LABEL[account.input_vat_treatment]}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell className="text-sm">
                         {account.status === "ACTIVE" ? "Active" : "Archived"}

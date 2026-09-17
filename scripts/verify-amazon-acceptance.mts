@@ -208,6 +208,47 @@ try {
   check(`Units sold: ${unitsSold} (owner measured 296)`, unitsSold === BigInt(296))
   check(`Units refunded: ${unitsRefunded} (owner measured 25)`, unitsRefunded === 25)
   check("No July line is unrecognised", !july.some((line) => line.category === "UNMAPPED"))
+
+  /* ------------------------------------------------------------------------ */
+  section("3. JULY 2026, FROM THE P&L ENGINE (migration 0032)")
+
+  const period = { p_from: "2026-07-01T00:00:00Z", p_to: "2026-08-01T00:00:00Z", p_account_id: accountId }
+  const summaryNow = async () =>
+    (await call("/rest/v1/rpc/pnl_summary", { method: "POST", body: JSON.stringify(period) }, token)).body?.[0]
+  const setVat = (treatment: string) =>
+    call("/rest/v1/rpc/tax_profile_set_input_vat", {
+      method: "POST", body: JSON.stringify({ p_account_id: accountId, p_treatment: treatment }),
+    }, token)
+
+  const unknownVat = await summaryNow()
+  check("Gross sales 61429.1100", unknownVat?.gross_sales === "61429.1100", JSON.stringify(unknownVat))
+  check("Net sales 55905.2100 (refunds -5242.13, shipping promotions -281.77)", unknownVat?.net_sales === "55905.2100")
+  check("Marketplace fees -6908.8400", unknownVat?.marketplace_fees === "-6908.8400")
+  check("Fulfillment -7278.9200", unknownVat?.fulfillment === "-7278.9200")
+  check("Advertising -5264.6900", unknownVat?.advertising === "-5264.6900")
+  check("Other income 100.0000 (COD charges)", unknownVat?.other_income === "100.0000")
+  check("Every July line classified automatically", unknownVat?.unknown_lines === 0 && unknownVat?.review_lines === 0)
+  check(
+    "VAT setting Unknown: no final contribution; AED 119.79 unresolved; informational 36552.7600",
+    unknownVat?.contribution === null && unknownVat?.contribution_status === "INCOMPLETE" &&
+      unknownVat?.input_vat_unresolved === "-119.7900" && unknownVat?.contribution_before_open_items === "36552.7600"
+  )
+
+  await setVat("RECOVERABLE")
+  const recoverable = await summaryNow()
+  check(
+    "Recoverable: final contribution 36552.7600",
+    recoverable?.contribution === "36552.7600" && recoverable?.contribution_status === "FINAL",
+    JSON.stringify(recoverable)
+  )
+
+  await setVat("NON_RECOVERABLE")
+  const nonRecoverable = await summaryNow()
+  check(
+    "Non-recoverable: final contribution 36432.9700",
+    nonRecoverable?.contribution === "36432.9700" && nonRecoverable?.non_recoverable_vat === "-119.7900",
+    JSON.stringify(nonRecoverable)
+  )
 } catch (error) {
   failed += 1
   console.log(`\n  FAIL  stopped early: ${(error as Error).message}`)

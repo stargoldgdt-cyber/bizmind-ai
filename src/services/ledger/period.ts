@@ -46,3 +46,13 @@ export function parseLedgerMonth(value: string | null | undefined): LedgerMonth 
 export function monthKeyOf(date: string): string {
   return date.slice(0, 7)
 }
+
+/**
+ * The calendar month before, as the dashboard compares against it
+ * (dashboard_overview uses the same calendar month in SQL).
+ */
+export function previousLedgerMonth(month: LedgerMonth): LedgerMonth {
+  const start = new Date(month.from)
+  const before = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() - 1, 1))
+  return parseLedgerMonth(before.toISOString().slice(0, 7))!
+}

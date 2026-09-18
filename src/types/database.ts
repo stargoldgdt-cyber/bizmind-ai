@@ -2305,6 +2305,143 @@ export type Database = {
         }[]
       }
 
+      /* ---- The home dashboard (migration 0043) --------------------------- */
+
+      dashboard_overview: {
+        Args: { p_business_id: string; p_currency: string; p_from: string; p_to: string; p_account_id?: string | null }
+        Returns: {
+          currency: string
+          scope_label: string
+          accounts: number
+          has_marketplace_data: boolean
+          lines: number | null
+          review_lines: number | null
+          unknown_lines: number | null
+          gross_sales: string | null
+          sales_refunds: string | null
+          seller_discounts: string | null
+          net_sales: string | null
+          other_income: string | null
+          marketplace_fees: string | null
+          fulfillment: string | null
+          advertising: string | null
+          other_marketplace_costs: string | null
+          non_recoverable_vat: string | null
+          marketplace_costs: string | null
+          figures_status: FigureStatusDb | null
+          contribution: string | null
+          contribution_status: FigureStatusDb
+          contribution_before_open_items: string | null
+          contribution_reasons: string[]
+          units_sold: string | null
+          cogs: string | null
+          units_without_product: string | null
+          units_without_cost: string | null
+          gross_profit: string | null
+          gross_profit_status: FigureStatusDb
+          gross_profit_before_open_items: string | null
+          gross_profit_reasons: string[]
+          /** Net profit belongs to the whole currency. */
+          net_available: boolean
+          operating_expenses: string | null
+          external_advertising: string | null
+          net_profit: string | null
+          net_profit_status: FigureStatusDb
+          net_profit_before_open_items: string | null
+          net_profit_reasons: string[]
+          input_vat_treatment: string | null
+          refunds_pct_of_gross: number | null
+          costs_pct_of_net_sales: number | null
+          fees_pct_of_net_sales: number | null
+          advertising_pct_of_net_sales: number | null
+          contribution_margin_pct: number | null
+          gross_margin_pct: number | null
+          net_margin_pct: number | null
+          prev_has_marketplace_data: boolean
+          gross_sales_change_pct: number | null
+          net_sales_change_pct: number | null
+          marketplace_costs_change_pct: number | null
+          contribution_change_pct: number | null
+          gross_profit_change_pct: number | null
+          net_profit_change_pct: number | null
+          expected_payouts: number
+          expected_inflow: string | null
+          payouts_in_doubt: number
+          open_quality_items: number
+          unmatched_skus: number
+          unplaced_expense_categories: number
+        }[]
+      }
+
+      dashboard_waterfall: {
+        Args: { p_business_id: string; p_currency: string; p_from: string; p_to: string; p_account_id?: string | null }
+        Returns: {
+          step: number
+          label: string
+          kind: "TOTAL" | "DELTA"
+          amount: string
+          status: FigureStatusDb | null
+          /** 0-1000 positions on one shared scale, worked out in SQL. */
+          bar_from: number
+          bar_to: number
+          zero_at: number
+        }[]
+      }
+
+      dashboard_daily: {
+        Args: { p_business_id: string; p_currency: string; p_from: string; p_to: string; p_account_id?: string | null }
+        Returns: {
+          day: string
+          has_lines: boolean
+          gross_sales: string
+          net_sales: string
+          contribution: string
+          gross_y: number
+          net_y: number
+          contribution_y: number
+          zero_y: number
+        }[]
+      }
+
+      dashboard_cost_breakdown: {
+        Args: { p_business_id: string; p_currency: string; p_from: string; p_to: string; p_account_id?: string | null }
+        Returns: {
+          category: string
+          label: string
+          lines: number
+          total: string
+          pct_of_net_sales: number | null
+          pct_of_costs: number | null
+          bar: number
+        }[]
+      }
+
+      dashboard_accounts: {
+        Args: { p_business_id: string; p_currency: string; p_from: string; p_to: string }
+        Returns: {
+          marketplace_account_id: string
+          account_label: string
+          marketplace_code: string
+          has_lines: boolean
+          gross_sales: string | null
+          sales_refunds: string | null
+          net_sales: string | null
+          marketplace_costs: string | null
+          advertising: string | null
+          contribution: string | null
+          contribution_status: FigureStatusDb
+          contribution_before_open_items: string | null
+          contribution_margin_pct: number | null
+          units_sold: string | null
+          gross_profit: string | null
+          gross_profit_status: FigureStatusDb
+          expected_inflow: string | null
+          expected_payouts: number
+          open_quality_items: number
+          share_of_net_sales_pct: number | null
+        }[]
+      }
+
       /* ---- Report exports (migration 0040). The worker functions are not typed:
        * they are reachable only through callTrusted(). ---------------------- */
 

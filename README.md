@@ -81,6 +81,8 @@ Full instructions, including how secrets are handled, are in
 | `npm run test:ledger-ask` | Ask BizMind on the ledger: facts and guards with a fake model, offline |
 | `npm run test:ledger-alerts` | Alerts on ledger figures, every skip reason, against the real database |
 | `npm run ai:check-ledger` | One real model answer per ledger question, through every guard (needs `OPENAI_API_KEY`) |
+| `npm run test:overview` | The home dashboard: migration 0043, no arithmetic, wording and routing, offline |
+| `npm run test:overview-ledger` | The home dashboard's readers against the P&L engine and isolation, live |
 | `npm run test:integration-live` | Tenant isolation and idempotency, live |
 | `npm run test:automation` | Alert rules, thresholds and the migration guards, no database |
 | `npm run test:automation-live` | Proves a rule stays silent when it should, live |

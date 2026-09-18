@@ -1042,6 +1042,26 @@ GCC Phase 9.
 No rollback script: the columns are additive; recreating 0017's evaluator
 removes the ledger branch.
 
+## 7u. The home dashboard's readers (0043)
+
+After GCC Phase 9. Read-only, `SECURITY INVOKER`, closed to anon, so RLS
+decides what each caller sees. Nothing is stored. Every reader takes one
+currency and optionally one account in it; currencies are never combined.
+
+| Function | Returns |
+| --- | --- |
+| `dashboard_pct(part, whole)` | `part / |whole| x 100`, one decimal; null when the whole is zero or missing |
+| `dashboard_change(now, before)` | Percentage change against `|before|`, one decimal; null without a non-zero "before" |
+| `dashboard_overview(business, currency, from, to, account?)` | One row: every `pnl_summary` figure and status for the scope, marketplace costs (fees + fulfilment + advertising + other + non-recoverable VAT), net profit when the scope is the whole currency (or its only account), shares of sales, margins, the change against the calendar month before for six figures (a not-final figure in either month is not compared), expected payouts and those in doubt, open quality items, unmatched SKUs and unplaced expense categories |
+| `dashboard_waterfall(...)` | Up to 16 steps from gross sales to net profit, each TOTAL or DELTA with its amount, status and bar positions on one 0–1000 scale. Optional steps with nothing in them are left out; net-profit steps only when net profit is available |
+| `dashboard_daily(...)` | Every day of the range: gross sales, net sales and contribution, with positions on one shared 0–1000 scale |
+| `dashboard_cost_breakdown(...)` | Marketplace costs by category, largest first: total, share of net sales, share of costs, bar length |
+| `dashboard_accounts(business, currency, from, to)` | Each account in the currency: its figures, contribution margin, share of net sales, expected payouts, open quality items |
+
+No rollback script: dropping the seven functions removes it completely.
+`npm run test:overview-ledger` checks it against the P&L engine live (41
+checks); `npm run test:overview` checks it offline.
+
 ---
 
 ## 8. Regenerating types

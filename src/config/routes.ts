@@ -9,8 +9,12 @@
 /** Signed-out visitors are sent here. */
 export const LOGIN_ROUTE = "/login"
 
-/** Where a signed-in user lands when they have a business. */
-export const DASHBOARD_ROUTE = "/dashboard"
+/**
+ * Where a signed-in user lands when they have a business: the home dashboard
+ * on the marketplace ledger. The legacy dashboard stays at /dashboard until
+ * GCC Phase 10 retires it.
+ */
+export const DASHBOARD_ROUTE = "/overview"
 
 /** Where a signed-in user lands when they do not yet have one. */
 export const ONBOARDING_ROUTE = "/onboarding"
@@ -37,6 +41,7 @@ export const ONBOARDING_ROUTE = "/onboarding"
  * complete.
  */
 export const PROTECTED_PREFIXES = [
+  "/overview",
   "/dashboard",
   "/ledger",
   "/catalog",

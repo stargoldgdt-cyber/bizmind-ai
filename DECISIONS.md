@@ -1946,6 +1946,37 @@ facts an owner is most likely to misread made impossible to misstate.
 
 ---
 
+## 2026-09-18 — The home dashboard moves onto the ledger
+
+The audit of the legacy dashboard found it reads only the old orders and
+expenses import, so it cannot show marketplace data. Its net profit counts
+stock purchases as expenses and marketplace fees twice, it spreads fees across
+products, and it handles one currency only.
+
+**Decided:**
+
+- **`/overview` is the home page.** Sign-in, onboarding and switching
+  business land there (`DASHBOARD_ROUTE`). The old page stays at `/dashboard`
+  as "Legacy dashboard" until Phase 10.
+- **All arithmetic is in SQL** (migration 0043), including shares, margins,
+  change against last month and every chart position. The page calculates
+  nothing.
+- **Scope is one currency or one account.** By default it is the currency with
+  the latest marketplace data. Net profit is shown for the whole currency, or
+  for an account only when it is alone in its currency (A7).
+- **"Last month" is the calendar month before.** A figure that is not final in
+  either month is not compared.
+- **The payouts card says "expected", and the bank side reads "Not connected".**
+  Following the owner's Phase 8 rule.
+- **Observations are fixed rules with stated thresholds**, not AI. Examples:
+  advertising at 10% or more of net sales, or refunds at 5% or more of gross
+  sales. Each one says when it appears.
+- **The layout follows the owner's reference.** Only the design system's own
+  tokens, fonts and status colours are used; the reference's palette is not
+  adopted.
+
+---
+
 ## 2026-09-17 — Fix: withdrawn expenses no longer count (migration 0042)
 
 Found in the audit of the legacy dashboard. Withdrawing an import marks its

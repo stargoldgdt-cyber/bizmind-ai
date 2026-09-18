@@ -86,6 +86,8 @@ export const NAVIGATION: NavSection[] = [
   {
     heading: "Marketplaces",
     items: [
+      // The home dashboard on the ledger (after GCC Phase 9).
+      { label: "Dashboard", href: "/overview", icon: LayoutDashboard, enabled: true },
       // GCC Phase 4: the dashboard on the marketplace ledger.
       {
         label: "Marketplace profit",
@@ -117,7 +119,9 @@ export const NAVIGATION: NavSection[] = [
   {
     heading: "Overview",
     items: [
-      { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, enabled: true },
+      // The legacy dashboard reads the old orders/expenses import, not the
+      // marketplace ledger. Kept reachable until GCC Phase 10 retires it.
+      { label: "Legacy dashboard", href: "/dashboard", icon: Gauge, enabled: true },
       { label: "Ask BizMind", href: "/ask", icon: Sparkles, enabled: true },
       {
         label: "Business brief",

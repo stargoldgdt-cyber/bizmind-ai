@@ -320,6 +320,26 @@ Rules:
 - A **hero statistic** (a single large number with a short label, no chart) is
   often better than a chart. Reach for it when there is one number that matters.
 
+### The home dashboard (`/overview`)
+
+It follows the owner's reference layout, top to bottom:
+- a status ribbon
+- six headline cards
+- what needs attention
+- the waterfall
+- the daily trend
+- costs next to what changed
+- the accounts
+- expected payouts next to data health
+- products
+- observations
+- quick actions
+
+It is drawn only with this system's tokens. Charts use `chart-1` to `chart-4`.
+A figure that is not final is hatched and labelled, never shown in a solid
+"final" colour. On a phone the cards stack two, then one, per row, and the
+tables scroll inside their card.
+
 ---
 
 ## 10. Buttons

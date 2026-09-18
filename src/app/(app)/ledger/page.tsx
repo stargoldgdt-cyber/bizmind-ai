@@ -268,9 +268,10 @@ function OpenItems({
                 )}
                 {reasons.includes("FEE_VAT_NOT_SEPARATED") && (
                   <li>
-                    Fees in {month.label} still include VAT that has not been separated, so fees and
-                    contribution are not final. Upload the marketplace&apos;s VAT invoices for the month
-                    (noon: Invoices and Credit Notes).{" "}
+                    Some fees in {month.label} still include VAT that has not been separated, so fees
+                    and contribution are not final. For noon, upload the month&apos;s Invoices and Credit
+                    Notes. Amazon&apos;s Paid Services Fee arrives with its VAT inside it, and no file
+                    separates it yet.{" "}
                     <Link href="/imports/settlement" className="font-medium underline underline-offset-4">
                       Upload them
                     </Link>

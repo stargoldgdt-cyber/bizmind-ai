@@ -1946,6 +1946,26 @@ facts an owner is most likely to misread made impossible to misstate.
 
 ---
 
+## 2026-09-18 — Amazon "Paid Services Fee" is the SP 360 fee, VAT included (migration 0044)
+
+Newer Amazon.ae settlements report the SP 360 fee as one line,
+`other-transaction · other-transaction · Paid Services Fee`. Earlier ones had
+a base fee line and a separate "Tax on fee" line. The owner's Amazon tax
+invoice shows the one line is the fee plus 5% VAT (2,325.86 + 116.29 =
+2,442.15).
+
+**Decided (owner):** the line is the SP 360 marketplace fee, and VAT is inside
+the amount. It uses the same flag as noon's fees (0034). When the account's
+VAT on fees is Non-recoverable, the whole line counts as the fee and the
+figures are final. When it is Recoverable, contribution stays not final
+(FEE_VAT_NOT_SEPARATED), because no uploaded file yet takes that VAT back out.
+BizMind never estimates the split.
+
+**Open:** an Amazon VAT-invoice import that separates it, as noon's Invoices
+and Credit Notes do.
+
+---
+
 ## 2026-09-18 — The home dashboard moves onto the ledger
 
 The audit of the legacy dashboard found it reads only the old orders and

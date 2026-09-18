@@ -155,10 +155,12 @@ try {
     owner
   )
   const ruleRows = rows(ruleReply)
-  check("21 owner-approved rules are active", ruleRows.length === 21, say(ruleReply))
+  // 21 from 0031, plus the one-line SP 360 fee from 0044.
+  check("22 owner-approved rules are active", ruleRows.length === 22, say(ruleReply))
   check(
     "each verified on real settlements and approved by the owner",
-    ruleRows.every((rule) => rule.confidence === "SAMPLE_VERIFIED" && String(rule.evidence).includes("approved by the owner"))
+    ruleRows.every((rule) => rule.confidence === "SAMPLE_VERIFIED" &&
+      (String(rule.evidence).includes("approved by the owner") || String(rule.evidence).includes("Owner decision")))
   )
 
   const rules: MappingRuleSummary[] = ruleRows.map((rule) => ({

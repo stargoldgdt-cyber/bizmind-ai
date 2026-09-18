@@ -121,7 +121,7 @@ section("3. EVERY AMAZON CODE IS CLASSIFIED, ONCE, THE SAME EVERYWHERE")
 
 const importKeys = AMAZON_V2_RULES.map((r) => r.matchKey).sort()
 const classKeys = AMAZON_V2_CLASSIFICATION.map((r) => r.matchKey).sort()
-check("21 Amazon codes classified", classKeys.length === 21, String(classKeys.length))
+check("22 Amazon codes classified", classKeys.length === 22, String(classKeys.length))
 check("no code classified twice", new Set(classKeys).size === classKeys.length)
 check(
   "exactly the codes the importer knows",
@@ -133,11 +133,20 @@ check(
   AMAZON_V2_CLASSIFICATION.every((r) => (codes as readonly string[]).includes(r.category))
 )
 
-const sqlRules = [...sql.matchAll(/\('([^'|]+\|[^']+)', '([A-Z_]+)', '([^']+)', '[^']*'\)/g)].map(
+// 0044 added the one-line SP 360 fee (VAT included) after 0032's 21 rules.
+const sql0044 = readFileSync("supabase/migrations/0044_amazon_paid_services_fee.sql", "utf8").replace(/\r\n/g, "\n")
+const sqlRules = [...(sql + sql0044).matchAll(/\('([^'|]+\|[^']+)', '([A-Z_]+)', '([^']+)', '[^']*'\)/g)].map(
   (m) => `${m[1]}|${m[2]}|${m[3]}`
 )
 const tsRules = AMAZON_V2_CLASSIFICATION.map((r) => `${r.matchKey}|${r.category}|${r.subcategory}`)
-check("the migration seeds 21 Amazon rules", sqlRules.length === 21, String(sqlRules.length))
+check("the migrations seed 22 Amazon rules (21 in 0032, 1 in 0044)", sqlRules.length === 22, String(sqlRules.length))
+check(
+  "the Paid Services Fee is the SP 360 marketplace fee with VAT inside it, in TypeScript and SQL",
+  AMAZON_V2_CLASSIFICATION.filter((r) => r.includesVat).map((r) => r.matchKey).join() ===
+    "other-transaction|other-transaction|Paid Services Fee" &&
+    AMAZON_V2_CLASSIFICATION.find((r) => r.includesVat)?.category === "MARKETPLACE_FEE" &&
+    /'HIGH',\s*true, false,/.test(sql0044)
+)
 check(
   "identical code, category and subcategory in TypeScript and SQL",
   JSON.stringify([...sqlRules].sort()) === JSON.stringify([...tsRules].sort()),

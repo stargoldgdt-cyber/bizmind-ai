@@ -37,6 +37,31 @@ amended, and B15 (take rate) and B16 (Gross Profit) opened, the same day. B16
 was decided on 2026-09-17 (Phase 6), and B17 (refunds and COGS) recorded with
 its default.
 
+### Known issue, to fix later (owner, 2026-09-18): VAT inside Amazon fees
+
+The commission lines in Amazon.ae settlements include 5% VAT. The owner's
+February 2026 invoice matches the settlement exactly on its VAT-included
+column:
+- Sales Commission: 212.38
+- Refund Commission: 9.60, 1.87, 5.02 and 4.60
+
+The rules from 0031/0032 count the whole commission as the fee.
+- **Effect:** while VAT on fees is Recoverable, Amazon fees are overstated by
+  about 4.8% of commission, and contribution is understated. This applies to
+  every Amazon month, July included (its confirmed 36,552.76 will rise).
+- **SP 360:** the Paid Services Fee is already flagged (0044).
+- **FBA fees:** not yet checked against an invoice.
+
+**Planned fix:**
+1. Flag the Amazon commission and refund commission rules
+   `amount_includes_vat`, as noon's are and as 0044 does. After that, months
+   read "not final" until VAT is separated.
+2. Add an Amazon VAT invoice (PDF) import. It takes the VAT out of fees and
+   into input VAT, exactly as noon's Invoices and Credit Notes do.
+
+The settlement already holds these amounts, so the invoice must never add
+fee lines. That would double count them.
+
 ## 3. Manual steps for the owner
 
 1. ~~Apply migrations 0029–0042~~ — done (0042 on 2026-09-17).

@@ -84,7 +84,7 @@ export function amazonMatchKey(transactionType: string, amountType: string, amou
 
 /**
  * The owner-approved classification (2026-09-15), seeded into
- * `ledger_mapping_rules` by migration 0031. A test fails if the two differ.
+ * `ledger_mapping_rules` by migration 0031 (and 0044). A test fails if they differ.
  */
 export type AmazonRule = {
   matchKey: string
@@ -118,6 +118,9 @@ export const AMAZON_V2_RULES: readonly AmazonRule[] = [
   { matchKey: "AmazonFees|Premium Services Fee|Base fee", side: "PNL", category: "MARKETPLACE_FEE", subcategory: "premium_services", quantityRule: "NONE", attribution: "MARKETPLACE", note: "Amazon Selling Partner 360 (SP 360) service fee, confirmed by the owner. A marketplace fee, not advertising." },
   { matchKey: "AmazonFees|Premium Services Fee|Tax on fee", side: "TAX", category: "FEE_VAT", subcategory: "premium_services", quantityRule: "NONE", attribution: "MARKETPLACE", note: "5% VAT on the SP 360 fee. Owner decision: a separate VAT line; whether it counts in profit is decision B1." },
   { matchKey: "FBAFees|FBA Inventory Storage Fee|Base fee", side: "PNL", category: "FULFILMENT", subcategory: "storage", quantityRule: "NONE", attribution: "MARKETPLACE", note: "FBA storage fee. A reported 0.00 is a recorded zero, not a blank." },
+  // Migration 0044 (owner decision 2026-09-18): newer settlements report the
+  // SP 360 fee on one line with its VAT inside it (checked against the tax invoice).
+  { matchKey: "other-transaction|other-transaction|Paid Services Fee", side: "PNL", category: "MARKETPLACE_FEE", subcategory: "premium_services", quantityRule: "NONE", attribution: "MARKETPLACE", note: "Amazon Selling Partner 360 (SP 360) service fee reported on one line, VAT included. A marketplace fee, not advertising." },
 ]
 
 /* ---- detection ----------------------------------------------------------- */

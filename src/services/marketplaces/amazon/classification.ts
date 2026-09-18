@@ -3,7 +3,7 @@ import type { CategoryCode } from "@/services/classification/model"
 /**
  * How each Amazon Flat File V2 code is classified (owner-approved 2026-09-15),
  * restated in the four-layer model. Seeded as GLOBAL HIGH rules by migration
- * 0032; `npm run test:classification` fails if this list, the importer's
+ * 0032 (and 0044); `npm run test:classification` fails if this list, the importer's
  * AMAZON_V2_RULES and the migration disagree.
  *
  * The P&L treatment comes from the category, and Input VAT follows the
@@ -13,6 +13,8 @@ export type AmazonClassification = {
   matchKey: string
   category: CategoryCode
   subcategory: string
+  /** The amount has VAT inside it that no line states (migration 0044). */
+  includesVat?: true
 }
 
 export const AMAZON_V2_CLASSIFICATION: readonly AmazonClassification[] = [
@@ -37,4 +39,6 @@ export const AMAZON_V2_CLASSIFICATION: readonly AmazonClassification[] = [
   { matchKey: "AmazonFees|Premium Services Fee|Base fee", category: "MARKETPLACE_FEE", subcategory: "SP 360 premium services" },
   { matchKey: "AmazonFees|Premium Services Fee|Tax on fee", category: "INPUT_VAT", subcategory: "VAT on SP 360 fee" },
   { matchKey: "FBAFees|FBA Inventory Storage Fee|Base fee", category: "STORAGE", subcategory: "FBA storage" },
+  // Migration 0044: the SP 360 fee on one line, VAT included (owner decision 2026-09-18).
+  { matchKey: "other-transaction|other-transaction|Paid Services Fee", category: "MARKETPLACE_FEE", subcategory: "SP 360 premium services", includesVat: true },
 ]

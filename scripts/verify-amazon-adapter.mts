@@ -283,12 +283,15 @@ section("7. THE RULES IN CODE ARE THE RULES IN THE DATABASE")
 
 let migration = ""
 try {
-  migration = readFileSync("supabase/migrations/0031_amazon_flat_file_v2.sql", "utf8")
+  // 0031 seeded the 21 approved rules; 0044 added the one-line SP 360 fee.
+  migration =
+    readFileSync("supabase/migrations/0031_amazon_flat_file_v2.sql", "utf8") +
+    readFileSync("supabase/migrations/0044_amazon_paid_services_fee.sql", "utf8")
 } catch {
   migration = ""
 }
 check("migration 0031 exists", migration.length > 0)
-check("it seeds exactly the 21 approved rules", AMAZON_V2_RULES.length === 21)
+check("the migrations seed exactly the 22 approved rules", AMAZON_V2_RULES.length === 22)
 const missingInSql = AMAZON_V2_RULES.filter(
   (rule) => !migration.includes(`('${rule.matchKey}',`) || !migration.includes(`'${rule.category}', '${rule.subcategory}', '${rule.quantityRule}', '${rule.attribution}'`)
 )

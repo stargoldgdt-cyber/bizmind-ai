@@ -69,6 +69,7 @@ fails if the two differ.
 | AmazonFees · Premium Services Fee · Base fee | PNL · MARKETPLACE_FEE · premium_services (SP 360) | Marketplace |
 | AmazonFees · Premium Services Fee · Tax on fee | TAX · FEE_VAT · premium_services (input VAT, B1) | Marketplace |
 | FBAFees · FBA Inventory Storage Fee · Base fee | PNL · FULFILMENT · storage | Marketplace |
+| other-transaction · other-transaction · Paid Services Fee | PNL · MARKETPLACE_FEE · premium_services (SP 360 on one line, **VAT included**; migration 0044) | Marketplace |
 
 Amounts keep Amazon's sign. Marketplace-level lines are never spread across
 products (A7). A code not in the table is recorded as **UNMAPPED** with its
@@ -137,6 +138,7 @@ already stored do not change.
 | Order / Refund · Promotion · Shipping | Revenue · Seller-funded discounts · Shipping promotion | Decrease revenue |
 | Refund · ItemPrice · Principal / Shipping | Revenue · Sales refunds · Refunded principal / shipping | Decrease revenue |
 | AmazonFees · Premium Services Fee · Tax on fee | Tax · Input VAT · VAT on SP 360 fee | Conditional (account VAT setting) |
+| other-transaction · other-transaction · Paid Services Fee | Expense · Marketplace fees · SP 360 premium services, VAT inside the amount | Increase expense; contribution not final (FEE_VAT_NOT_SEPARATED) while VAT on fees is Recoverable |
 
 **July 2026 from the P&L engine** (real files, 2026-09-16):
 

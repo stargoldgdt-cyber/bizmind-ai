@@ -5,6 +5,7 @@ import { z } from "zod"
 
 import { getActiveBusiness } from "@/features/businesses/queries"
 import { createClient } from "@/lib/supabase/server"
+import { matchIdenticalSkus } from "@/services/catalog/auto-match"
 import { UNIT_COST_PATTERN } from "@/services/catalog/sku"
 
 /**
@@ -58,6 +59,10 @@ export async function createProductAction(input: unknown): Promise<{ ok: true; i
   })
   if (error || !data) return { ok: false, error: error?.message ?? "The product could not be added." }
 
+  // A product whose own SKU code is identical to a marketplace SKU picks it
+  // up at once, rather than at the next upload (0045).
+  if (parsed.data.skuCode) await matchIdenticalSkus(business.id)
+
   refresh()
   return { ok: true, id: data }
 }
@@ -85,6 +90,9 @@ export async function updateProductAction(input: unknown): Promise<{ ok: true } 
     p_status: parsed.data.status,
   })
   if (error) return { ok: false, error: error.message }
+
+  // A new or corrected SKU code can make a marketplace SKU identical to it (0045).
+  if (parsed.data.status === "ACTIVE" && parsed.data.skuCode) await matchIdenticalSkus(business.id)
 
   refresh()
   return { ok: true }
@@ -116,28 +124,6 @@ export async function decideSkuAction(input: unknown): Promise<{ ok: true } | Fa
 
   refresh()
   return { ok: true }
-}
-
-/** Create a product named after a marketplace SKU and match the SKU to it. */
-export async function createProductFromSkuAction(input: unknown): Promise<{ ok: true } | Failure> {
-  const parsed = z
-    .object({
-      marketplaceCode: decisionSchema.shape.marketplaceCode,
-      rawSku: decisionSchema.shape.rawSku,
-      name: productSchema.shape.name,
-    })
-    .safeParse(input)
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the product." }
-
-  const created = await createProductAction({ name: parsed.data.name, skuCode: parsed.data.rawSku.slice(0, 120) })
-  if (!created.ok) return created
-
-  return decideSkuAction({
-    marketplaceCode: parsed.data.marketplaceCode,
-    rawSku: parsed.data.rawSku,
-    productId: created.id,
-    decision: "CONFIRMED",
-  })
 }
 
 export async function removeSkuMatchAction(aliasId: unknown): Promise<{ ok: true } | Failure> {

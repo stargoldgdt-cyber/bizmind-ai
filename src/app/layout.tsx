@@ -28,7 +28,9 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={cn("font-sans", fontVariables)}>
-      <body className="min-h-dvh antialiased">
+      {/* Browser extensions (e.g. WOT) add attributes to <body> before React
+          loads; this silences that one mismatch on this element only. */}
+      <body className="min-h-dvh antialiased" suppressHydrationWarning>
         <TooltipProvider>{children}</TooltipProvider>
       </body>
     </html>

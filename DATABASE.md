@@ -1062,6 +1062,63 @@ No rollback script: dropping the seven functions removes it completely.
 `npm run test:overview-ledger` checks it against the P&L engine live (41
 checks); `npm run test:overview` checks it offline.
 
+## 7v. SKU setup (0045)
+
+"Set up once, BizMind remembers." This builds on 0035 and changes nothing in
+the ledger, classification, VAT or P&L.
+
+| Change | What it does |
+| --- | --- |
+| `sku_aliases.method` | MANUAL (a person on screen), EXCEL (a person, in a setup sheet) or AUTOMATIC. Existing rows are MANUAL |
+| `product_costs.source` | Gains EXCEL |
+| `sku_identity_key(text)` | Removes spaces and dashes, then capitalises. Nothing else counts as "the same SKU" |
+| `sku_auto_match(business)` | Definer, OWNER/ADMIN/STAFF. See below |
+| `sku_setup_rows(business, include_matched)` | Invoker. One row per SKU and account: the one-sheet template, with the current product and cost for corrections |
+| `sku_setup_apply(business, rows)` | Definer, OWNER/ADMIN. See below |
+| `sku_alias_decide()` | Records method MANUAL; otherwise 0035's |
+| `ledger_file_sku_summary(file)` | Invoker. The SKUs in one uploaded file: recognised, matched automatically, or needing mapping |
+
+**`sku_auto_match(business)`**
+- Matches each unmatched SKU whose key equals exactly one product's own SKU
+  code, or one SKU a person already matched.
+- Never replaces a confirmed mapping and never re-makes a rejected pairing.
+- It is audited, and runs after every upload and every applied sheet.
+- To undo a match, reject the pairing.
+
+**`sku_setup_apply(business, rows)`**
+- Finds or creates products by Product SKU and records each SKU's product
+  (EXCEL).
+- Adds costs once per product and currency:
+  - **First cost:** starts on the product's first sale.
+  - **Different cost:** starts today.
+  - **Same cost:** nothing changes.
+- A sheet with two costs for one Product SKU is refused, as is one that gives
+  one SKU two products.
+- Everything it does is audited.
+
+No rollback script. To undo: drop the five functions and the `method` column,
+restore 0035's `sku_alias_decide`, and restore 0037's source check.
+`npm run test:sku-setup` runs offline; `npm run test:sku-setup-ledger` runs
+live.
+
+## 7w. Faster SKU readers (0046)
+
+The first real noon uploads brought the ledger to about 33,000 lines. At that
+size the dashboard hit the 8-second statement timeout, because
+`dashboard_overview()` built the whole `sku_mapping_queue` (7.7 s) just to
+count it. Two readers also returned more than the API's 1,000-row page.
+
+**What 0046 changes.** Signatures and result shapes stay the same, and nothing
+is stored.
+- `dashboard_overview().unmatched_skus` counts the SKUs sold in the scope and
+  month shown that have no product. That is what the month's gross profit
+  waits for.
+- `sku_mapping_queue()` and `sku_setup_rows()` find unmatched lines first. They
+  read the classified lines, without the per-line product and cost lookups.
+- A new `sku_setup_summary(business)` gives the counts for Products and costs.
+
+**In the app.** Every SKU list is now read in pages of 1,000 (`.range()`).
+
 ---
 
 ## 8. Regenerating types

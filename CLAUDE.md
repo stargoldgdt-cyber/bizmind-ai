@@ -392,7 +392,11 @@ Update the relevant documentation in the same commit as the change.
 - Do not store customer names, emails, phone numbers or addresses in the ledger
   or any new table.
 - Do not allocate marketplace-level fees or advertising to products (V1).
-- Do not merge SKUs automatically. A person confirms every mapping.
+- Do not merge similar SKUs automatically. Only IDENTICAL SKUs (spaces,
+  dashes and capitals aside) are matched automatically, labelled "Matched
+  automatically", undoable, never replacing a confirmed mapping or re-making a
+  rejected one (A10 as narrowed by the owner, 0045). A person confirms every
+  other mapping.
 - Do not convert currencies (V1). Currency belongs to the marketplace account.
 - Do not build two-way Google Sheets sync (V1). BizMind writes only to
   spreadsheets it created for an export.

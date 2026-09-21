@@ -22,7 +22,7 @@ Where this file and an older document disagree, this file wins.
 | A7 | Marketplace-level fees and advertising without reliable SKU attribution stay at marketplace level in V1. No artificial allocation to products |
 | A8 | COGS: one "COGS / Unit" field in the UI; dated historical versions in the backend |
 | A9 | Settlement, payout and bank deposit are separate entities, linked only by reconciliation |
-| A10 | SKU mapping: UNMAPPED → SUGGESTED → CONFIRMED / REJECTED. Never an automatic merge on normalised similarity |
+| A10 | SKU mapping: UNMAPPED → SUGGESTED → CONFIRMED / REJECTED. Never an automatic merge on normalised similarity. **Narrowed 2026-09-18 (owner):** a SKU identical to a known one except for spaces, dashes and capitals is matched automatically, labelled and undoable (migration 0045) |
 | A11 | VAT architecture configurable; no accounting treatment before an accountant confirms it. The P&L treatment of VAT on marketplace fees is decided in B1 (2026-09-15) |
 | A12 | Currency belongs to the marketplace account. No FX conversion in V1 |
 | A13 | WooCommerce is hidden and deprecated, not deleted |

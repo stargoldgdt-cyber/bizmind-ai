@@ -109,6 +109,9 @@ export type PnlTreatmentDb =
   | "CONDITIONAL"
 export type ClassificationStatusDb = "CLASSIFIED" | "UNDER_REVIEW" | "UNKNOWN"
 export type FigureStatusDb = "FINAL" | "INCOMPLETE"
+
+/** How a SKU mapping was made (migration 0045). */
+export type SkuAliasMethod = "MANUAL" | "EXCEL" | "AUTOMATIC"
 export type InputVatTreatmentDb = "UNKNOWN" | "RECOVERABLE" | "NON_RECOVERABLE"
 
 export type ImportStatus =
@@ -1004,6 +1007,8 @@ export type Database = {
           note: string | null
           decided_by: string | null
           decided_at: string
+          /** Migration 0045: how the decision was made. AUTOMATIC = identical SKU. */
+          method: SkuAliasMethod
         }
         Insert: never
         Update: never
@@ -1025,7 +1030,7 @@ export type Database = {
           retired_by: string | null
           retire_reason: string | null
           /** Migration 0037. */
-          source: "MANUAL" | "SHEETS"
+          source: "MANUAL" | "SHEETS" | "EXCEL"
           integration_account_id: string | null
         }
         Insert: never
@@ -2609,6 +2614,56 @@ export type Database = {
           gross_margin_percent: string | null
           cogs_status: "COSTED" | "PARTLY_COSTED" | "NO_COST" | "NO_PRODUCT" | "NOT_APPLICABLE"
         }[]
+      }
+
+      /* ---- SKU setup (migration 0045) ----------------------------------- */
+
+      sku_auto_match: {
+        Args: { p_business_id: string }
+        Returns: number
+      }
+
+      sku_setup_rows: {
+        Args: { p_business_id: string; p_include_matched?: boolean }
+        Returns: {
+          marketplace_code: string
+          account_label: string
+          currency: string
+          raw_sku: string
+          title: string | null
+          product_id: string | null
+          product_sku: string | null
+          product_name: string | null
+          method: SkuAliasMethod | null
+          unit_cost: string | null
+          units_sold: string
+          net_sales: string
+          first_sold: string | null
+        }[]
+      }
+
+      sku_setup_apply: {
+        Args: { p_business_id: string; p_rows: Json }
+        Returns: {
+          products_created: number
+          skus_matched: number
+          skus_changed: number
+          skus_unchanged: number
+          costs_added: number
+          costs_backfilled: number
+          costs_unchanged: number
+          matched_automatically: number
+        }
+      }
+
+      sku_setup_summary: {
+        Args: { p_business_id: string }
+        Returns: { skus: number; recognised: number; matched_automatically: number; need_attention: number }[]
+      }
+
+      ledger_file_sku_summary: {
+        Args: { p_source_file_id: string }
+        Returns: { skus: number; recognised: number; matched_automatically: number; need_attention: number }[]
       }
 
       sku_mapping_queue: {

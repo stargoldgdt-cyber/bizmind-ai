@@ -1946,6 +1946,39 @@ facts an owner is most likely to misread made impossible to misstate.
 
 ---
 
+## 2026-09-18 — SKU setup: set up once, BizMind remembers (migration 0045)
+
+**Decided (owner):**
+
+- **One place and one sheet.** Products and costs holds Needs attention
+  (inline "Save & Match"), a single Excel sheet for large batches, and a side
+  panel per product. The separate SKU matching page forwards there. There is
+  no three-sheet workbook.
+- **Identical SKUs are matched automatically (A10 narrowed).**
+  - Only differences in spaces, dashes and capitals are ignored.
+  - A match needs exactly one product to fit. It is labelled "Matched
+    automatically" and can be undone (undoing rejects the pairing).
+  - It never replaces a confirmed mapping and never re-makes a rejected one.
+  - Similar-but-different SKUs (for example "SG-T84D B Blue Fog FBA" and
+    "SG-T84D") stay suggestions until a person confirms them once.
+  - Anyone who can import may trigger it, including STAFF (B11). It applies
+    the owner's rule, not a person's judgement.
+- **A cost belongs to the product.**
+  - Several SKUs with the same Product SKU share its cost.
+  - Equal costs in a sheet count as one cost. Different costs for one Product
+    SKU are refused, naming every row.
+- **When a sheet or inline cost starts:**
+  - **A product's first cost:** from the product's first sale in that
+    currency, so historical months become complete. This is B7's audited
+    backfill.
+  - **A product that already has a different cost:** the new cost starts
+    today. Other dates are set in the product panel.
+  - Costs are never edited.
+- **An unmatched SKU never blocks marketplace profit.** Only gross profit
+  waits. This is unchanged.
+
+---
+
 ## 2026-09-18 — Amazon "Paid Services Fee" is the SP 360 fee, VAT included (migration 0044)
 
 Newer Amazon.ae settlements report the SP 360 fee as one line,

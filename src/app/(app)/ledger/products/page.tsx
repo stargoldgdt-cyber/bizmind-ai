@@ -170,7 +170,7 @@ export default async function ProductProfitPage(props: PageProps<"/ledger/produc
                     .join(" ")}
                 </p>
                 <Button asChild size="sm" variant="outline" className="rounded-4xl">
-                  <Link href="/catalog/mapping">Match SKUs</Link>
+                  <Link href="/catalog#needs-attention">Set up SKUs</Link>
                 </Button>
               </section>
             )}
@@ -217,7 +217,7 @@ export default async function ProductProfitPage(props: PageProps<"/ledger/produc
                                 {row.product_name}
                               </Link>
                             ) : row.row_kind === "UNMAPPED_SKU" ? (
-                              <Link href="/catalog/mapping" className="underline-offset-4 hover:underline">
+                              <Link href="/catalog#needs-attention" className="underline-offset-4 hover:underline">
                                 <span className="font-mono text-xs">{row.raw_sku}</span>
                                 <span className="ml-1 text-[11px] text-muted-foreground">{row.marketplace_code}</span>
                               </Link>

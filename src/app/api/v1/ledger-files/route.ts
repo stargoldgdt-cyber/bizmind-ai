@@ -8,6 +8,7 @@ import { getActiveBusiness } from "@/features/businesses/queries"
 import { createClient, getCurrentUser } from "@/lib/supabase/server"
 import { MAX_FILE_BYTES, MAX_ROWS, parseFile } from "@/services/ingestion/parse"
 import { marketplaceAdapters } from "@/services/marketplaces/adapters"
+import { matchIdenticalSkus } from "@/services/catalog/auto-match"
 import { applyLedgerFile } from "@/services/marketplaces/apply"
 import type { MappingRuleSummary, SourceRow } from "@/services/marketplaces/contract"
 import { buildLedgerFilePayload } from "@/services/marketplaces/ledger-file"
@@ -179,7 +180,12 @@ export async function POST(request: Request) {
   const applied = await applyLedgerFile(built.payload)
   if (!applied.ok) return refuse(422, applied.error)
 
+  // Known SKUs written differently (spaces, dashes, capitals) are matched to
+  // their product at once. The file is recorded whether or not this succeeds.
+  const matched = await matchIdenticalSkus(business.id)
+
   revalidatePath("/imports")
+  revalidatePath("/catalog")
 
   return NextResponse.json({
     sourceFileId: applied.value.source_file_id,
@@ -193,5 +199,6 @@ export async function POST(request: Request) {
     unmapped: applied.value.unmapped_written,
     errors: result.issues.filter((issue) => issue.severity === "ERROR").length,
     warnings: result.issues.filter((issue) => issue.severity === "WARNING").length,
+    skusMatchedAutomatically: matched,
   })
 }

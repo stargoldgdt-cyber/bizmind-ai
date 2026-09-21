@@ -8,7 +8,6 @@ import {
   Gauge,
   Landmark,
   LayoutDashboard,
-  Link2,
   type LucideIcon,
   Newspaper,
   Package,
@@ -96,16 +95,16 @@ export const NAVIGATION: NavSection[] = [
         enabled: true,
         match: ["/ledger/lines"],
       },
-      // GCC Phase 6: product master, SKU matching and product profit.
+      // GCC Phase 6: product master and product profit. SKU matching lives on
+      // Products and costs since 0045 (/catalog/mapping forwards there).
       { label: "Product profit", href: "/ledger/products", icon: Package, enabled: true },
       {
         label: "Products and costs",
         href: "/catalog",
         icon: Tags,
         enabled: true,
-        match: ["/catalog/products"],
+        match: ["/catalog/products", "/catalog/mapping"],
       },
-      { label: "SKU matching", href: "/catalog/mapping", icon: Link2, enabled: true },
       // GCC Phase 7: operating expenses and net profit.
       { label: "Operating expenses", href: "/ledger/expenses", icon: Receipt, enabled: true },
       // GCC Phase 8: expected marketplace payouts; no bank source yet.

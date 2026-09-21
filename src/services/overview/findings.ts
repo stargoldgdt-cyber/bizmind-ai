@@ -79,10 +79,10 @@ export function openItems(o: Overview, monthKey: string): Finding[] {
     items.push({
       id: "skus",
       tone: "attention",
-      title: `${n(o.unmatched_skus)} SKUs not matched to a product`,
+      title: `${n(o.unmatched_skus)} SKU${o.unmatched_skus === 1 ? "" : "s"} sold this month need${o.unmatched_skus === 1 ? "s" : ""} product mapping`,
       body: `${formatNumber(o.units_without_product, 4)} units sold this month have no product, so gross profit is not final.`,
-      href: "/catalog/mapping",
-      action: "Match SKUs",
+      href: "/catalog#needs-attention",
+      action: "Set them up",
     })
   }
   if (reasons.has("COST_MISSING")) {

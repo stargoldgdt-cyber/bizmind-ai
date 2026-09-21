@@ -313,7 +313,7 @@ function OpenItems({
                   <li>
                     {formatNumber(s.units_without_product, 4)} unit(s) sold under SKUs not yet matched to one of your
                     products.{" "}
-                    <Link href="/catalog/mapping" className="font-medium underline underline-offset-4">
+                    <Link href="/catalog#needs-attention" className="font-medium underline underline-offset-4">
                       Match SKUs
                     </Link>
                   </li>

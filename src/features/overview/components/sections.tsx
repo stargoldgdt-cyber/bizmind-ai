@@ -445,8 +445,8 @@ export function DataHealth({ o, monthKey }: { o: OverviewRow; monthKey: string }
     },
     {
       ok: o.unmatched_skus === 0,
-      text: o.unmatched_skus === 0 ? "Every SKU sold is matched to a product" : `${formatNumber(o.unmatched_skus)} SKUs not matched to a product`,
-      href: "/catalog/mapping",
+      text: o.unmatched_skus === 0 ? "Every SKU sold is matched to a product" : `${formatNumber(o.unmatched_skus)} SKUs sold this month need product mapping`,
+      href: "/catalog#needs-attention",
     },
     {
       ok: !o.gross_profit_reasons.includes("COST_MISSING"),

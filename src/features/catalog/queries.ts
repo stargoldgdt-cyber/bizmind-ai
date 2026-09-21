@@ -2,7 +2,7 @@ import "server-only"
 
 import { createClient } from "@/lib/supabase/server"
 import type { LedgerMonth } from "@/services/ledger/period"
-import type { CatalogProduct, Database, ProductCost } from "@/types/database"
+import type { CatalogProduct, Database, ProductCost, SkuAliasMethod } from "@/types/database"
 
 /**
  * Reads for the product master, SKU mapping and product profit (GCC Phase 6),
@@ -13,6 +13,7 @@ import type { CatalogProduct, Database, ProductCost } from "@/types/database"
 type Fn = Database["public"]["Functions"]
 export type ProductOverviewRow = Fn["catalog_product_overview"]["Returns"][number]
 export type SkuQueueRow = Fn["sku_mapping_queue"]["Returns"][number]
+export type SkuSetupRowRead = Fn["sku_setup_rows"]["Returns"][number]
 export type ProductProfitRow = Fn["pnl_by_product"]["Returns"][number]
 
 export async function listProductOverview(businessId: string): Promise<ProductOverviewRow[]> {
@@ -44,6 +45,7 @@ export type MappedSku = {
   status: "CONFIRMED" | "REJECTED"
   decided_at: string
   note: string | null
+  method: SkuAliasMethod
 }
 
 export type ProductDetail = {
@@ -73,7 +75,7 @@ export async function getProductDetail(businessId: string, productId: string): P
       .order("created_at", { ascending: false }),
     supabase
       .from("sku_aliases")
-      .select("id, marketplace_code, raw_sku, status, decided_at, note")
+      .select("id, marketplace_code, raw_sku, status, decided_at, note, method")
       .eq("product_id", productId)
       .order("status")
       .order("marketplace_code")
@@ -89,11 +91,81 @@ export async function getProductDetail(businessId: string, productId: string): P
   }
 }
 
-export async function getSkuQueue(businessId: string): Promise<SkuQueueRow[]> {
+/**
+ * The API returns at most 1,000 rows per request, so a longer list is read in
+ * pages. Each reader orders its rows fully, so pages neither overlap nor skip.
+ */
+const PAGE = 1000
+
+async function everyPage<T>(
+  load: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  what: string,
+  limit = Number.POSITIVE_INFINITY
+): Promise<T[]> {
+  const rows: T[] = []
+  for (let from = 0; from < limit; from += PAGE) {
+    const to = Math.min(from + PAGE, limit) - 1
+    const { data, error } = await load(from, to)
+    if (error) throw new Error(`Could not load ${what}: ${error.message}`)
+    rows.push(...(data ?? []))
+    if (!data || data.length < to - from + 1) break
+  }
+  return rows
+}
+
+/** The SKUs that need a product, largest sales first; `limit` for a first screen. */
+export async function getSkuQueue(businessId: string, limit?: number): Promise<SkuQueueRow[]> {
   const supabase = await createClient()
-  const { data, error } = await supabase.rpc("sku_mapping_queue", { p_business_id: businessId })
-  if (error) throw new Error(`Could not load the SKUs to match: ${error.message}`)
-  return data ?? []
+  return everyPage(
+    (from, to) => supabase.rpc("sku_mapping_queue", { p_business_id: businessId }).range(from, to),
+    "the SKUs to match",
+    limit
+  )
+}
+
+/**
+ * One row per marketplace SKU and account: the SKU setup sheet (migration
+ * 0045). Unmatched SKUs only, or every SKU for bulk corrections.
+ */
+export async function getSkuSetupRows(businessId: string, includeMatched: boolean): Promise<SkuSetupRowRead[]> {
+  const supabase = await createClient()
+  return everyPage(
+    (from, to) =>
+      supabase.rpc("sku_setup_rows", { p_business_id: businessId, p_include_matched: includeMatched }).range(from, to),
+    "your marketplace SKUs"
+  )
+}
+
+export type SkuSummary = {
+  /** Distinct marketplace SKUs in the business's files. */
+  skus: number
+  recognised: number
+  matchedAutomatically: number
+  needAttention: number
+}
+
+/** How far SKU setup has come, counted in SQL over every SKU (migration 0046). */
+export async function getSkuSummary(businessId: string): Promise<SkuSummary> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("sku_setup_summary", { p_business_id: businessId })
+  if (error) throw new Error(`Could not count your marketplace SKUs: ${error.message}`)
+  const row = data?.[0]
+  return {
+    skus: row?.skus ?? 0,
+    recognised: row?.recognised ?? 0,
+    matchedAutomatically: row?.matched_automatically ?? 0,
+    needAttention: row?.need_attention ?? 0,
+  }
+}
+
+export type FileSkuSummary = Fn["ledger_file_sku_summary"]["Returns"][number]
+
+/** The marketplace SKUs in one uploaded file: recognised, or needing setup. */
+export async function getFileSkuSummary(sourceFileId: string): Promise<FileSkuSummary | null> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("ledger_file_sku_summary", { p_source_file_id: sourceFileId })
+  if (error) throw new Error(`Could not count the file's SKUs: ${error.message}`)
+  return data?.[0] ?? null
 }
 
 /** The currencies the business sells in: those of its marketplace accounts. */

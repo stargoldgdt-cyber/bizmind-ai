@@ -128,13 +128,15 @@ section("5. SCREENS, MENU AND ROUTES")
 
 const items = NAVIGATION.flatMap((s) => s.items)
 const find = (href: string) => items.find((i) => i.href === href)
-check("the menu has Product profit, Products and costs, SKU matching", !!find("/ledger/products") && !!find("/catalog") && !!find("/catalog/mapping"))
+// 0045: SKU matching lives on Products and costs; /catalog/mapping forwards there.
+check("the menu has Product profit and Products and costs, and no separate SKU matching",
+  !!find("/ledger/products") && !!find("/catalog") && !find("/catalog/mapping"))
 check("a product page highlights Products and costs", isNavItemActive(find("/catalog")!, "/catalog/products/abc"))
-check("SKU matching highlights only itself", !isNavItemActive(find("/catalog")!, "/catalog/mapping") &&
-  isNavItemActive(find("/catalog/mapping")!, "/catalog/mapping"))
+check("the old SKU matching address highlights Products and costs", isNavItemActive(find("/catalog")!, "/catalog/mapping"))
 check("product profit does not highlight Marketplace profit", !isNavItemActive(find("/ledger")!, "/ledger/products"))
 check("/catalog is a protected prefix", PROTECTED_PREFIXES.includes("/catalog"))
 
+const PAGES_MAPPING = read("src/app/(app)/catalog/mapping/page.tsx")
 const PAGES = {
   catalog: read("src/app/(app)/catalog/page.tsx"),
   product: read("src/app/(app)/catalog/products/[id]/page.tsx"),
@@ -142,6 +144,7 @@ const PAGES = {
   profit: read("src/app/(app)/ledger/products/page.tsx"),
   overview: read("src/app/(app)/ledger/page.tsx"),
 }
+check("the old SKU matching address forwards to Needs attention", PAGES_MAPPING.includes('redirect("/catalog#needs-attention")'))
 const ACTIONS = read("src/features/catalog/actions.ts")
 const QUERIES = read("src/features/catalog/queries.ts")
 for (const [name, source] of Object.entries(PAGES)) {
@@ -154,8 +157,10 @@ check("every write goes through the audited functions",
   ["catalog_product_create", "catalog_product_update", "sku_alias_decide", "sku_alias_remove", "product_cost_add", "product_cost_retire"]
     .every((fn) => ACTIONS.includes(`rpc("${fn}"`)) && !/\.from\(/.test(ACTIONS))
 check("actions take the business from the session, never from input", ACTIONS.includes("getActiveBusiness()") && !/businessId:\s*z\./.test(ACTIONS))
-check("suggestions are only offered: nothing is matched without a click",
-  !/sku_alias_decide/.test(QUERIES) && read("src/features/catalog/components/sku-match-controls.tsx").includes('decide(s.product_id, "CONFIRMED")'))
+const ROW = read("src/features/catalog/components/needs-attention-row.tsx")
+check("suggestions are only offered: a suggestion is used only when a person clicks Save & Match",
+  !/sku_alias_decide/.test(QUERIES) && ROW.includes("setProductId(s.product_id)") && ROW.includes("onClick={save}") &&
+    !/useEffect/.test(ROW))
 
 console.log(`\n${"=".repeat(74)}`)
 console.log(` RESULT: ${passed} passed, ${failed} failed`)

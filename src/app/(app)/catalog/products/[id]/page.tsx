@@ -5,23 +5,11 @@ import { ArrowLeft } from "lucide-react"
 import { z } from "zod"
 
 import { AppShell } from "@/components/layout/app-shell"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { ONBOARDING_ROUTE } from "@/config/routes"
 import { getActiveBusiness, getUserBusinesses } from "@/features/businesses/queries"
-import { ProductCostForm } from "@/features/catalog/components/product-cost-form"
-import { ProductForm } from "@/features/catalog/components/product-form"
-import { RowActionButton } from "@/features/catalog/components/row-action-button"
+import { ProductDetailSections } from "@/features/catalog/components/product-detail-sections"
 import { getProductDetail, listBusinessCurrencies } from "@/features/catalog/queries"
-import { formatMoney } from "@/lib/format"
 import { createClient, getCurrentUser } from "@/lib/supabase/server"
-import { formatLedgerDay } from "@/services/ledger/display"
 
 export const metadata: Metadata = {
   title: "Product",
@@ -51,10 +39,8 @@ export default async function ProductPage(props: PageProps<"/catalog/products/[i
   ])
   if (!detail) notFound()
 
-  const { product, costs, skus } = detail
+  const { product } = detail
   const canManage = activeBusiness.role === "OWNER" || activeBusiness.role === "ADMIN"
-  const confirmed = skus.filter((s) => s.status === "CONFIRMED")
-  const rejected = skus.filter((s) => s.status === "REJECTED")
 
   return (
     <AppShell
@@ -76,104 +62,7 @@ export default async function ProductPage(props: PageProps<"/catalog/products/[i
           </p>
         </div>
 
-        {/* ---- costs ------------------------------------------------------- */}
-        <section className="overflow-hidden rounded-xl border border-border bg-card">
-          <div className="border-b border-border px-5 py-4">
-            <h2 className="text-sm font-semibold">Cost history</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Each sale uses the latest cost that started on or before its date, in its currency.
-            </p>
-          </div>
-          {costs.length === 0 ? (
-            <p className="px-5 py-6 text-sm text-muted-foreground">
-              No cost yet: sales of this product keep gross profit incomplete.
-            </p>
-          ) : (
-            <div className="overflow-x-auto [&_td:first-child]:pl-5 [&_td:last-child]:pr-5 [&_th:first-child]:pl-5 [&_th:last-child]:pr-5">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Applies from</TableHead>
-                    <TableHead className="text-right">Cost per unit</TableHead>
-                    <TableHead>Note</TableHead>
-                    <TableHead>Status</TableHead>
-                    {canManage && <TableHead className="text-right">Action</TableHead>}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {costs.map((c) => (
-                    <TableRow key={c.id} className={c.retired_at ? "text-muted-foreground" : undefined}>
-                      <TableCell className="text-sm">{formatLedgerDay(c.effective_from)}</TableCell>
-                      <TableCell className="text-right font-mono text-sm tabular-nums">
-                        {c.retired_at ? <s>{formatMoney(c.unit_cost, c.currency)}</s> : formatMoney(c.unit_cost, c.currency)}
-                      </TableCell>
-                      <TableCell className="text-xs">{c.note ?? "—"}</TableCell>
-                      <TableCell className="text-xs">
-                        {c.retired_at
-                          ? `Withdrawn ${formatLedgerDay(c.retired_at)}${c.retire_reason ? `: ${c.retire_reason}` : ""}`
-                          : "In use"}
-                      </TableCell>
-                      {canManage && (
-                        <TableCell className="text-right">
-                          {!c.retired_at && <RowActionButton kind="retire-cost" id={c.id} />}
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </section>
-
-        {canManage && <ProductCostForm productId={product.id} currencies={currencies} />}
-
-        {/* ---- SKUs -------------------------------------------------------- */}
-        <section className="overflow-hidden rounded-xl border border-border bg-card">
-          <div className="border-b border-border px-5 py-4">
-            <h2 className="text-sm font-semibold">Marketplace SKUs</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Sales under these SKUs count as this product.{" "}
-              <Link href="/catalog/mapping" className="font-medium text-foreground underline underline-offset-4">
-                Match more SKUs
-              </Link>
-            </p>
-          </div>
-          {skus.length === 0 ? (
-            <p className="px-5 py-6 text-sm text-muted-foreground">No SKUs matched yet.</p>
-          ) : (
-            <div className="overflow-x-auto [&_td:first-child]:pl-5 [&_td:last-child]:pr-5 [&_th:first-child]:pl-5 [&_th:last-child]:pr-5">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Marketplace</TableHead>
-                    <TableHead>SKU</TableHead>
-                    <TableHead>Decision</TableHead>
-                    {canManage && <TableHead className="text-right">Action</TableHead>}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {[...confirmed, ...rejected].map((s) => (
-                    <TableRow key={s.id}>
-                      <TableCell className="text-sm">{s.marketplace_code}</TableCell>
-                      <TableCell className="font-mono text-xs">{s.raw_sku}</TableCell>
-                      <TableCell className="text-xs">
-                        {s.status === "CONFIRMED" ? "Matched" : "Not this product"} · {formatLedgerDay(s.decided_at)}
-                      </TableCell>
-                      {canManage && (
-                        <TableCell className="text-right">
-                          <RowActionButton kind="remove-match" id={s.id} />
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </section>
-
-        {canManage && <ProductForm product={product} />}
+        <ProductDetailSections detail={detail} currencies={currencies} canManage={canManage} />
       </div>
     </AppShell>
   )

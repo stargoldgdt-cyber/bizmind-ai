@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
-import { ArrowLeft, CircleAlert, TriangleAlert } from "lucide-react"
+import { ArrowLeft, CircleAlert, CircleCheck, TriangleAlert } from "lucide-react"
 
 import { AppShell } from "@/components/layout/app-shell"
 import { Button } from "@/components/ui/button"
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table"
 import { ONBOARDING_ROUTE } from "@/config/routes"
 import { getActiveBusiness, getUserBusinesses } from "@/features/businesses/queries"
+import { getFileSkuSummary, type FileSkuSummary } from "@/features/catalog/queries"
 import { LedgerFilePanel } from "@/features/imports/components/ledger-file-panel"
 import {
   LedgerFileContents,
@@ -74,12 +75,13 @@ export default async function ImportDetailPage(props: PageProps<"/imports/[id]">
   const isLedger = source.dataset === "LEDGER"
 
   const supabase = await createClient()
-  const [{ data: profile }, issues, preview, summary, settlements] = await Promise.all([
+  const [{ data: profile }, issues, preview, summary, settlements, skus] = await Promise.all([
     supabase.from("profiles").select("full_name").eq("id", user!.id).maybeSingle(),
     getImportIssues(source.batch_id, 200),
     canManage && !isLedger ? getWithdrawalPreview(source.batch_id) : Promise.resolve(null),
     isLedger ? getLedgerFileSummary(source.batch_id) : Promise.resolve([]),
     isLedger ? getLedgerFileSettlements(source.batch_id) : Promise.resolve([]),
+    isLedger ? getFileSkuSummary(source.batch_id) : Promise.resolve(null),
   ])
 
   return (
@@ -135,6 +137,7 @@ export default async function ImportDetailPage(props: PageProps<"/imports/[id]">
                   : "Recorded exactly as the marketplace reported it. Nothing in the ledger is ever edited; a wrong file is withdrawn, not changed."}
               </p>
             </section>
+            {skus && skus.skus > 0 && !source.withdrawn_at && <FileSkus skus={skus} />}
             <LedgerFileSettlements settlements={settlements} />
             <LedgerFileContents summary={summary} />
           </>
@@ -291,5 +294,34 @@ function Stat({ label, value }: { label: string; value: number | null }) {
         {value === null ? "—" : formatNumber(value)}
       </dd>
     </div>
+  )
+}
+
+/** The file's marketplace SKUs: recognised from earlier setup, or new. */
+function FileSkus({ skus }: { skus: FileSkuSummary }) {
+  return (
+    <section className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-border bg-card px-5 py-4 text-sm">
+      <p className="font-semibold">{formatNumber(skus.skus)} SKUs in this file</p>
+      <p className="inline-flex items-center gap-1.5 text-success-strong">
+        <CircleCheck className="size-4" aria-hidden />
+        {formatNumber(skus.recognised)} recognised
+        {skus.matched_automatically > 0 && (
+          <span className="text-muted-foreground">({formatNumber(skus.matched_automatically)} automatically)</span>
+        )}
+      </p>
+      {skus.need_attention > 0 ? (
+        <>
+          <p className="inline-flex items-center gap-1.5 text-warning-strong">
+            <CircleAlert className="size-4" aria-hidden />
+            {formatNumber(skus.need_attention)} need product mapping
+          </p>
+          <Link href="/catalog#needs-attention" className="ml-auto font-medium underline underline-offset-4">
+            Set them up
+          </Link>
+        </>
+      ) : (
+        <p className="text-muted-foreground">Every SKU has a product; their costs apply automatically.</p>
+      )}
+    </section>
   )
 }

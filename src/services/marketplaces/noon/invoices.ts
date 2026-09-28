@@ -179,6 +179,7 @@ export function normalizeInvoices(input: NormalizeInput): NormalizeResult {
         attribution: rule?.attribution ?? (refs.orderRef ? "ORDER" : "MARKETPLACE"),
         settlementRef: null,
         payoutRef: null,
+        externalRef: null,
       })
     }
 

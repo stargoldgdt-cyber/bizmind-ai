@@ -2,6 +2,7 @@ import "server-only"
 
 import ExcelJS from "exceljs"
 import Papa from "papaparse"
+import PdfParse from "pdf-parse"
 
 import type { RawRecord } from "./contracts"
 
@@ -44,10 +45,63 @@ export async function parseFile(
 
   if (extension === "csv" || extension === "txt") return parseCsv(buffer)
   if (extension === "xlsx" || extension === "xlsm") return parseXlsx(buffer)
+  if (extension === "pdf") return parsePdf(buffer)
 
   return {
-    error: `BizMind cannot read ".${extension}" files. Upload a CSV or an Excel (.xlsx) file.`,
+    error: `BizMind cannot read ".${extension}" files. Upload a CSV, an Excel (.xlsx) or a PDF file.`,
   }
+}
+
+/**
+ * A PDF has no rows or columns, only text — and unlike a settlement file, one
+ * PDF is one document (a tax invoice, a credit note), not a table. This hands
+ * the whole extracted text over as a single row, in a single "text" column, so
+ * the row-accounting the database requires ("every row is used by something")
+ * stays meaningful instead of forcing every page header and column label into
+ * its own row issue. Recognising the table inside that text is the adapter's
+ * job (contract.ts: "transport and meaning are separate"), not this file's.
+ */
+async function parsePdf(buffer: Buffer): Promise<ParsedFile | ParseFailure> {
+  let text: string
+  try {
+    text = await extractPdfText(buffer)
+  } catch {
+    return {
+      error: "That PDF could not be read. If it is password protected, remove the password and try again.",
+    }
+  }
+
+  if (text.trim() === "") {
+    return { error: "That PDF has no readable text. A scanned image cannot be read; upload the original PDF." }
+  }
+
+  return {
+    columns: ["text"],
+    rows: [{ text }],
+    totalRowsInFile: 1,
+    truncated: false,
+  }
+}
+
+/**
+ * pdf-parse's very first call in a process can throw on a PDF it reads fine
+ * on a later call (observed on a real, slightly malformed Amazon tax
+ * document: the first parse threw a stream/xref error with a different
+ * message each time, while every retry read it correctly, byte for byte).
+ * Three attempts, immediately, no delay: this is a one-time warm-up quirk in
+ * the underlying library on a genuinely borderline file, not a signal to
+ * keep trying indefinitely.
+ */
+async function extractPdfText(buffer: Buffer): Promise<string> {
+  let lastError: unknown
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return (await PdfParse(buffer)).text
+    } catch (error) {
+      lastError = error
+    }
+  }
+  throw lastError
 }
 
 function parseCsv(buffer: Buffer): ParsedFile | ParseFailure {

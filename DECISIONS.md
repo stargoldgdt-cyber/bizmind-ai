@@ -1946,6 +1946,65 @@ facts an owner is most likely to misread made impossible to misstate.
 
 ---
 
+## 2026-09-21 — Website rewritten for marketplace sellers; legal pages drafted
+
+**Decided:**
+
+- **One story, same layout.** The landing page tells the GCC marketplace
+  story: Amazon and noon settlement reports in, true profit per marketplace,
+  product and month out. The eleven bands and their order stay; the copy
+  (`src/features/marketing/content.ts`) and the hero's drawn dashboard are
+  rewritten. The rule is unchanged: nothing may claim what BizMind does not
+  do.
+- **Marketplace statuses.** Amazon and noon are Available; Carrefour and bank
+  statements are Planned.
+- **Pricing shows the owner's planned plan shape**: Starter free, Growth, and
+  Business (contact us). No online payment. The amounts stay placeholders,
+  with a visible notice, until the owner sets them.
+- **Privacy Policy and Terms (`/privacy`, `/terms`).**
+  - They describe only what the code does: buyer details are removed before
+    storage, businesses are isolated, Google access is `drive.file`, the AI
+    receives figures only, and there are no trackers.
+  - Company details (entity, address, email, governing law, date) live in
+    `src/config/legal.ts` as placeholders. A "draft" notice shows until the
+    owner confirms them.
+  - A lawyer should review both texts.
+- **Guarded by a test.** `npm run test:website` fails the build if a
+  placeholder price or bracketed legal detail shows without its notice, if a
+  marketplace status is overstated, or if copy calls an expected payout
+  received.
+
+---
+
+## 2026-09-21 — Executive dashboard; legacy screens hidden (migrations 0049–0051)
+
+**Decided (owner):**
+
+- **The Dashboard becomes the executive view.** It shows the whole business
+  by default (every account in one currency), or one account.
+  - Marketplace cards sit side by side.
+  - A month-by-month trend shows net sales per marketplace, with a
+    contribution line.
+  - Period choice: Month / 3 months / Year to date / 12 months.
+  - Currencies are never combined (A12).
+- **Periods end on the latest month with data** by default, not today's
+  calendar month. Sellers upload after a month closes, so "this month" is
+  usually still empty. Each period is compared with the same number of months
+  just before it.
+- **The legacy spreadsheet-import screens are hidden from the menu:**
+  Legacy dashboard, old Ask, Sales, Products, Profit, Business health,
+  Channels and old Data quality. A marketplace seller sees them empty. They
+  stay in the code until Phase 10.
+  - The Import data wizard now offers only Expenses, the one legacy upload
+    that still feeds net profit.
+  - The menu is regrouped: Overview, Profit, Products, Data, Automation,
+    Settings.
+- **Speed without changing any figure.** Readers that read the ledger line by
+  line now group lines by type and classify each type once. The live tests
+  compare every dashboard figure with the P&L engine's own.
+
+---
+
 ## 2026-09-18 — SKU setup: set up once, BizMind remembers (migration 0045)
 
 **Decided (owner):**
@@ -2038,3 +2097,165 @@ skipped them; Phase 7's `expense_lines` did not, so operating expenses and Net
 Profit still included expenses from a withdrawn import. 0042 adds the filter;
 the records are kept for the audit trail. `npm run test:expenses-ledger` now
 withdraws a synced expense import and checks every figure.
+
+---
+
+## 2026-09-28 — Amazon VAT invoices/credit notes; `pdf-parse`; `external_ref`
+
+The owner audited why Amazon's recoverable input VAT looked low (AED 116.44
+for a month with AED 3,277 of fees) and traced it precisely: Amazon's
+settlement report (Flat File V2) only ever itemises VAT for one fee (Premium
+Services Fee / SP 360). Every other fee -- Referral Commission, FBA
+fulfilment, Advertising, Variable Closing Fee, COD Fee -- carries 5% UAE VAT
+that Amazon states only on a SEPARATE monthly document: a Tax Invoice and,
+when Amazon adjusts an earlier charge, a Tax Credit Note, both from Seller
+Central's Tax Document Library. Confirmed against four real August 2026
+documents (2 invoices, 2 credit notes): the true VAT for the month is AED
+293.95, of which BizMind previously captured AED 116.44 (40%).
+
+**Decided:**
+
+- **A second Amazon format, on the same adapter**, the same shape as noon's
+  two formats on one adapter: `amazon.tax_invoice` and
+  `amazon.tax_credit_note`. Optional -- a settlement-only account behaves
+  exactly as before. Never required for a period to be final.
+- **`pdf-parse` is a new dependency.** Nothing in the ingestion pipeline reads
+  PDFs; every other format is CSV/XLSX. It does one thing (extract a PDF's
+  text) and carries no Amazon-specific knowledge -- table recognition for
+  Amazon's specific document layout lives in the Amazon adapter, consistent
+  with "a transport gets rows; an adapter knows what one format means."
+  A future SP-API connector would not reuse the PDF-extraction step itself
+  (an API hands back structured fields, not a PDF) -- only the
+  normalize/classify/ledger layers downstream of it are the reusable,
+  connector-ready part.
+- **The Premium Services Fee's VAT, when it appears on a tax invoice, is
+  classified `MEMO / INFORMATIONAL`** (an existing ledger category, not a new
+  one) rather than `TAX / FEE_VAT` -- stored and traceable, never counted a
+  second time, since the settlement file already fully captures it. A
+  deterministic classification rule, not runtime matching against other rows.
+- **`external_ref` is a new, marketplace-agnostic column** on
+  `financial_transactions` -- the document number a line came from, as the
+  marketplace itself names it (an Amazon invoice/credit-note number today; any
+  future format's own document id later). Not specific to Amazon or to PDFs.
+
+**Rejected:** Detecting the Premium Services Fee overlap by matching amount
+and date across documents at read time -- fragile, and the overlap is a known,
+stable, single fee type; a fixed classification rule is precise and auditable
+instead of a heuristic.
+
+**Cost to change:** Moderate. A new dependency and a new ledger column touch
+the core ingestion path, though additively; the two new formats are isolated,
+optional, and follow an already-proven pattern (noon's second format).
+
+---
+
+## 2026-09-28 — Building the above: the fee amount duplicates too, not just VAT (migration 0057)
+
+While building the tax-invoice reader, tracing the real documents against the
+settlement more closely than the audit above did turned up a bigger risk than
+the Premium Services Fee overlap: **every row's "Price (Excl. Tax)" amount is
+Amazon's own restatement of a fee already recorded through the settlement**
+(a tax invoice's "Multitier Per Unit Fee" reconciles to the settlement's own
+fulfilment-fee lines; its "Sales Commission" to the settlement's referral
+commission). Recording that column as a new marketplace fee, as first
+designed, would have doubled every fee amount on the account, not just added
+VAT.
+
+**Decided:** for every fee description these documents report, the
+"Price (Excl. Tax)" amount is always classified `MEMO / INFORMATIONAL`
+(recorded, traceable, never counted) and only the VAT column is ever new
+P&L-affecting data (`TAX / FEE_VAT` on import, `INPUT_VAT` at classification —
+the same treatment the existing SP 360 VAT rule already gets). Premium
+Services Fee is the one description where BOTH columns are informational,
+since the settlement already states its fee and VAT combined. 28 rules were
+seeded on each side (7 fee kinds × 2 subtypes × 2 formats), generated in the
+migration from one shared list rather than typed out 4 times, to keep the fee
+kinds and their VAT treatment defined in exactly one place.
+
+Verified against the owner's real four August 2026 documents (never copied
+into the repository): every one of the 168 lines they contain was recognised,
+zero fell to UNMAPPED, and the reconciled total lands on **AED 293.95** —
+exactly the figure the original audit above named as the true VAT for the
+month, up from the AED 116.44 previously captured. `npm run test:amazon-tax-documents`
+covers this offline, on invented fixture text shaped like the real layout.
+
+**Also found and fixed while building:**
+
+- Two regexes (the invoice number, the credit-note block's reference to its
+  original invoice) were written against `AE-SFZL-INV-...`, the one real
+  seller's actual document-number prefix, rather than a general pattern. The
+  offline test caught it immediately by using an invented prefix
+  (`AE-TEST-...`) in its fixture — exactly why the fixture is never the
+  owner's real numbers. Both now match any token, not a specific legal
+  entity's naming.
+- `pdf-parse`'s first call in a given Node process can throw on a PDF it reads
+  correctly on the very next call — observed reliably on one of the owner's
+  four real credit notes (a different, transient stream/xref error each time,
+  never on the file's own content). `parsePdf()` now makes up to three
+  attempts before giving up; every real-file test run this was tried against
+  (dozens of fresh-process runs) succeeded within the first two.
+- A PDF is one document, not a table of independent rows — unlike a CSV, most
+  of its lines are headers and labels, not data. `parse.ts` hands a PDF over
+  as a single source row holding the whole extracted text, letting the Amazon
+  adapter emit several transactions from that one row via `lineIndex` (an
+  existing mechanism), rather than forcing every page heading into its own
+  row issue just to satisfy "every row is accounted for."
+
+**Cost to change:** Low, on top of the design above — the correction changed
+which classification each rule pointed to, not the architecture.
+
+---
+
+## 2026-09-28 — Fix: tax-document fee/VAT amounts were the wrong sign (migration 0059)
+
+The owner uploaded their real August documents and asked to verify the
+result: the "Input VAT on fees, recoverable" figure read AED 61.07, not
+anything near the AED 293.95 the design above was built and tested against.
+
+Tracing it down: every amount BizMind already records for a fee — from the
+settlement — is stored **negative** (money the marketplace took; this is
+Amazon's own convention, passed through `AS_REPORTED`, and it is what an
+already-passing acceptance check expects: July's unresolved SP 360 VAT is
+asserted as exactly `-119.7900`). Migration 0057's tax-document reader took
+each amount exactly as the PDF prints it — always a plain positive number,
+since a document states a magnitude, not a debit or credit — and never
+negated it. Two different sign conventions for the same kind of fact. The
+account's real August settlement happens to hold this period's SP 360 VAT
+as `-AED 116.44`; adding the tax documents' *positive* AED 177.51 gave
+`-116.44 + 177.51 = 61.07` — a number that looked plausible enough to pass a
+casual glance, which is exactly why the owner was right to ask rather than
+trust the card.
+
+**Why offline and live testing both missed it:** every test — the offline
+fixture and the first live run against the real four documents — used a
+throwaway business with **no settlement uploaded**, so there was no real
+negative VAT-on-fee line to combine against and expose the mismatch. The
+lesson: a throwaway business proves the new format's own logic; it does not
+prove the new format is *consistent* with an existing one unless the test
+account carries both. `test:amazon-tax-documents-live` does not (yet) upload
+a real settlement alongside the tax documents into its own throwaway
+business — worth doing next time this path is touched.
+
+**Decided:** the 28 `ledger_mapping_rules` migration 0057 seeded are retired
+(the table cannot be edited, only retired and superseded — a trigger enforces
+it) and replaced with version-2 rules, identical except `sign_rule =
+'NEGATE'`. `classification_rules` is untouched: the category each line
+received (`INFORMATIONAL` / `INPUT_VAT`) was already correct; only the stored
+amount's sign was wrong.
+
+**The ledger itself cannot be repaired by a migration** —
+`financial_transactions` is immutable by design, for every role, with no
+exception for BizMind's own mistakes. The four documents already uploaded
+with the old (positive) sign must be withdrawn and re-uploaded once migration
+0059 is live, so `ledger_apply_file()` writes them again under the corrected
+rule. Nothing is lost: withdrawing keeps the file and its old lines in the
+audit trail: exactly the mechanism this table already has for "the wrong file
+was uploaded."
+
+**Rejected:** a repair script that flips the sign of the already-written
+rows directly — the ledger refuses this for any role, by design (LEDGER.md);
+withdraw-and-reupload is the only sanctioned correction.
+
+**Cost to change:** Low for the rule itself (one migration, the established
+retire-and-supersede pattern). Cost to the owner: four files withdrawn and
+re-uploaded, a few minutes.

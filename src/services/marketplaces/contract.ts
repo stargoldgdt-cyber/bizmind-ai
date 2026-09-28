@@ -132,6 +132,12 @@ export type TransactionDraft = {
   attribution: Attribution
   settlementRef: string | null
   payoutRef: string | null
+  /**
+   * The document number this line came from, as the marketplace itself names
+   * it (an invoice or credit note number today; any future connector's own
+   * document id later). Not the same fact as `orderRef`, which is an order id.
+   */
+  externalRef: string | null
 }
 
 export type SettlementDraft = {

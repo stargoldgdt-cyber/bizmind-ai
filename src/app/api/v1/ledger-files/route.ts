@@ -29,7 +29,7 @@ import { buildLedgerFilePayload } from "@/services/marketplaces/ledger-file"
 
 const fieldsSchema = z.object({ marketplaceAccountId: z.string().uuid() })
 
-const ACCEPTED = ["txt", "csv", "xlsx"] as const
+const ACCEPTED = ["txt", "csv", "xlsx", "pdf"] as const
 type Accepted = (typeof ACCEPTED)[number]
 
 const refuse = (status: number, error: string, extra: Record<string, unknown> = {}) =>
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
 
   const extension = (file.name.toLowerCase().split(".").pop() ?? "") as Accepted
   if (!ACCEPTED.includes(extension)) {
-    return refuse(400, "Upload the settlement report as the marketplace provides it (.txt or .csv).")
+    return refuse(400, "Upload the file as the marketplace provides it (.txt, .csv, .xlsx or .pdf).")
   }
   if (file.size > MAX_FILE_BYTES) {
     return refuse(413, `That file is too large. The limit is ${MAX_FILE_BYTES / 1024 / 1024} MB.`)

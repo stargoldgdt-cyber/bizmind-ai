@@ -381,6 +381,7 @@ function normalize(input: NormalizeInput): NormalizeResult {
       attribution: rule?.attribution ?? (orderRef ? "ORDER_LINE" : "MARKETPLACE"),
       settlementRef: header.id,
       payoutRef: null,
+      externalRef: null,
     })
   }
 

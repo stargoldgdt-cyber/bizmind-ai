@@ -34,7 +34,7 @@ export type LedgerFileInput = {
   accountId: string
   accountCurrency: string
   format: FormatDescriptor
-  file: { name: string; type: "txt" | "csv" | "xlsx"; sizeBytes: number; sha256: string }
+  file: { name: string; type: "txt" | "csv" | "xlsx" | "pdf"; sizeBytes: number; sha256: string }
   sourceKind?: "UPLOAD" | "API"
   /** Every header the file had, before filtering. Names only. */
   columns: readonly string[]
@@ -48,7 +48,7 @@ export type LedgerFilePayload = {
   adapter_version: string
   source_kind: "UPLOAD" | "API"
   file_name: string
-  file_type: "txt" | "csv" | "xlsx"
+  file_type: "txt" | "csv" | "xlsx" | "pdf"
   file_size_bytes: number
   file_sha256: string
   columns: string[]
@@ -93,6 +93,7 @@ export type LedgerFilePayload = {
     attribution: string
     settlement_ref: string | null
     payout_ref: string | null
+    external_ref: string | null
   }[]
   issues: {
     row_number: number
@@ -267,6 +268,7 @@ export function buildLedgerFilePayload(input: LedgerFileInput): BuildResult {
       draft.orderLineRef,
       draft.rawSku,
       draft.subcategory,
+      draft.externalRef,
     ]
     if (texts.some((text) => text !== null && containsEmailAddress(text))) {
       report(`${label}: a text field contains an email address.`)
@@ -294,6 +296,7 @@ export function buildLedgerFilePayload(input: LedgerFileInput): BuildResult {
       attribution: draft.attribution,
       settlement_ref: draft.settlementRef,
       payout_ref: draft.payoutRef,
+      external_ref: draft.externalRef,
     }
   })
 

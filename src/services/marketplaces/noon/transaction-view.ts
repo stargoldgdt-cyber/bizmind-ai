@@ -190,6 +190,7 @@ export function normalizeTransactionView(input: NormalizeInput): NormalizeResult
         attribution: rule?.attribution ?? (itemNr ? "ORDER_LINE" : orderRef ? "ORDER" : "MARKETPLACE"),
         settlementRef: null,
         payoutRef: payoutKey,
+        externalRef: null,
       })
     })
   }

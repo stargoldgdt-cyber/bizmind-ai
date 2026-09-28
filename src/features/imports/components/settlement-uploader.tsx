@@ -100,12 +100,12 @@ export function SettlementUploader({
         </div>
 
         <div className="grid gap-1.5">
-          <Label htmlFor="settlement-file">Settlement file</Label>
+          <Label htmlFor="settlement-file">File</Label>
           <Input
             id="settlement-file"
             ref={fileInput}
             type="file"
-            accept=".txt,.csv"
+            accept=".txt,.csv,.xlsx,.pdf"
             className="sm:w-96"
             onChange={(event) => {
               setFileName(event.target.files?.[0]?.name ?? null)
@@ -114,6 +114,9 @@ export function SettlementUploader({
           />
           <p className="text-xs text-muted-foreground">
             Amazon: Seller Central → Payments → Reports repository → settlement report, Flat File V2 (.txt).
+            <br />
+            Amazon (optional): Seller Central → Tax Document Library → a VAT tax invoice or credit note
+            (.pdf). Adds the VAT most fees carry that the settlement alone does not itemise.
             <br />
             noon: Finance → Transaction View (item level) and Invoices and Credit Notes (.csv). Upload both
             for each period; the invoices are where noon states the VAT inside its fees.

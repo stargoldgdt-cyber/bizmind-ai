@@ -306,6 +306,7 @@ function transaction(overrides: Partial<TransactionDraft> = {}): TransactionDraf
     attribution: "ORDER_LINE",
     settlementRef: "S1",
     payoutRef: null,
+    externalRef: null,
     ...overrides,
   }
 }

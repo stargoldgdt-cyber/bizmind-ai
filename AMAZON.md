@@ -1,7 +1,8 @@
-# Amazon — Flat File V2 settlements
+# Amazon — settlements, and VAT tax invoices/credit notes
 
 GCC Phase 2, built and verified 2026-09-15. How BizMind reads an Amazon
-settlement report into the ledger ([LEDGER.md](LEDGER.md)).
+settlement report into the ledger ([LEDGER.md](LEDGER.md)). §6 covers the
+optional VAT tax invoice/credit note upload added 2026-09-28.
 
 ---
 
@@ -160,8 +161,11 @@ All 1,154 July lines classified automatically; none unknown or under review.
 
 | Path | Role |
 | --- | --- |
-| `src/services/marketplaces/amazon/flat-file-v2.ts` | Detection, rejections, date parsing, normalisation, the rules mirror |
+| `src/services/marketplaces/amazon/flat-file-v2.ts` | The settlement format: detection, rejections, date parsing, normalisation, the rules mirror |
+| `src/services/marketplaces/amazon/tax-documents.ts` | The two tax-document formats (§6): detection, the invoice-line and credit-note-block readers |
+| `src/services/marketplaces/amazon/adapter.ts` | Combines the two into the one Amazon adapter (mirrors `noon/adapter.ts`) |
 | `src/services/marketplaces/adapters.ts` | Registers the Amazon adapter (the only registration) |
+| `src/services/ingestion/parse.ts` | `parseFile()`'s `.pdf` dispatch: extracts text via `pdf-parse`, one row per document |
 | `src/app/api/v1/ledger-files/route.ts` | Upload: session business, account check, parse, detect, normalise, build, apply |
 | `src/app/(app)/marketplaces/` | Marketplace accounts (owner adds) |
 | `src/app/(app)/imports/settlement/` | Upload a settlement |
@@ -170,6 +174,8 @@ All 1,154 July lines classified automatically; none unknown or under review.
 - `npm run test:amazon` — offline, in `npm run verify`: detection and
   rejections, dates and signs, every row accounted for, classification, what it
   refuses to guess, payload acceptance, rules parity with migration 0031.
+- `npm run test:amazon-tax-documents` — offline, in `npm run verify`: the two
+  new formats, on invented text shaped like the real documents (§6).
 - `npm run test:amazon-ledger` — live, invented file: the seeded rules, a .txt
   file accepted, exact totals per kind, reconciliation, the UNMAPPED warning,
   Data Sources counts, duplicate upload, withdrawal, tenant isolation.
@@ -178,3 +184,85 @@ All 1,154 July lines classified automatically; none unknown or under review.
   none is given. Checks the ledger sums and, from Phase 3, the P&L engine's
   July figures under all three VAT settings, and (Phase 4) that the dashboard
   offers July with its 1,154 lines across the four settlements, each adding up.
+
+## 6. VAT tax invoices and credit notes (PDF, optional, migration 0057)
+
+The settlement itemises VAT for exactly one fee (Premium Services Fee / SP
+360, §3). Every other fee carries 5% UAE VAT that Amazon states only on a
+separate monthly document from Seller Central's Tax Document Library: a
+**Tax Invoice**, and, when Amazon adjusts an earlier charge, a **Tax Credit
+Note**. Seller Central offers no CSV/Excel export of these — PDF only
+(confirmed with the owner, 2026-09-28) — so this is the one place BizMind
+reads a PDF. Uploading them is entirely optional; an account that only
+uploads settlements behaves exactly as before, and no period ever requires
+them to be final. See DECISIONS.md, 2026-09-28, for why this exists and how
+it was verified against four real documents.
+
+**The one rule that makes this safe:** every fee amount these documents state
+is Amazon's own restatement of a fee already recorded through the settlement.
+Recording it again would double the fee. So only the **VAT** column is ever
+new, P&L-affecting data; the fee amount is kept (for traceability) but
+classified `MEMO / INFORMATIONAL` — recorded, never counted. Premium Services
+Fee is the one exception in the other direction: the settlement already
+states its fee *and* VAT combined (migration 0044), so both columns from the
+tax invoice are informational for that one description.
+
+| Format id | Recognised by |
+| --- | --- |
+| `amazon.tax_invoice` | The extracted text contains "TAX INVOICE" and "Souq.com FZ LLC" |
+| `amazon.tax_credit_note` | The extracted text contains "TAX CREDIT NOTE" and "Souq.com FZ LLC" |
+
+Both formats carry a single "text" column — a PDF has no rows or columns, and
+unlike a settlement, one PDF is one document, not a table. `parse.ts` hands
+the whole extracted text over as one source row; the adapter finds every line
+(invoice) or 20-line adjustment block (credit note) inside it and emits
+several transactions from that one row via `lineIndex`.
+
+**Fee kinds seeded (`ledger_mapping_rules` and `classification_rules`,
+migration 0057, GLOBAL, one shared list generated into both formats — 28
+rules on each side):**
+
+| Description on the document | Fee-excl-tax | VAT |
+| --- | --- | --- |
+| Sales Commission | INFORMATIONAL | **FEE_VAT → INPUT_VAT** (new) |
+| Refund Commission | INFORMATIONAL | **FEE_VAT → INPUT_VAT** (new) |
+| Variable Closing Fee | INFORMATIONAL | **FEE_VAT → INPUT_VAT** (new) |
+| Multitier Per Unit Fee | INFORMATIONAL | **FEE_VAT → INPUT_VAT** (new) |
+| Shipping Chargeback | INFORMATIONAL | **FEE_VAT → INPUT_VAT** (new) |
+| COD Chargeback Fee | INFORMATIONAL | **FEE_VAT → INPUT_VAT** (new) |
+| Paid Services Fee | INFORMATIONAL | INFORMATIONAL (settlement already has both, migration 0044) |
+
+A description not in this table is kept as **UNMAPPED** with a row warning,
+exactly like an unrecognised settlement code — never dropped, never blocking
+the rest of the document.
+
+**Every one of these rules negates its amount** (migration 0059; the original
+migration 0057 wrongly left them `AS_REPORTED`). A tax document prints a
+fee or VAT amount as a plain positive magnitude — it never signs it debit or
+credit — but every fee and VAT amount BizMind already records, from the
+settlement, is stored negative: money the marketplace took. `NEGATE` makes a
+tax document's fee/VAT lines match that same convention. A credit note's
+already-negative delta (a fee being reduced) negates correctly too: printed
+`-AED 32.93` becomes `32.93`, partly reversing the fee's negative total.
+
+**`external_ref`** (new, marketplace-agnostic column on
+`financial_transactions`): every line from these documents carries the
+invoice or credit-note number it came from, so a VAT figure is traceable back
+to its source document. Populated as `null` on settlement-report lines (no
+per-line document number exists there).
+
+**Verified against the owner's real four August 2026 documents** (two
+invoices, two credit notes; never copied into the repository): all 168 lines
+recognised, zero UNMAPPED. The reconciled magnitude, AED 293.95, matches the
+original audit (DECISIONS.md, 2026-09-28); its sign was wrong until migration
+0059 (DECISIONS.md, 2026-09-28, second entry) — a real settlement holds a
+genuine negative VAT-on-fee line the throwaway test business used for the
+first verification did not, which is how the sign error passed offline and
+live testing against a business with no settlement data.
+
+**A note for whoever touches `parsePdf()` next:** `pdf-parse`'s first call in
+a process can throw on a PDF it reads correctly on the next call — hit
+reliably on one of the four real credit notes. `extractPdfText()` in
+`parse.ts` retries up to three times before giving up; this is a known quirk
+in the underlying library on a borderline file, not a sign to add more
+retries or a delay.

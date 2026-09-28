@@ -141,11 +141,18 @@ section("4. Files that should be refused")
 const empty = await parseFile(Buffer.from("", "utf8"), "empty.csv")
 check("empty file refused", "error" in empty)
 
-const badExt = await parseFile(Buffer.from("hello", "utf8"), "notes.pdf")
+const badExt = await parseFile(Buffer.from("hello", "utf8"), "notes.docx")
 check(
   "unsupported extension refused by name",
-  "error" in badExt && badExt.error.includes(".pdf"),
+  "error" in badExt && badExt.error.includes(".docx"),
   "error" in badExt ? badExt.error : ""
+)
+
+const badPdf = await parseFile(Buffer.from("not a real pdf", "utf8"), "notes.pdf")
+check(
+  "an unreadable PDF is refused with its own message, not the 'unsupported extension' one",
+  "error" in badPdf && badPdf.error.startsWith("That PDF could not be read"),
+  "error" in badPdf ? badPdf.error : ""
 )
 
 const headerOnly = await parseFile(Buffer.from("A,B,C\n", "utf8"), "headers.csv")

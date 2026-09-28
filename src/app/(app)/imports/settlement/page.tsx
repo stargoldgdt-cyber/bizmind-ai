@@ -59,7 +59,9 @@ export default async function SettlementUploadPage() {
         <p className="mt-1 max-w-prose-comfortable text-sm text-muted-foreground">
           BizMind reads every line of the marketplace&apos;s own settlement report
           and records it as it was reported: sales, fees, refunds, advertising and
-          the payout. Customer details are never stored.
+          the payout. For Amazon, a VAT tax invoice or credit note can also be
+          uploaded here — optional, and it adds VAT the settlement alone does not
+          itemise. Customer details are never stored.
         </p>
 
         <div className="mt-6">

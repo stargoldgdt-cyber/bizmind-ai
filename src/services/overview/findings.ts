@@ -1,3 +1,4 @@
+import { compareMoney } from "@/services/analytics/money"
 import { formatMoney, formatNumber, formatPercent } from "@/lib/format"
 import type { Database } from "@/types/database"
 
@@ -11,6 +12,7 @@ import type { Database } from "@/types/database"
  */
 
 type Overview = Database["public"]["Functions"]["dashboard_overview"]["Returns"][number]
+type BridgeStep = Database["public"]["Functions"]["dashboard_profit_bridge"]["Returns"][number]
 
 export type Tone = "attention" | "watch" | "info" | "good"
 
@@ -23,6 +25,59 @@ export type Finding = {
   action: string
 }
 
+/** Strips a leading "-" so two amounts can be ordered by size, not by sign. */
+function magnitude(amount: string): string {
+  const trimmed = amount.trim()
+  return trimmed.startsWith("-") ? trimmed.slice(1) : trimmed
+}
+
+/**
+ * Why contribution moved since the period before, in the reader's own
+ * currency: the two lines that moved it most, by their exact dollar delta
+ * (dashboard_profit_bridge, migration 0060) -- never a percentage stitched
+ * into a guess at cause. Ordered by size (compareMoney orders the digits;
+ * nothing here converts an amount to a number), largest first.
+ */
+export function contributionStory(
+  o: Overview,
+  bridge: readonly BridgeStep[],
+  previousLabel: string,
+  href: string
+): Finding | null {
+  if (o.contribution === null || !o.prev_has_marketplace_data || o.contribution_change_pct === null) return null
+
+  const movers = bridge
+    .filter((s): s is BridgeStep & { amount: string } => s.kind === "DELTA" && s.amount !== null && s.amount !== "0.0000")
+    .toSorted((a, b) => compareMoney(magnitude(b.amount), magnitude(a.amount)))
+  if (movers.length === 0) return null
+
+  // "Net sales" and "other income" are revenue: a fall is a fall, not a
+  // "cost." Every other step is itself a cost, where a rise is what hurts.
+  const REVENUE_LABELS = new Set(["Net sales", "Other income"])
+  const phrase = (s: BridgeStep) => {
+    const down = s.amount.trim().startsWith("-")
+    const verb = REVENUE_LABELS.has(s.label)
+      ? down
+        ? "fell, taking away"
+        : "added"
+      : down
+        ? "cost you an extra"
+        : "added"
+    return `${s.label.toLowerCase()} ${verb} ${formatMoney(magnitude(s.amount), o.currency)}`
+  }
+
+  const [first, second] = movers
+  const rising = o.contribution_change_pct > 0
+  return {
+    id: "contribution-story",
+    tone: rising ? "good" : "attention",
+    title: `Contribution is ${rising ? "up" : "down"} ${formatPercent(Math.abs(o.contribution_change_pct))} vs ${previousLabel}`,
+    body: `The biggest reason: ${phrase(first)}` + (second ? `, and ${phrase(second)}` : "") + ".",
+    href,
+    action: "See why",
+  }
+}
+
 const REASON: Record<string, string> = {
   UNKNOWN_LINES: "some marketplace lines are not recognised",
   VAT_TREATMENT_UNKNOWN: "VAT on marketplace fees has no setting",
@@ -30,7 +85,7 @@ const REASON: Record<string, string> = {
   ROW_ERRORS: "some uploaded rows could not be read",
   SKU_NOT_MAPPED: "some SKUs are not matched to a product",
   COST_MISSING: "some products have no cost for the sale date",
-  NO_MARKETPLACE_DATA: "there are no marketplace figures this month",
+  NO_MARKETPLACE_DATA: "there are no marketplace figures in this period",
   EXPENSES_UNCLASSIFIED: "some expense categories are not placed",
   EXPENSES_BUSINESS_WIDE: "expenses belong to all accounts in the currency",
 }
@@ -79,8 +134,8 @@ export function openItems(o: Overview, monthKey: string): Finding[] {
     items.push({
       id: "skus",
       tone: "attention",
-      title: `${n(o.unmatched_skus)} SKU${o.unmatched_skus === 1 ? "" : "s"} sold this month need${o.unmatched_skus === 1 ? "s" : ""} product mapping`,
-      body: `${formatNumber(o.units_without_product, 4)} units sold this month have no product, so gross profit is not final.`,
+      title: `${n(o.unmatched_skus)} SKU${o.unmatched_skus === 1 ? "" : "s"} sold in this period need${o.unmatched_skus === 1 ? "s" : ""} product mapping`,
+      body: `${formatNumber(o.units_without_product, 4)} units sold in this period have no product, so gross profit is not final.`,
       href: "/catalog#needs-attention",
       action: "Set them up",
     })
@@ -90,7 +145,7 @@ export function openItems(o: Overview, monthKey: string): Finding[] {
       id: "costs",
       tone: "attention",
       title: "Products without a cost",
-      body: `${formatNumber(o.units_without_cost, 4)} units sold this month have no cost for their sale date.`,
+      body: `${formatNumber(o.units_without_cost, 4)} units sold in this period have no cost for their sale date.`,
       href: "/catalog",
       action: "Add costs",
     })
@@ -120,7 +175,7 @@ export function openItems(o: Overview, monthKey: string): Finding[] {
       id: "quality",
       tone: "watch",
       title: `${n(o.open_quality_items)} data quality item${o.open_quality_items === 1 ? "" : "s"} open`,
-      body: "Things BizMind could not read or match cleanly this month.",
+      body: "Things BizMind could not read or match cleanly in this period.",
       href: "/ledger/quality",
       action: "Open data quality",
     })
@@ -191,7 +246,7 @@ export function findings(o: Overview, currency: string, monthKey: string, ledger
     out.push({
       id: "payouts",
       tone: "info",
-      title: "Expected payouts this month",
+      title: "Expected payouts in this period",
       body: `${formatNumber(o.expected_payouts)} payout${o.expected_payouts === 1 ? "" : "s"}, ${formatMoney(o.expected_inflow, currency)} expected. Not confirmed as received: no bank is connected.`,
       href: `/ledger/payouts?month=${monthKey}`,
       action: "See payouts",

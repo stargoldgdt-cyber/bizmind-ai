@@ -2,15 +2,24 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import {
+  Boxes,
+  CalendarRange,
   ChartColumn,
+  CreditCard,
   Download,
   FileSpreadsheet,
   Landmark,
   LineChart,
+  Megaphone,
   Package,
+  PiggyBank,
+  Receipt,
   ShieldCheck,
+  ShoppingBag,
   Sparkles,
+  TrendingUp,
   Upload,
+  Wallet,
 } from "lucide-react"
 
 import { AppShell } from "@/components/layout/app-shell"
@@ -18,49 +27,59 @@ import { Button } from "@/components/ui/button"
 import { ONBOARDING_ROUTE } from "@/config/routes"
 import { getActiveBusiness, getUserBusinesses } from "@/features/businesses/queries"
 import { getExpensePeriods } from "@/features/expenses/queries"
-import { LedgerFilters } from "@/features/ledger/components/ledger-filters"
 import { firstParam, ledgerHref } from "@/features/ledger/params"
 import { getLedgerPeriods, listLedgerAccounts } from "@/features/ledger/queries"
+import { CostDonutChart } from "@/features/overview/components/cost-donut-chart"
+import { Greeting } from "@/features/overview/components/greeting"
+import { InsightCard } from "@/features/overview/components/insight-card"
 import { KpiCard } from "@/features/overview/components/kpi-card"
+import { MonthlyTrend } from "@/features/overview/components/monthly-trend"
+import { OverviewFilters } from "@/features/overview/components/overview-filters"
+import { ProductsTable } from "@/features/overview/components/products-table"
+import { ProfitBridgeChart } from "@/features/overview/components/profit-bridge-chart"
 import {
   AccountsTable,
   AlertStrip,
   Card,
-  ChangeAnalysis,
-  CostBreakdown,
   DataHealth,
   Insights,
+  MarketplaceCards,
   NeedsAttention,
   PayoutsCard,
-  ProductsTable,
   StatusRibbon,
 } from "@/features/overview/components/sections"
 import { TrendChart } from "@/features/overview/components/trend-chart"
 import { WaterfallChart } from "@/features/overview/components/waterfall-chart"
-import { getOverviewData, type OverviewRow } from "@/features/overview/queries"
-import { formatMoney, formatPercent } from "@/lib/format"
+import { getOverviewData, type OverviewData, type OverviewRow } from "@/features/overview/queries"
+import { formatMoney, formatNumber, formatPercent } from "@/lib/format"
 import { createClient, getCurrentUser } from "@/lib/supabase/server"
 import { compareMoney } from "@/services/analytics/money"
 import { listAlerts } from "@/services/automation/alerts"
-import { monthKeyOf, parseLedgerMonth, previousLedgerMonth, type LedgerMonth } from "@/services/ledger/period"
-import { findings, openItems } from "@/services/overview/findings"
+import { monthKeyOf, parseLedgerMonth, type LedgerMonth } from "@/services/ledger/period"
+import { contributionStory, findings, openItems } from "@/services/overview/findings"
+import { isPeriodKey, resolvePeriod, type OverviewPeriod } from "@/services/overview/period"
 
 export const metadata: Metadata = {
   title: "Dashboard",
 }
 
 /**
- * The home dashboard, on the marketplace ledger.
+ * The executive dashboard: the whole business at a glance (owner request,
+ * 2026-09-21).
  *
- * PERFORMS NO CALCULATIONS. Every figure, share, change against last month and
- * chart position is worked out in SQL (migration 0043, on the P&L engine) and
- * arrives as exact text or a finished percentage. This page picks the scope,
- * orders the sections and chooses the words.
+ * PERFORMS NO CALCULATIONS. Every figure, share, change against the previous
+ * period and chart position is worked out in SQL (migrations 0043 and 0049, on
+ * the P&L engine) and arrives as exact text or a finished percentage. This
+ * page picks the scope and period, orders the sections and chooses the words.
  *
- * Scope is one currency -- all its marketplace accounts added up -- or one
- * account. Currencies are never combined (A12). Net profit belongs to the
- * whole currency because expenses are never allocated to an account (A7), so
- * an account view shows it only when that account is alone in its currency.
+ * Scope is the whole business -- every marketplace account in one currency,
+ * added up -- or one account. Currencies are never combined (A12): a business
+ * selling in two currencies switches between them. Net profit belongs to the
+ * whole currency because expenses are never allocated to an account (A7).
+ *
+ * The period is whole months ending on a chosen month (by default the latest
+ * month with data): one month, three, the year to date or twelve. It is
+ * compared with the same number of months just before it.
  *
  * Nothing incomplete looks final (B1), and an expected payout is never called
  * received: the bank side reads "Not connected" until a bank source exists.
@@ -89,8 +108,8 @@ export default async function OverviewPage(props: PageProps<"/overview">) {
 
   const currencies = [...new Set(accounts.map((a) => a.currency))].sort()
 
-  // The scope: "all-AED", an account id, or by default the currency with the
-  // most recent marketplace data.
+  // The scope: "all-AED" (the whole business in AED), an account id, or by
+  // default the whole business in the currency with the most recent data.
   const requested = firstParam(searchParams.account)
   const requestedAccount = accounts.find((a) => a.id === requested) ?? null
   const requestedCurrency = requested?.startsWith(ALL_PREFIX) ? requested.slice(ALL_PREFIX.length) : null
@@ -115,30 +134,38 @@ export default async function OverviewPage(props: PageProps<"/overview">) {
     .sort()
     .reverse()
   const monthOptions = monthKeys.map((key) => parseLedgerMonth(key)).filter((m): m is LedgerMonth => m !== null)
-  const month = parseLedgerMonth(firstParam(searchParams.month)) ?? monthOptions[0] ?? null
-  if (month && !monthOptions.some((m) => m.key === month.key)) monthOptions.unshift(month)
+  const endMonth = parseLedgerMonth(firstParam(searchParams.month)) ?? monthOptions[0] ?? null
+  if (endMonth && !monthOptions.some((m) => m.key === endMonth.key)) monthOptions.unshift(endMonth)
+  const requestedPeriod = firstParam(searchParams.period)
+  const periodKey = isPeriodKey(requestedPeriod) ? requestedPeriod : "1m"
+  const period = endMonth ? resolvePeriod(periodKey, endMonth) : null
 
-  const data = currency && month ? await getOverviewData(activeBusiness.id, { currency, accountId }, month) : null
+  const data = currency && period ? await getOverviewData(activeBusiness.id, { currency, accountId }, period) : null
   const o = data?.overview ?? null
 
   const canImport = activeBusiness.role !== "VIEWER"
-  const filterOptions = [
+  const scopeOptions = [
     ...currencies.map((cur) => {
       const n = accounts.filter((a) => a.currency === cur).length
-      return { id: `${ALL_PREFIX}${cur}`, label: `All ${cur} marketplaces`, detail: `${n} account${n === 1 ? "" : "s"}` }
+      return {
+        id: `${ALL_PREFIX}${cur}`,
+        label: currencies.length > 1 ? `Whole business (${cur})` : "Whole business",
+        detail: `${n} account${n === 1 ? "" : "s"}`,
+      }
     }),
     ...accounts.map((a) => ({ id: a.id, label: a.label, detail: `${a.marketplace_code} · ${a.currency}` })),
   ]
 
-  // The marketplace profit screen only has a combined view for 2+ accounts.
+  // The marketplace profit screen only has a combined view for 2+ accounts;
+  // month screens open on the period's last month.
   const currencyAccounts = accounts.filter((a) => a.currency === currency)
   const ledgerScope = accountId ?? (currencyAccounts.length === 1 ? currencyAccounts[0].id : `${ALL_PREFIX}${currency}`)
-  const scoped = (path: string) => ledgerHref(path, { account: ledgerScope, month: month?.key })
-  const overviewHref = (id: string) => ledgerHref("/overview", { account: id, month: month?.key })
+  const scoped = (path: string) => ledgerHref(path, { account: ledgerScope, month: endMonth?.key })
+  const overviewHref = (id: string) => ledgerHref("/overview", { account: id, period: periodKey, month: endMonth?.key })
 
   const scopeAlerts = alerts.filter((a) => a.currency === null || a.currency === currency)
   const topProducts = (data?.products ?? [])
-    // Unmatched SKUs are shown too (labelled), so a month before matching is not empty.
+    // Unmatched SKUs are shown too (labelled), so a period before matching is not empty.
     .filter((p) => p.row_kind === "PRODUCT" || p.row_kind === "UNMAPPED_SKU")
     .sort((a, b) => compareMoney(b.net_sales, a.net_sales))
     .slice(0, 5)
@@ -154,9 +181,13 @@ export default async function OverviewPage(props: PageProps<"/overview">) {
         {/* ---- header ------------------------------------------------------ */}
         <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h1 className="font-heading text-2xl font-bold tracking-tight sm:text-3xl">Business overview</h1>
+            <h1 className="font-heading text-2xl font-bold tracking-tight sm:text-3xl">
+              <Greeting name={profile?.full_name?.split(" ")[0] ?? null} />
+            </h1>
             <p className="mt-1 max-w-prose-comfortable text-sm text-muted-foreground">
-              Your marketplace sales, costs and profit, worked out from the marketplaces&apos; own reports.
+              {period
+                ? `Here's your business performance for ${period.label}.`
+                : "Every marketplace you sell on, together: sales, costs and profit, worked out from the marketplaces' own reports."}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -184,15 +215,15 @@ export default async function OverviewPage(props: PageProps<"/overview">) {
           />
         ) : (
           <>
-            <LedgerFilters
-              accounts={filterOptions}
+            <OverviewFilters
+              scopes={scopeOptions}
+              scope={scopeValue}
+              period={periodKey}
               months={monthOptions.map((m) => ({ key: m.key, label: m.label }))}
-              accountId={scopeValue}
-              monthKey={month?.key ?? null}
-              basePath="/overview"
+              endMonth={endMonth?.key ?? null}
             />
 
-            {!month || !o || !data ? (
+            {!period || !o || !data ? (
               <EmptyState
                 title="No marketplace figures yet"
                 body="Upload a settlement report and your dashboard fills in: sales, marketplace costs, contribution and expected payouts."
@@ -201,8 +232,8 @@ export default async function OverviewPage(props: PageProps<"/overview">) {
               />
             ) : !o.has_marketplace_data ? (
               <EmptyState
-                title={`No marketplace lines in ${month.label}`}
-                body="Choose another month, or upload the report that covers this one."
+                title={`No marketplace lines in ${period.label}`}
+                body="Choose another period, or upload the reports that cover this one."
                 href="/imports/settlement"
                 action="Upload a report"
               />
@@ -210,7 +241,7 @@ export default async function OverviewPage(props: PageProps<"/overview">) {
               <Dashboard
                 o={o}
                 data={data}
-                month={month}
+                period={period}
                 accountId={accountId}
                 scoped={scoped}
                 overviewHref={overviewHref}
@@ -220,7 +251,7 @@ export default async function OverviewPage(props: PageProps<"/overview">) {
               />
             )}
 
-            <QuickActions canImport={canImport} scoped={scoped} monthKey={month?.key ?? null} />
+            <QuickActions canImport={canImport} scoped={scoped} monthKey={endMonth?.key ?? null} />
           </>
         )}
       </div>
@@ -233,7 +264,7 @@ export default async function OverviewPage(props: PageProps<"/overview">) {
 function Dashboard({
   o,
   data,
-  month,
+  period,
   accountId,
   scoped,
   overviewHref,
@@ -242,8 +273,8 @@ function Dashboard({
   topProducts,
 }: {
   o: OverviewRow
-  data: NonNullable<Awaited<ReturnType<typeof getOverviewData>>>
-  month: LedgerMonth
+  data: OverviewData
+  period: OverviewPeriod
   accountId: string | null
   scoped: (path: string) => string
   overviewHref: (id: string) => string
@@ -252,18 +283,19 @@ function Dashboard({
   topProducts: Parameters<typeof ProductsTable>[0]["rows"]
 }) {
   const money = (v: string | null | undefined) => formatMoney(v, o.currency)
-  const previous = previousLedgerMonth(month)
-  const vs = `vs ${previous.label}`
+  const vs = `vs ${period.previousLabel}`
   const soFar = (v: string | null) => `So far: ${money(v)} — not final`
+  const monthKey = period.end.key
 
   return (
     <>
-      <StatusRibbon o={o} monthLabel={month.label} />
+      <StatusRibbon o={o} monthLabel={period.label} />
       <AlertStrip alerts={alerts} />
 
       {/* ---- headline figures -------------------------------------------- */}
-      <section aria-label="Headline figures" className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 md:grid-cols-3 2xl:grid-cols-6">
+      <section aria-label="Headline figures" className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 md:grid-cols-4">
         <KpiCard
+          icon={ShoppingBag}
           label="Gross sales"
           value={money(o.gross_sales)}
           status={o.figures_status}
@@ -273,6 +305,7 @@ function Dashboard({
           href={scoped("/ledger")}
         />
         <KpiCard
+          icon={Receipt}
           label="Net sales"
           value={money(o.net_sales)}
           status={o.figures_status}
@@ -285,6 +318,7 @@ function Dashboard({
           }
         />
         <KpiCard
+          icon={CreditCard}
           label="Marketplace costs"
           value={money(o.marketplace_costs)}
           status={o.figures_status}
@@ -298,12 +332,33 @@ function Dashboard({
           }
         />
         <KpiCard
+          icon={Megaphone}
+          label="Advertising"
+          value={money(o.advertising)}
+          status={o.figures_status}
+          risingIsGood={false}
+          note={
+            o.advertising_pct_of_net_sales === null
+              ? "Marketplace advertising spend"
+              : `${formatPercent(o.advertising_pct_of_net_sales)} of net sales`
+          }
+        />
+        <KpiCard
+          icon={Boxes}
+          label="Cost of goods"
+          value={o.cogs === null ? "Incomplete" : money(o.cogs)}
+          status={o.gross_profit_status}
+          risingIsGood={false}
+          note={`${formatNumber(o.units_sold, 4)} units sold`}
+          href={scoped("/ledger/products")}
+        />
+        <KpiCard
+          icon={PiggyBank}
           label="Contribution"
           value={o.contribution === null ? "Incomplete" : money(o.contribution)}
           status={o.contribution_status}
           change={o.contribution_change_pct}
           changeLabel={vs}
-          emphasis
           note={
             o.contribution === null
               ? soFar(o.contribution_before_open_items)
@@ -312,6 +367,7 @@ function Dashboard({
           href={scoped("/ledger")}
         />
         <KpiCard
+          icon={TrendingUp}
           label="Gross profit"
           value={o.gross_profit === null ? "Incomplete" : money(o.gross_profit)}
           status={o.gross_profit_status}
@@ -326,35 +382,62 @@ function Dashboard({
         />
         {o.net_available ? (
           <KpiCard
+            icon={Wallet}
             label="Net profit"
             value={o.net_profit === null ? "Incomplete" : money(o.net_profit)}
             status={o.net_profit_status}
             change={o.net_profit_change_pct}
             changeLabel={vs}
-            emphasis
             note={
               o.net_profit === null
                 ? soFar(o.net_profit_before_open_items)
                 : `${formatPercent(o.net_margin_pct)} margin, after operating expenses`
             }
-            href={ledgerHref("/ledger/expenses", { month: month.key })}
+            href={ledgerHref("/ledger/expenses", { month: monthKey })}
           />
         ) : (
           <KpiCard
+            icon={Wallet}
             label="Net profit"
             value="—"
-            note={`Operating expenses belong to the whole business, so net profit is shown for all ${o.currency} accounts together.`}
+            note={`Operating expenses belong to the whole business, so net profit is shown for the whole business.`}
             href={allHref}
           />
         )}
       </section>
 
-      <NeedsAttention items={openItems(o, month.key)} />
+      {/* ---- the sharpest observation, given the reference's prominence -- */}
+      <InsightCard
+        story={contributionStory(o, data.bridge, period.previousLabel, scoped("/ledger"))}
+        items={findings(o, o.currency, monthKey, scoped("/ledger"))}
+      />
+
+      {/* ---- each marketplace -------------------------------------------- */}
+      {data.accounts.length > 1 && (
+        <MarketplaceCards rows={data.accounts} currency={o.currency} selected={accountId} hrefFor={overviewHref} />
+      )}
+
+      {/* ---- month by month ------------------------------------------------ */}
+      <Card
+        title="Month by month"
+        description={
+          period.single
+            ? `Net sales per marketplace and contribution over the 12 months to ${period.end.label}.`
+            : `Net sales per marketplace and contribution, ${period.label}.`
+        }
+        icon={CalendarRange}
+      >
+        <div className="px-3 py-4 sm:px-5">
+          <MonthlyTrend points={data.monthly} currency={o.currency} />
+        </div>
+      </Card>
+
+      <NeedsAttention items={openItems(o, monthKey)} />
 
       {/* ---- where the money goes ---------------------------------------- */}
       <Card
         title="Where your sales money goes"
-        description={`From gross sales down to ${o.net_available ? "net profit" : "gross profit"}, for ${month.label}. Hover a bar for its exact amount.`}
+        description={`From gross sales down to ${o.net_available ? "net profit" : "gross profit"}, ${period.label}. Hover a bar for its exact amount.`}
         icon={ChartColumn}
         aside={
           <Link href={scoped("/ledger")} className="text-xs font-medium underline-offset-4 hover:underline">
@@ -367,19 +450,54 @@ function Dashboard({
         </div>
       </Card>
 
-      <Card
-        title="Sales and contribution, day by day"
-        description={`Every day of ${month.label} by the date each line was posted.`}
-        icon={LineChart}
-      >
-        <div className="px-3 py-4 sm:px-5">
-          <TrendChart points={data.daily} currency={o.currency} contributionFinal={o.contribution_status === "FINAL"} />
-        </div>
-      </Card>
+      {period.single && (
+        <Card
+          title="Sales and contribution, day by day"
+          description={`Every day of ${period.label} by the date each line was posted.`}
+          icon={LineChart}
+        >
+          <div className="px-3 py-4 sm:px-5">
+            <TrendChart points={data.daily} currency={o.currency} contributionFinal={o.contribution_status === "FINAL"} />
+          </div>
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <CostBreakdown rows={data.costs} o={o} linesHref={scoped("/ledger")} />
-        <ChangeAnalysis o={o} previousLabel={previous.label} />
+        <Card
+          title="Where your money goes"
+          description="What the marketplaces kept in this period, largest first."
+          icon={ChartColumn}
+          aside={
+            o.costs_pct_of_net_sales !== null ? (
+              <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium tabular-nums">
+                {formatPercent(o.costs_pct_of_net_sales)} of net sales
+              </span>
+            ) : undefined
+          }
+        >
+          <CostDonutChart rows={data.costs} total={o.marketplace_costs} currency={o.currency} />
+          <Link href={scoped("/ledger")} className="border-t border-border px-5 py-2.5 text-xs font-medium underline-offset-4 hover:underline">
+            See every line behind these costs
+          </Link>
+        </Card>
+        <Card
+          title="Why did contribution change?"
+          description={
+            o.prev_has_marketplace_data
+              ? `Previous contribution to current, ${period.previousLabel} to ${period.label}. Each step is that line's own dollar move.`
+              : `There are no marketplace figures for ${period.previousLabel}, so nothing is compared yet.`
+          }
+          icon={LineChart}
+        >
+          <div className="pt-4">
+            <ProfitBridgeChart steps={data.bridge} currency={o.currency} />
+          </div>
+          {o.advertising_pct_of_net_sales !== null && (
+            <p className="mt-auto border-t border-border bg-muted/40 px-5 py-3 text-xs text-muted-foreground">
+              Marketplace advertising in this period: {money(o.advertising)}, {formatPercent(o.advertising_pct_of_net_sales)} of net sales.
+            </p>
+          )}
+        </Card>
       </div>
 
       {data.accounts.length > 1 && (
@@ -387,13 +505,13 @@ function Dashboard({
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <PayoutsCard o={o} payouts={data.payouts} href={ledgerHref("/ledger/payouts", { month: month.key })} />
-        <DataHealth o={o} monthKey={month.key} />
+        <PayoutsCard o={o} payouts={data.payouts} href={ledgerHref("/ledger/payouts", { month: monthKey })} />
+        <DataHealth o={o} monthKey={monthKey} />
       </div>
 
       <ProductsTable rows={topProducts} currency={o.currency} href={scoped("/ledger/products")} />
 
-      <Insights items={findings(o, o.currency, month.key, scoped("/ledger"))} />
+      <Insights items={findings(o, o.currency, monthKey, scoped("/ledger"))} />
     </>
   )
 }

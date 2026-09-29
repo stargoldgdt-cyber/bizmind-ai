@@ -2216,6 +2216,15 @@ export type Database = {
             | "SKU_NOT_MAPPED"
             | "COST_MISSING"
           )[]
+          /* ---- Migration 0052: the same KPIs for every marketplace ---- */
+          /** Distinct orders among GROSS_SALES lines; a multi-line order counts once. */
+          orders: number
+          /** net_sales / orders. NULL when there are no orders. */
+          average_order_value: string | null
+          /** gross_profit / orders. NULL under exactly the condition gross_profit is NULL. */
+          profit_per_order: string | null
+          /** dashboard_pct(gross_profit, net_sales) -- the same ratio helper as the executive dashboard. */
+          gross_margin_pct: number | null
         }[]
       }
 
@@ -2307,6 +2316,8 @@ export type Database = {
           reconciles: boolean
           payout_amount: string | null
           payout_date: string | null
+          /** Migration 0053: reported_total - lines_total. NULL when reported_total is NULL. */
+          difference: string | null
         }[]
       }
 
@@ -2437,13 +2448,65 @@ export type Database = {
           contribution_status: FigureStatusDb
           contribution_before_open_items: string | null
           contribution_margin_pct: number | null
-          units_sold: string | null
-          gross_profit: string | null
-          gross_profit_status: FigureStatusDb
           expected_inflow: string | null
           expected_payouts: number
           open_quality_items: number
           share_of_net_sales_pct: number | null
+          /** Migration 0049. */
+          costs_pct_of_net_sales: number | null
+        }[]
+      }
+
+      /** Migration 0049: the waterfall from a dashboard_overview row already read. */
+      dashboard_waterfall_steps: {
+        Args: { p_overview: Json }
+        Returns: {
+          step: number
+          label: string
+          kind: "TOTAL" | "DELTA"
+          amount: string
+          status: FigureStatusDb | null
+          bar_from: number
+          bar_to: number
+          zero_at: number
+        }[]
+      }
+
+      /** Migration 0060: why contribution changed, previous period to current. */
+      dashboard_profit_bridge: {
+        Args: { p_business_id: string; p_currency: string; p_from: string; p_to: string; p_account_id?: string | null }
+        Returns: {
+          step: number
+          label: string
+          kind: "START" | "DELTA" | "END"
+          amount: string
+          status: FigureStatusDb | null
+          bar_from: number
+          bar_to: number
+          zero_at: number
+        }[]
+      }
+
+      /** Migration 0049: month by month, per marketplace account. */
+      dashboard_monthly: {
+        Args: { p_business_id: string; p_currency: string; p_from: string; p_to: string; p_account_id?: string | null }
+        Returns: {
+          month: string
+          marketplace_account_id: string
+          account_label: string
+          marketplace_code: string
+          has_lines: boolean
+          net_sales: string
+          marketplace_costs: string
+          contribution: string
+          contribution_status: FigureStatusDb | null
+          month_net_sales: string
+          month_contribution: string
+          month_status: FigureStatusDb | null
+          bar_from: number
+          bar_to: number
+          month_contribution_y: number
+          zero_y: number
         }[]
       }
 
@@ -2481,6 +2544,8 @@ export type Database = {
           bank_receipt_status: BankReceiptStatus
           bank_receipt_amount: string | null
           bank_receipt_date: string | null
+          /** Migration 0056: expected_amount - settlement_lines_total. NULL for a noon-style payment. */
+          difference: string | null
         }[]
       }
 
@@ -2680,6 +2745,24 @@ export type Database = {
           last_seen: string
           sample_title: string | null
           suggestions: { product_id: string; name: string; reason: "SAME_SKU_CODE" | "MAPPED_ON_OTHER_MARKETPLACE" }[]
+        }[]
+      }
+
+      /** Migration 0055: products with a currently uncosted sale, business-wide. */
+      product_cost_gap_queue: {
+        Args: { p_business_id: string }
+        Returns: {
+          /** Always present: cogs_status = 'NO_COST' only exists once a SKU is matched to a product. */
+          product_id: string
+          product_name: string
+          product_sku: string | null
+          currency: string
+          accounts: string
+          lines: number
+          units_sold: string
+          sales_amount: string
+          first_seen: string
+          last_seen: string
         }[]
       }
 

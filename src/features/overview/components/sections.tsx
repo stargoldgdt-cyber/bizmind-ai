@@ -12,9 +12,8 @@ import {
 } from "lucide-react"
 
 import { cn } from "cn"
-import { ChangeChip } from "@/features/overview/components/kpi-card"
 import { StatusLabel } from "@/features/ledger/components/status-label"
-import type { AccountRow, CostRow, OverviewRow, PayoutRow, ProductRow } from "@/features/overview/queries"
+import type { AccountRow, OverviewRow, PayoutRow } from "@/features/overview/queries"
 import { formatMoney, formatNumber, formatPercent } from "@/lib/format"
 import { formatLedgerDay } from "@/services/ledger/display"
 import type { Finding, Tone } from "@/services/overview/findings"
@@ -159,7 +158,9 @@ export function NeedsAttention({ items }: { items: Finding[] }) {
           return (
             <li key={item.id} className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex gap-3">
-                <Icon className={cn("mt-0.5 size-4 shrink-0", tone.text)} aria-hidden />
+                <span className={cn("mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-current/10", tone.text)}>
+                  <Icon className={cn("size-4", tone.text)} aria-hidden />
+                </span>
                 <div>
                   <p className="text-sm font-medium">{item.title}</p>
                   <p className="text-xs text-muted-foreground">{item.body}</p>
@@ -180,101 +181,38 @@ export function NeedsAttention({ items }: { items: Finding[] }) {
   )
 }
 
-/* ---- where the marketplace costs go ------------------------------------------ */
-
-export function CostBreakdown({ rows, o, linesHref }: { rows: CostRow[]; o: OverviewRow; linesHref: string }) {
-  const money = (v: string | null | undefined) => formatMoney(v, o.currency)
-  return (
-    <Card
-      title="Where your marketplace costs go"
-      description="What the marketplaces kept this month, largest first."
-      aside={
-        o.costs_pct_of_net_sales !== null ? (
-          <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium tabular-nums">
-            {formatPercent(o.costs_pct_of_net_sales)} of net sales
-          </span>
-        ) : undefined
-      }
-    >
-      {rows.length === 0 ? (
-        <p className="px-5 py-8 text-center text-sm text-muted-foreground">No marketplace costs this month.</p>
-      ) : (
-        <ul className="grid gap-4 px-5 py-4">
-          {rows.map((row) => (
-            <li key={row.category}>
-              <div className="flex items-baseline justify-between gap-3 text-sm">
-                <span>{row.label}</span>
-                <span className="font-mono tabular-nums">
-                  {money(row.total)}
-                  {row.pct_of_net_sales !== null && (
-                    <span className="ml-1.5 text-xs text-muted-foreground">({formatPercent(row.pct_of_net_sales)})</span>
-                  )}
-                </span>
-              </div>
-              <div className="mt-1.5 h-2 rounded-full bg-muted" aria-hidden>
-                <div className="h-2 rounded-full bg-chart-3" style={{ width: `${Math.max(row.bar / 10, 1)}%` }} />
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="mt-auto flex items-center justify-between border-t border-border bg-muted/40 px-5 py-3 text-sm">
-        <span className="font-medium">Total marketplace costs</span>
-        <span className="font-mono font-semibold tabular-nums">{money(o.marketplace_costs)}</span>
-      </div>
-      <Link href={linesHref} className="border-t border-border px-5 py-2.5 text-xs font-medium underline-offset-4 hover:underline">
-        See every line behind these costs
-      </Link>
-    </Card>
-  )
-}
-
-/* ---- against last month ------------------------------------------------------- */
-
-export function ChangeAnalysis({ o, previousLabel }: { o: OverviewRow; previousLabel: string }) {
-  const rows: { label: string; change: number | null; risingIsGood: boolean; note?: string }[] = [
-    { label: "Gross sales", change: o.gross_sales_change_pct, risingIsGood: true },
-    { label: "Net sales", change: o.net_sales_change_pct, risingIsGood: true },
-    { label: "Marketplace costs", change: o.marketplace_costs_change_pct, risingIsGood: false },
-    {
-      label: "Contribution",
-      change: o.contribution_change_pct,
-      risingIsGood: true,
-      note: o.contribution_change_pct === null && o.prev_has_marketplace_data ? "Compared only when both months are final" : undefined,
-    },
-    { label: "Gross profit", change: o.gross_profit_change_pct, risingIsGood: true },
-    ...(o.net_available ? [{ label: "Net profit", change: o.net_profit_change_pct, risingIsGood: true }] : []),
-  ]
-  return (
-    <Card
-      title={`What changed since ${previousLabel}`}
-      description={
-        o.prev_has_marketplace_data
-          ? "Each figure against the same figure last month. A figure that is not final in either month is not compared."
-          : `There are no marketplace figures for ${previousLabel}, so nothing is compared yet.`
-      }
-    >
-      <ul className="divide-y divide-border">
-        {rows.map((row) => (
-          <li key={row.label} className="flex items-center justify-between gap-3 px-5 py-3">
-            <div>
-              <p className="text-sm">{row.label}</p>
-              {row.note && <p className="text-[11px] text-muted-foreground">{row.note}</p>}
-            </div>
-            <ChangeChip change={row.change} label="" risingIsGood={row.risingIsGood} />
-          </li>
-        ))}
-      </ul>
-      {o.advertising_pct_of_net_sales !== null && (
-        <p className="mt-auto border-t border-border bg-muted/40 px-5 py-3 text-xs text-muted-foreground">
-          Marketplace advertising this month: {formatMoney(o.advertising, o.currency)}, {formatPercent(o.advertising_pct_of_net_sales)} of net sales.
-        </p>
-      )}
-    </Card>
-  )
-}
+/* ---- where the marketplace costs go and why contribution changed -------------
+ * Replaced by CostDonutChart and ProfitBridgeChart (their own files) as part
+ * of the executive dashboard redesign, 2026-09-29.
+ * ---------------------------------------------------------------------------- */
 
 /* ---- each marketplace account ------------------------------------------------- */
+
+/**
+ * A small colored monogram per marketplace -- the one place DESIGN.md §8
+ * allows a multicolour mark ("a third-party integration logo grid, where the
+ * logos are other companies' brands"). Fixed per marketplace code, not per
+ * row, so it never drifts into a rainbow-per-row pattern. BizMind supports
+ * Amazon, noon and Carrefour only; anything else falls back to a neutral tile.
+ */
+const MARKETPLACE_BADGE: Record<string, { letter: string; bg: string; fg: string }> = {
+  AMAZON: { letter: "a", bg: "#ff9900", fg: "#141414" },
+  NOON: { letter: "n", bg: "#faeb17", fg: "#141414" },
+  CARREFOUR: { letter: "C", bg: "#004e9e", fg: "#ffffff" },
+}
+
+export function MarketplaceBadge({ code }: { code: string }) {
+  const badge = MARKETPLACE_BADGE[code] ?? { letter: code.slice(0, 1), bg: "var(--color-muted)", fg: "var(--color-muted-foreground)" }
+  return (
+    <span
+      className="inline-flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+      style={{ background: badge.bg, color: badge.fg }}
+      aria-hidden
+    >
+      {badge.letter}
+    </span>
+  )
+}
 
 export function AccountsTable({
   rows,
@@ -291,7 +229,7 @@ export function AccountsTable({
   return (
     <Card
       title="Marketplace performance"
-      description={`Every ${currency} account this month, as each marketplace reported it. Open one to see it alone.`}
+      description={`Every ${currency} account in this period, as each marketplace reported it. Open one to see it alone.`}
       icon={TrendingUp}
     >
       <div className="overflow-x-auto">
@@ -315,19 +253,24 @@ export function AccountsTable({
                 className={cn(row.marketplace_account_id === selected && "bg-primary/5")}
               >
                 <td className="px-5 py-3">
-                  <Link href={hrefFor(row.marketplace_account_id)} className="font-medium underline-offset-4 hover:underline">
-                    {row.account_label}
-                  </Link>
-                  <span className="block text-[11px] text-muted-foreground">
-                    {row.marketplace_code}
-                    {row.open_quality_items > 0 && (
-                      <span className="ml-2 text-warning-strong">· {formatNumber(row.open_quality_items)} to review</span>
-                    )}
-                  </span>
+                  <div className="flex items-center gap-2.5">
+                    <MarketplaceBadge code={row.marketplace_code} />
+                    <div>
+                      <Link href={hrefFor(row.marketplace_account_id)} className="font-medium underline-offset-4 hover:underline">
+                        {row.account_label}
+                      </Link>
+                      <span className="block text-[11px] text-muted-foreground">
+                        {row.marketplace_code}
+                        {row.open_quality_items > 0 && (
+                          <span className="ml-2 text-warning-strong">· {formatNumber(row.open_quality_items)} to review</span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
                 </td>
                 {!row.has_lines ? (
                   <td colSpan={7} className="px-3 py-3 text-right text-xs text-muted-foreground">
-                    No lines this month
+                    No lines in this period
                   </td>
                 ) : (
                   <>
@@ -382,7 +325,7 @@ export function PayoutsCard({ o, payouts, href }: { o: OverviewRow; payouts: Pay
         </div>
       </dl>
       {payouts.length === 0 ? (
-        <p className="px-5 py-6 text-sm text-muted-foreground">No payouts are expected in this month.</p>
+        <p className="px-5 py-6 text-sm text-muted-foreground">no payouts are expected in this period.</p>
       ) : (
         <ul className="divide-y divide-border">
           {payouts.slice(0, 4).map((p) => {
@@ -445,7 +388,7 @@ export function DataHealth({ o, monthKey }: { o: OverviewRow; monthKey: string }
     },
     {
       ok: o.unmatched_skus === 0,
-      text: o.unmatched_skus === 0 ? "Every SKU sold is matched to a product" : `${formatNumber(o.unmatched_skus)} SKUs sold this month need product mapping`,
+      text: o.unmatched_skus === 0 ? "Every SKU sold is matched to a product" : `${formatNumber(o.unmatched_skus)} SKUs sold in this period need product mapping`,
       href: "/catalog#needs-attention",
     },
     {
@@ -509,69 +452,6 @@ export function DataHealth({ o, monthKey }: { o: OverviewRow; monthKey: string }
   )
 }
 
-/* ---- products ----------------------------------------------------------------- */
-
-export function ProductsTable({ rows, currency, href }: { rows: ProductRow[]; currency: string; href: string }) {
-  const money = (v: string | null | undefined) => formatMoney(v, currency)
-  return (
-    <Card
-      title="Product profitability"
-      description="Your best sellers this month, including SKUs not yet matched to a product. Marketplace-level fees and advertising are not split across products."
-      icon={TrendingUp}
-    >
-      {rows.length === 0 ? (
-        <p className="px-5 py-8 text-center text-sm text-muted-foreground">No product sales this month.</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] whitespace-nowrap text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                <th className="px-5 py-2 font-semibold">Product</th>
-                <th className="px-3 py-2 text-right font-semibold">Units</th>
-                <th className="px-3 py-2 text-right font-semibold">Net sales</th>
-                <th className="px-3 py-2 text-right font-semibold">Product-level costs</th>
-                <th className="px-3 py-2 text-right font-semibold">Cost of goods</th>
-                <th className="px-3 py-2 text-right font-semibold">Gross profit</th>
-                <th className="px-5 py-2 text-right font-semibold">Margin</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {rows.map((p) => (
-                <tr key={`${p.row_kind}-${p.product_id ?? p.raw_sku}-${p.marketplace_code ?? ""}`}>
-                  <td className="min-w-52 whitespace-normal px-5 py-3">
-                    <span className="font-medium">{p.product_name ?? p.raw_sku}</span>
-                    {p.row_kind === "UNMAPPED_SKU" ? (
-                      <span className="flex items-center gap-1 text-[11px] text-warning-strong">
-                        <CircleAlert className="size-3" aria-hidden />
-                        SKU not matched to a product
-                      </span>
-                    ) : (
-                      p.product_category && <span className="block text-[11px] text-muted-foreground">{p.product_category}</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-3 text-right font-mono tabular-nums">{formatNumber(p.units_sold, 4)}</td>
-                  <td className="px-3 py-3 text-right font-mono tabular-nums">{money(p.net_sales)}</td>
-                  <td className="px-3 py-3 text-right font-mono tabular-nums">{money(p.costs)}</td>
-                  <td className="px-3 py-3 text-right font-mono tabular-nums">{p.cogs === null ? "—" : money(p.cogs)}</td>
-                  <td className="px-3 py-3 text-right font-mono tabular-nums">
-                    {p.gross_profit === null ? <StatusLabel status="INCOMPLETE" /> : money(p.gross_profit)}
-                  </td>
-                  <td className="px-5 py-3 text-right font-mono tabular-nums">
-                    {p.gross_margin_percent === null ? "—" : formatPercent(p.gross_margin_percent)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      <Link href={href} className="border-t border-border px-5 py-2.5 text-xs font-medium underline-offset-4 hover:underline">
-        All products, unmatched SKUs and costs
-      </Link>
-    </Card>
-  )
-}
-
 /* ---- plain observations -------------------------------------------------------- */
 
 export function Insights({ items }: { items: Finding[] }) {
@@ -579,7 +459,7 @@ export function Insights({ items }: { items: Finding[] }) {
   return (
     <Card
       title="BizMind insights"
-      description="Plain observations from this month's verified figures. Each rule says when it appears."
+      description="Plain observations from this period's verified figures. Each rule says when it appears."
       icon={Lightbulb}
     >
       <ul className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -602,5 +482,87 @@ export function Insights({ items }: { items: Finding[] }) {
         })}
       </ul>
     </Card>
+  )
+}
+
+/* ---- each marketplace at a glance (executive view) --------------------------- */
+
+export function MarketplaceCards({
+  rows,
+  currency,
+  selected,
+  hrefFor,
+}: {
+  rows: AccountRow[]
+  currency: string
+  selected: string | null
+  hrefFor: (accountId: string) => string
+}) {
+  const money = (v: string | null | undefined) => formatMoney(v, currency)
+  return (
+    <section aria-label="Marketplaces at a glance" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {rows.map((row) => (
+        <Link
+          key={row.marketplace_account_id}
+          href={hrefFor(row.marketplace_account_id)}
+          className={cn(
+            "flex flex-col gap-3 rounded-xl border bg-card p-4 transition-colors hover:border-primary/40",
+            row.marketplace_account_id === selected ? "border-primary/50" : "border-border"
+          )}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <MarketplaceBadge code={row.marketplace_code} />
+              <div>
+                <p className="font-heading text-sm font-semibold">{row.account_label}</p>
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{row.marketplace_code}</p>
+              </div>
+            </div>
+            {row.has_lines ? (
+              <StatusLabel status={row.contribution_status === "FINAL" ? "FINAL" : "INCOMPLETE"} />
+            ) : (
+              <span className="text-[11px] text-muted-foreground">No lines</span>
+            )}
+          </div>
+          {row.has_lines ? (
+            <>
+              <div>
+                <p className="text-[11px] text-muted-foreground">Net sales</p>
+                <p className="whitespace-nowrap font-mono text-xl font-semibold tabular-nums">{money(row.net_sales)}</p>
+                {row.share_of_net_sales_pct !== null && (
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <div className="h-1.5 flex-1 rounded-full bg-muted" aria-hidden>
+                      <div
+                        className="h-1.5 rounded-full bg-primary"
+                        style={{ width: `${Math.min(100, Math.max(0, row.share_of_net_sales_pct))}%` }}
+                      />
+                    </div>
+                    <span className="text-[11px] tabular-nums text-muted-foreground">
+                      {formatPercent(row.share_of_net_sales_pct)} of the business
+                    </span>
+                  </div>
+                )}
+              </div>
+              <dl className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <dt className="text-muted-foreground">Marketplace costs</dt>
+                  <dd className="font-mono tabular-nums">
+                    {row.costs_pct_of_net_sales === null ? "—" : `${formatPercent(row.costs_pct_of_net_sales)} of sales`}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Contribution margin</dt>
+                  <dd className="font-mono tabular-nums">
+                    {row.contribution_margin_pct === null ? "Not final" : formatPercent(row.contribution_margin_pct)}
+                  </dd>
+                </div>
+              </dl>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">No marketplace lines in this period.</p>
+          )}
+        </Link>
+      ))}
+    </section>
   )
 }

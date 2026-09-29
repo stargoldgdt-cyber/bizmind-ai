@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react"
+import { ArrowDownRight, ArrowUpRight, Minus, type LucideIcon } from "lucide-react"
 
 import { cn } from "cn"
 import { StatusLabel } from "@/features/ledger/components/status-label"
@@ -12,6 +12,13 @@ import { formatPercent } from "@/lib/format"
  * far" figure may appear in the note, labelled as not final. The change
  * against last month is a percentage the database worked out, shown with an
  * arrow AND a word, so direction never depends on colour alone.
+ *
+ * Every card shares the same surface (owner decision, 2026-09-29: a uniform
+ * card style, colour reserved for the icon and the change chip, never a
+ * solid-fill "hero" card). The icon tile is violet by default and only takes
+ * on success/danger when this card's OWN change direction is unambiguously
+ * good or bad -- the same `risingIsGood` rule `ChangeChip` already applies,
+ * never a colour invented just for the icon.
  */
 export function KpiCard({
   label,
@@ -22,7 +29,7 @@ export function KpiCard({
   changeLabel = "",
   risingIsGood = true,
   href,
-  emphasis = false,
+  icon: Icon,
 }: {
   label: string
   value: string
@@ -32,18 +39,34 @@ export function KpiCard({
   changeLabel?: string
   risingIsGood?: boolean
   href?: string
-  emphasis?: boolean
+  icon?: LucideIcon
 }) {
+  const good = change === null || change === undefined || change === 0 ? null : change > 0 === risingIsGood
   const body = (
     <div
       className={cn(
-        "flex h-full flex-col gap-2 rounded-xl border bg-card p-4 transition-colors",
-        emphasis ? "border-primary/35" : "border-border",
+        "flex h-full flex-col gap-3 rounded-xl border border-border bg-card p-4 transition-colors",
         href && "hover:border-primary/40 hover:bg-muted/30"
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+        <div className="flex items-center gap-2.5">
+          {Icon && (
+            <span
+              className={cn(
+                "flex size-8 shrink-0 items-center justify-center rounded-md",
+                good === true
+                  ? "bg-success-subtle text-success-strong"
+                  : good === false
+                    ? "bg-danger-subtle text-danger-strong"
+                    : "bg-primary/10 text-primary"
+              )}
+            >
+              <Icon className="size-4" aria-hidden />
+            </span>
+          )}
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+        </div>
         {status && <StatusLabel status={status} />}
       </div>
       <p

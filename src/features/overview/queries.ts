@@ -1,78 +1,115 @@
 import "server-only"
 
 import { createClient } from "@/lib/supabase/server"
-import type { LedgerMonth } from "@/services/ledger/period"
-import type { Database } from "@/types/database"
+import type { OverviewPeriod } from "@/services/overview/period"
+import type { Database, Json } from "@/types/database"
 
 /**
- * Everything the home dashboard shows, for one currency (or one account) and
- * one month, read through the signed-in user's session. Every figure, share,
- * change and chart position arrives computed by the SQL readers (0043 and the
- * ledger readers they build on). Nothing here calculates.
+ * Everything the executive dashboard shows, for one currency (or one account)
+ * and one period, read through the signed-in user's session. Every figure,
+ * share, change and chart position arrives computed by the SQL readers (0043,
+ * 0049 and the ledger readers they build on). Nothing here calculates.
  */
 
 type Fn = Database["public"]["Functions"]
 export type OverviewRow = Fn["dashboard_overview"]["Returns"][number]
-export type WaterfallStep = Fn["dashboard_waterfall"]["Returns"][number]
+export type WaterfallStep = Fn["dashboard_waterfall_steps"]["Returns"][number]
 export type DailyPoint = Fn["dashboard_daily"]["Returns"][number]
+export type MonthlyPoint = Fn["dashboard_monthly"]["Returns"][number]
 export type CostRow = Fn["dashboard_cost_breakdown"]["Returns"][number]
 export type AccountRow = Fn["dashboard_accounts"]["Returns"][number]
 export type ProductRow = Fn["pnl_by_product"]["Returns"][number]
 export type PayoutRow = Fn["expected_payouts"]["Returns"][number]
+export type BridgeStep = Fn["dashboard_profit_bridge"]["Returns"][number]
 
 export type OverviewScope = { currency: string; accountId: string | null }
 
 export type OverviewData = {
   overview: OverviewRow | null
   waterfall: WaterfallStep[]
+  /** Day by day, for a single month only. */
   daily: DailyPoint[]
+  /** Month by month and account, for a period of more than one month. */
+  monthly: MonthlyPoint[]
   costs: CostRow[]
   accounts: AccountRow[]
   products: ProductRow[]
   payouts: PayoutRow[]
+  bridge: BridgeStep[]
 }
 
-export async function getOverviewData(businessId: string, scope: OverviewScope, month: LedgerMonth): Promise<OverviewData> {
+export async function getOverviewData(
+  businessId: string,
+  scope: OverviewScope,
+  period: OverviewPeriod
+): Promise<OverviewData> {
   const supabase = await createClient()
   const range = {
     p_business_id: businessId,
     p_currency: scope.currency,
-    p_from: month.from,
-    p_to: month.to,
+    p_from: period.from,
+    p_to: period.to,
   }
   const scoped = { ...range, p_account_id: scope.accountId }
 
-  const [overview, waterfall, daily, costs, accounts, products, payouts] = await Promise.all([
+  const [overview, daily, monthly, costs, accounts, products, payouts, bridge] = await Promise.all([
     supabase.rpc("dashboard_overview", scoped),
-    supabase.rpc("dashboard_waterfall", scoped),
-    supabase.rpc("dashboard_daily", scoped),
+    period.single ? supabase.rpc("dashboard_daily", scoped) : Promise.resolve({ data: [], error: null }),
+    // The trend always shows the whole period's months, so a single month still
+    // sits in the context of the months before it.
+    supabase.rpc("dashboard_monthly", {
+      ...scoped,
+      p_from: period.single ? shiftBack(period.from, 11) : period.from,
+    }),
     supabase.rpc("dashboard_cost_breakdown", scoped),
     supabase.rpc("dashboard_accounts", range),
     supabase.rpc("pnl_by_product", {
-      p_from: month.from,
-      p_to: month.to,
+      p_from: period.from,
+      p_to: period.to,
       p_account_id: scope.accountId,
       p_business_id: businessId,
     }),
     supabase.rpc("expected_payouts", {
       p_business_id: businessId,
-      p_from: month.from,
-      p_to: month.to,
+      p_from: period.from,
+      p_to: period.to,
       p_account_id: scope.accountId,
     }),
+    // Why contribution changed since the period before: previous period's own
+    // date range is worked out in SQL (0060), the same rule dashboard_overview
+    // already uses, so the two never disagree.
+    supabase.rpc("dashboard_profit_bridge", scoped),
   ])
 
-  for (const reply of [overview, waterfall, daily, costs, accounts, products, payouts]) {
+  for (const reply of [overview, daily, monthly, costs, accounts, products, payouts, bridge]) {
     if (reply.error) throw new Error(`Could not load the dashboard: ${reply.error.message}`)
   }
 
+  const row = overview.data?.[0] ?? null
+  // The waterfall is worked out from the overview row already read (0049),
+  // instead of reading the ledger a second time.
+  let waterfall: WaterfallStep[] = []
+  if (row) {
+    const steps = await supabase.rpc("dashboard_waterfall_steps", { p_overview: row as unknown as Json })
+    if (steps.error) throw new Error(`Could not load the dashboard: ${steps.error.message}`)
+    waterfall = steps.data ?? []
+  }
+
   return {
-    overview: overview.data?.[0] ?? null,
-    waterfall: waterfall.data ?? [],
+    overview: row,
+    waterfall,
     daily: daily.data ?? [],
+    monthly: monthly.data ?? [],
     costs: costs.data ?? [],
     accounts: accounts.data ?? [],
     products: (products.data ?? []).filter((p) => p.currency === scope.currency),
     payouts: (payouts.data ?? []).filter((p) => p.currency === scope.currency),
+    bridge: bridge.data ?? [],
   }
+}
+
+/** The first instant `months` months before `iso` (calendar arithmetic, UTC). */
+function shiftBack(iso: string, months: number): string {
+  const d = new Date(iso)
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - months, 1)).toISOString()
 }

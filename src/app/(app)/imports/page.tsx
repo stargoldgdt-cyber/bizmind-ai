@@ -84,7 +84,7 @@ export default async function DataSourcesPage() {
               <Button asChild variant="outline" className="rounded-4xl">
                 <Link href="/imports/new">
                   <Plus className="size-4" aria-hidden />
-                  Import a file
+                  Upload expenses
                 </Link>
               </Button>
             </div>
@@ -107,15 +107,14 @@ export default async function DataSourcesPage() {
                 <span className="flex size-11 items-center justify-center rounded-md bg-accent text-accent-foreground">
                   <FileSpreadsheet className="size-5" aria-hidden />
                 </span>
-                <p className="font-heading text-lg font-semibold">Nothing imported yet</p>
+                <p className="font-heading text-lg font-semibold">Nothing uploaded yet</p>
                 <p className="max-w-md text-sm text-muted-foreground">
-                  Load a sales export to see real revenue and margin, or a
-                  product list to fill in the cost prices your dashboard is
-                  missing.
+                  Upload your marketplace settlement reports (Amazon, noon) and
+                  BizMind works out sales, fees and profit from them.
                 </p>
                 {canImport && (
                   <Button asChild className="mt-2 rounded-4xl">
-                    <Link href="/imports/new">Import a file</Link>
+                    <Link href="/imports/settlement">Upload a settlement</Link>
                   </Button>
                 )}
               </div>

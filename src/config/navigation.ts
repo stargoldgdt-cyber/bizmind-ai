@@ -82,46 +82,17 @@ export type NavSection = {
 }
 
 export const NAVIGATION: NavSection[] = [
-  {
-    heading: "Marketplaces",
-    items: [
-      // The home dashboard on the ledger (after GCC Phase 9).
-      { label: "Dashboard", href: "/overview", icon: LayoutDashboard, enabled: true },
-      // GCC Phase 4: the dashboard on the marketplace ledger.
-      {
-        label: "Marketplace profit",
-        href: "/ledger",
-        icon: Scale,
-        enabled: true,
-        match: ["/ledger/lines"],
-      },
-      // GCC Phase 6: product master and product profit. SKU matching lives on
-      // Products and costs since 0045 (/catalog/mapping forwards there).
-      { label: "Product profit", href: "/ledger/products", icon: Package, enabled: true },
-      {
-        label: "Products and costs",
-        href: "/catalog",
-        icon: Tags,
-        enabled: true,
-        match: ["/catalog/products", "/catalog/mapping"],
-      },
-      // GCC Phase 7: operating expenses and net profit.
-      { label: "Operating expenses", href: "/ledger/expenses", icon: Receipt, enabled: true },
-      // GCC Phase 8: expected marketplace payouts; no bank source yet.
-      { label: "Payouts and cashflow", href: "/ledger/payouts", icon: Landmark, enabled: true },
-      { label: "Reports", href: "/ledger/reports", icon: FileSpreadsheet, enabled: true },
-      // GCC Phase 9: questions answered from verified ledger figures.
-      { label: "Ask about marketplaces", href: "/ledger/ask", icon: Sparkles, enabled: true },
-      { label: "Marketplace data quality", href: "/ledger/quality", icon: ShieldCheck, enabled: true },
-    ],
-  },
+  // Reorganised 2026-09-21 around the marketplace product (owner decision):
+  // what the business made, where the money goes, then setup. The legacy
+  // spreadsheet-import screens are switched off below until Phase 10 removes
+  // them; their pages still answer by URL.
   {
     heading: "Overview",
     items: [
-      // The legacy dashboard reads the old orders/expenses import, not the
-      // marketplace ledger. Kept reachable until GCC Phase 10 retires it.
-      { label: "Legacy dashboard", href: "/dashboard", icon: Gauge, enabled: true },
-      { label: "Ask BizMind", href: "/ask", icon: Sparkles, enabled: true },
+      { label: "Dashboard", href: "/overview", icon: LayoutDashboard, enabled: true },
+      // GCC Phase 9: questions answered from verified ledger figures.
+      { label: "Ask BizMind", href: "/ledger/ask", icon: Sparkles, enabled: true },
+      { label: "Alerts", href: "/alerts", icon: Bell, enabled: true },
       {
         label: "Business brief",
         href: "/brief",
@@ -129,58 +100,39 @@ export const NAVIGATION: NavSection[] = [
         enabled: false,
         note: "Phase 12. The dashboard narrative is the brief's foundation; the daily standalone brief is not built.",
       },
-      { label: "Alerts", href: "/alerts", icon: Bell, enabled: true },
     ],
   },
   {
-    heading: "Business",
+    heading: "Profit",
     items: [
-      { label: "Sales", href: "/sales", icon: ShoppingCart, enabled: true },
-      { label: "Products", href: "/products", icon: Boxes, enabled: true },
-      { label: "Profit", href: "/profit", icon: BarChart3, enabled: true },
+      // GCC Phase 4: the month statement on the marketplace ledger.
       {
-        label: "Customers",
-        href: "/customers",
-        icon: Users,
-        enabled: false,
-        note: "Customers are counted by analytics but not aggregated per customer. Needs a SQL function; must not be summed in TypeScript.",
+        label: "Marketplace P&L",
+        href: "/ledger",
+        icon: Scale,
+        enabled: true,
+        match: ["/ledger/lines"],
       },
-      {
-        label: "Expenses",
-        href: "/expenses",
-        icon: Receipt,
-        enabled: false,
-        note: "Superseded by Marketplaces -> Operating expenses (GCC Phase 7), which classifies these expenses and shows net profit.",
-      },
-      {
-        label: "Inventory",
-        href: "/inventory",
-        icon: Waypoints,
-        enabled: false,
-        note: "The table exists but nothing keeps stock current. A stale stock figure is worse than none.",
-      },
+      // GCC Phase 6: product profit.
+      { label: "Product profit", href: "/ledger/products", icon: Package, enabled: true },
+      // GCC Phase 7: operating expenses and net profit.
+      { label: "Operating expenses", href: "/ledger/expenses", icon: Receipt, enabled: true },
+      // GCC Phase 8: expected marketplace payouts; no bank source yet.
+      { label: "Payouts and cashflow", href: "/ledger/payouts", icon: Landmark, enabled: true },
+      { label: "Reports", href: "/ledger/reports", icon: FileSpreadsheet, enabled: true },
     ],
   },
   {
-    heading: "Intelligence",
+    heading: "Products",
     items: [
-      { label: "Business health", href: "/health", icon: Gauge, enabled: true },
-      { label: "Channels", href: "/channels", icon: PieChart, enabled: true },
-      { label: "Data quality", href: "/data-quality", icon: ShieldCheck, enabled: true },
+      // SKU matching lives here since 0045 (/catalog/mapping forwards here).
       {
-        label: "Recommendations",
-        href: "/recommendations",
-        icon: Sparkles,
-        enabled: false,
-        note: "Phase 12. Not built. Must never be an LLM inventing actions from unverified figures.",
+        label: "Products and costs",
+        href: "/catalog",
+        icon: Tags,
+        enabled: true,
+        match: ["/catalog/products", "/catalog/mapping"],
       },
-    ],
-  },
-  {
-    heading: "Automation",
-    items: [
-      { label: "Automations", href: "/automations", icon: Workflow, enabled: true },
-      { label: "Activity", href: "/activity", icon: Activity, enabled: true },
     ],
   },
   {
@@ -194,7 +146,15 @@ export const NAVIGATION: NavSection[] = [
         match: ["/imports/new", "/imports/settlement"],
       },
       { label: "Marketplace accounts", href: "/marketplaces", icon: Store, enabled: true },
+      { label: "Data quality", href: "/ledger/quality", icon: ShieldCheck, enabled: true },
       { label: "Integrations", href: "/integrations", icon: Plug, enabled: true },
+    ],
+  },
+  {
+    heading: "Automation",
+    items: [
+      { label: "Automations", href: "/automations", icon: Workflow, enabled: true },
+      { label: "Activity", href: "/activity", icon: Activity, enabled: true },
     ],
   },
   {
@@ -206,6 +166,50 @@ export const NAVIGATION: NavSection[] = [
         icon: Building2,
         enabled: true,
         match: ["/settings/team"],
+      },
+    ],
+  },
+  {
+    // The legacy model: these read the old orders/products/expenses import,
+    // never the marketplace ledger, so a marketplace seller sees them empty.
+    // Hidden 2026-09-21 (owner decision); GCC Phase 10 retires them.
+    heading: "Legacy",
+    items: [
+      { label: "Legacy dashboard", href: "/dashboard", icon: Gauge, enabled: false, note: "Legacy model; Phase 10." },
+      { label: "Ask BizMind (legacy)", href: "/ask", icon: Sparkles, enabled: false, note: "Legacy model; replaced by /ledger/ask." },
+      { label: "Sales", href: "/sales", icon: ShoppingCart, enabled: false, note: "Legacy model; Phase 10." },
+      { label: "Products (legacy)", href: "/products", icon: Boxes, enabled: false, note: "Legacy model; replaced by /ledger/products." },
+      { label: "Profit (legacy)", href: "/profit", icon: BarChart3, enabled: false, note: "Legacy model; replaced by /ledger." },
+      { label: "Business health", href: "/health", icon: Gauge, enabled: false, note: "Legacy model; Phase 10." },
+      { label: "Channels", href: "/channels", icon: PieChart, enabled: false, note: "Legacy model; the dashboard compares marketplaces." },
+      { label: "Data quality (legacy)", href: "/data-quality", icon: ShieldCheck, enabled: false, note: "Legacy model; replaced by /ledger/quality." },
+      {
+        label: "Customers",
+        href: "/customers",
+        icon: Users,
+        enabled: false,
+        note: "Not built. No customer data is stored for marketplace sellers.",
+      },
+      {
+        label: "Expenses (legacy)",
+        href: "/expenses",
+        icon: Receipt,
+        enabled: false,
+        note: "Superseded by Operating expenses (GCC Phase 7).",
+      },
+      {
+        label: "Inventory",
+        href: "/inventory",
+        icon: Waypoints,
+        enabled: false,
+        note: "The table exists but nothing keeps stock current. A stale stock figure is worse than none.",
+      },
+      {
+        label: "Recommendations",
+        href: "/recommendations",
+        icon: Sparkles,
+        enabled: false,
+        note: "Phase 12. Not built. Must never be an LLM inventing actions from unverified figures.",
       },
     ],
   },

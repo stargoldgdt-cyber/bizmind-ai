@@ -1119,6 +1119,52 @@ is stored.
 
 **In the app.** Every SKU list is now read in pages of 1,000 (`.range()`).
 
+## 7x. The executive dashboard (0049–0051)
+
+The home dashboard shows the whole business at a glance (2026-09-21): every
+account in a currency, over 1, 3 or 12 months or the year to date. All of
+these readers are read-only and SECURITY INVOKER.
+
+**0049**
+- **`dashboard_overview()`:** any whole-month range is compared with the same
+  number of months just before it.
+- **`dashboard_waterfall_steps(overview jsonb)`:** builds the waterfall from
+  the overview row the page already has, with no second pass over the ledger.
+- **`dashboard_monthly()`:** net sales, marketplace costs and contribution per
+  month and account. Each month's Final/Incomplete is judged exactly as
+  `pnl_summary()` judges an account (unknown lines, VAT unknown, fee VAT not
+  separated, row errors). Chart positions are on one 0–1000 scale.
+- **`dashboard_accounts()`:** gains `costs_pct_of_net_sales`.
+
+**0050**
+- **`dashboard_overview()`:** works out net profit from the summary it already
+  read plus `expense_summary()`, using exactly `pnl_net_profit()`'s rule.
+  `pnl_net_profit()` would read the summary a second time.
+
+**0051**
+- **`dashboard_line_types()`:** a shared building block. It groups the scoped
+  lines by account and line type, then classifies each type once with the
+  view's own rule choice.
+- **`dashboard_accounts()`:** now built on those groups. It drops units sold,
+  gross profit and gross profit status, which no screen shows per account.
+- **`dashboard_cost_breakdown()`:** built on the same groups.
+
+**Measured on the owner's data** (about 33,000 lines, over 12 months):
+
+| Reader | Before | After |
+| --- | --- | --- |
+| `dashboard_overview()` | 5.2 s | 3.4 s |
+| `dashboard_accounts()` | 3.5 s | 2.0 s |
+| `dashboard_cost_breakdown()` | 1.6 s | 0.6 s |
+| `dashboard_monthly()` | new | 0.6 s |
+
+`npm run test:overview-ledger` (55 live checks) compares these readers with
+the P&L engine:
+- every monthly figure and status
+- every account figure and status
+- net profit
+- the waterfall
+
 ---
 
 ## 8. Regenerating types

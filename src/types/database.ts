@@ -2228,6 +2228,34 @@ export type Database = {
         }[]
       }
 
+      /** Migration 0061: percentage change vs the period before, same shape pnl_summary() is called with. */
+      pnl_summary_change: {
+        Args: {
+          p_from: string
+          p_to: string
+          p_account_id?: string | null
+          p_business_id?: string | null
+          p_combine_by_currency?: boolean
+        }
+        Returns: {
+          marketplace_account_id: string | null
+          currency: string
+          prev_has_data: boolean
+          gross_sales_change_pct: number | null
+          net_sales_change_pct: number | null
+          orders_change_pct: number | null
+          average_order_value_change_pct: number | null
+          marketplace_fees_change_pct: number | null
+          fulfillment_change_pct: number | null
+          advertising_change_pct: number | null
+          contribution_change_pct: number | null
+          cogs_change_pct: number | null
+          gross_profit_change_pct: number | null
+          gross_margin_pct_change_pct: number | null
+          profit_per_order_change_pct: number | null
+        }[]
+      }
+
       pnl_breakdown: {
         Args: { p_from: string; p_to: string; p_account_id?: string | null }
         Returns: {

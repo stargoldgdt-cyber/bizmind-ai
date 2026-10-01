@@ -17,9 +17,12 @@ import { nav } from "../content"
  * it is a set of escape hatches for someone who has already decided what they
  * want to check before they commit.
  *
- * It sits on the hero's dark band and stays dark once scrolled, so the header
- * never changes identity mid-page. The only thing that changes is the hairline
- * underneath, which appears once there is content behind it to separate from.
+ * LIGHT, MATCHED TO THE HERO
+ * ---------------------------
+ * Owner direction, 2026-09-30: the hero moved from a dark band to a light
+ * one, and the header moves with it -- same identity as the band it sits on,
+ * so there's no seam between them. The only thing that changes on scroll is
+ * the hairline underneath, once there is content behind it to separate from.
  */
 export function MarketingNav() {
   const [scrolled, setScrolled] = useState(false)
@@ -38,8 +41,8 @@ export function MarketingNav() {
   return (
     <header
       className={cn(
-        "sticky top-0 z-50 bg-surface-3 text-surface-3-foreground transition-shadow",
-        scrolled && "border-b border-surface-3-border"
+        "sticky top-0 z-50 bg-surface-1 text-surface-1-foreground transition-shadow",
+        scrolled && "border-b border-surface-1-border"
       )}
     >
       <div className="mx-auto flex h-16 max-w-marketing items-center justify-between gap-6 px-5 sm:px-8">
@@ -52,7 +55,7 @@ export function MarketingNav() {
             <a
               key={link.href}
               href={link.href}
-              className="text-sm text-surface-3-muted transition-colors hover:text-surface-3-foreground"
+              className="text-sm text-surface-1-muted transition-colors hover:text-surface-1-foreground"
             >
               {link.label}
             </a>
@@ -60,7 +63,7 @@ export function MarketingNav() {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
-          <Button asChild variant="ghost" size="sm" className="text-surface-3-muted hover:bg-surface-3-raised hover:text-surface-3-foreground">
+          <Button asChild variant="outline" size="sm" className="rounded-4xl border-surface-1-border px-4">
             <Link href={nav.signIn.href}>{nav.signIn.label}</Link>
           </Button>
           <Button asChild size="sm" className="rounded-4xl px-4">
@@ -74,7 +77,7 @@ export function MarketingNav() {
           aria-expanded={open}
           aria-controls="marketing-menu"
           aria-label={open ? "Close menu" : "Open menu"}
-          className="-mr-2 inline-flex size-10 items-center justify-center rounded-md text-surface-3-foreground md:hidden"
+          className="-mr-2 inline-flex size-10 items-center justify-center rounded-md text-surface-1-foreground md:hidden"
         >
           {open ? <X className="size-5" aria-hidden /> : <Menu className="size-5" aria-hidden />}
         </button>
@@ -84,7 +87,7 @@ export function MarketingNav() {
       <div
         id="marketing-menu"
         hidden={!open}
-        className="border-t border-surface-3-border bg-surface-3 md:hidden"
+        className="border-t border-surface-1-border bg-surface-1 md:hidden"
       >
         {/*
           A distinct label. Two navigation landmarks both called "Main" are
@@ -97,7 +100,7 @@ export function MarketingNav() {
               key={link.href}
               href={link.href}
               onClick={close}
-              className="block border-b border-surface-3-border py-3.5 text-base text-surface-3-foreground last:border-0"
+              className="block border-b border-surface-1-border py-3.5 text-base text-surface-1-foreground last:border-0"
             >
               {link.label}
             </a>
@@ -109,12 +112,7 @@ export function MarketingNav() {
                 {nav.cta.label}
               </Link>
             </Button>
-            <Button
-              asChild
-              size="lg"
-              variant="outline"
-              className="h-11 rounded-4xl border-surface-3-border bg-transparent text-surface-3-foreground hover:bg-surface-3-raised hover:text-surface-3-foreground"
-            >
+            <Button asChild size="lg" variant="outline" className="h-11 rounded-4xl border-surface-1-border">
               <Link href={nav.signIn.href} onClick={close}>
                 {nav.signIn.label}
               </Link>

@@ -15,6 +15,7 @@ export type ProductOverviewRow = Fn["catalog_product_overview"]["Returns"][numbe
 export type SkuQueueRow = Fn["sku_mapping_queue"]["Returns"][number]
 export type SkuSetupRowRead = Fn["sku_setup_rows"]["Returns"][number]
 export type ProductProfitRow = Fn["pnl_by_product"]["Returns"][number]
+export type ProductCostGapRow = Fn["product_cost_gap_queue"]["Returns"][number]
 
 export async function listProductOverview(businessId: string): Promise<ProductOverviewRow[]> {
   const supabase = await createClient()
@@ -119,6 +120,21 @@ export async function getSkuQueue(businessId: string, limit?: number): Promise<S
   return everyPage(
     (from, to) => supabase.rpc("sku_mapping_queue", { p_business_id: businessId }).range(from, to),
     "the SKUs to match",
+    limit
+  )
+}
+
+/**
+ * Products with a currently uncosted sale, business-wide, largest sales
+ * first (migration 0055). Reads the same cogs_status = NO_COST signal
+ * Marketplace P&L's "needs product costs" banner already does -- this can
+ * never disagree with it, because it is the exact same figure.
+ */
+export async function getProductCostGapQueue(businessId: string, limit?: number): Promise<ProductCostGapRow[]> {
+  const supabase = await createClient()
+  return everyPage(
+    (from, to) => supabase.rpc("product_cost_gap_queue", { p_business_id: businessId }).range(from, to),
+    "the products with no cost on their sale date",
     limit
   )
 }

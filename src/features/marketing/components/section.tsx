@@ -86,6 +86,8 @@ export function SectionHeader({
   headline,
   support,
   align = "left",
+  /** "lg" matches the Hero's own headline scale, for a section built to a reference that headlines just as big (e.g. Analyst). Default keeps every other section unchanged. */
+  size = "default",
   className,
 }: {
   level: Level
@@ -93,6 +95,7 @@ export function SectionHeader({
   headline: ReactNode
   support?: string
   align?: "left" | "center"
+  size?: "default" | "lg"
   className?: string
 }) {
   return (
@@ -112,14 +115,22 @@ export function SectionHeader({
         {eyebrow}
       </p>
 
-      <h2 className="mt-3 font-heading text-3xl font-bold tracking-tighter text-balance sm:text-4xl">
+      <h2
+        className={cn(
+          "font-heading text-balance",
+          size === "lg"
+            ? "mt-5 text-4xl leading-[1.05] font-extrabold tracking-tighter sm:text-[3.2rem]"
+            : "mt-3 text-3xl font-bold tracking-tighter sm:text-4xl"
+        )}
+      >
         {headline}
       </h2>
 
       {support && (
         <p
           className={cn(
-            "mt-4 text-base text-pretty sm:text-lg",
+            size === "lg" ? "mt-6" : "mt-4",
+            "text-base text-pretty sm:text-lg",
             align === "center" ? "mx-auto" : "",
             "max-w-prose-comfortable",
             MUTED[level]

@@ -61,7 +61,7 @@ const payout = {
   marketplace_code: "AMAZON", currency: "AED", reference: "INVENTED", source_file_id: null, file_name: null,
   period_start: null, period_end: null, expected_date: "2026-07-18T00:00:00Z", expected_amount: "1234567890123.4567",
   settlement_lines_total: null, settlement_lines: 1, marketplace_status: "NO_TOTAL", bank_receipt_status: "NOT_CONNECTED",
-  bank_receipt_amount: null, bank_receipt_date: null,
+  bank_receipt_amount: null, bank_receipt_date: null, difference: null,
 } satisfies Fn["expected_payouts"]["Returns"][number]
 
 const report: Report = {

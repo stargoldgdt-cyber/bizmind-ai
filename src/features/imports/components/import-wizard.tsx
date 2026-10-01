@@ -26,7 +26,15 @@ import type {
   RowIssue,
   ValidationResult,
 } from "@/services/ingestion/contracts"
-import { ENTITY_LIST, getEntity } from "@/services/ingestion/entities"
+import { ENTITIES, getEntity } from "@/services/ingestion/entities"
+
+/**
+ * Marketplace sellers upload one kind of file here: operating expenses, which
+ * feed net profit (GCC Phase 7). Orders and products come from the
+ * marketplaces' own reports now, so the legacy choices are not offered
+ * (2026-09-21); their import code stays until Phase 10.
+ */
+const OFFERED = [ENTITIES.EXPENSES]
 
 /**
  * The import flow.
@@ -72,7 +80,7 @@ export function ImportWizard({ businessCurrency }: { businessCurrency: string })
   const [pending, startTransition] = useTransition()
 
   const [step, setStep] = useState<Step>("upload")
-  const [entity, setEntity] = useState<EntityKey>("ORDERS")
+  const [entity, setEntity] = useState<EntityKey>("EXPENSES")
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
 
@@ -173,8 +181,8 @@ export function ImportWizard({ businessCurrency }: { businessCurrency: string })
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className="grid gap-3 sm:grid-cols-3">
-              {ENTITY_LIST.map((item) => (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {OFFERED.map((item) => (
                 <button
                   key={item.key}
                   type="button"
@@ -517,7 +525,7 @@ export function ImportWizard({ businessCurrency }: { businessCurrency: string })
             </ul>
             <div className="mt-3 flex flex-wrap justify-center gap-3">
               <Button asChild className="rounded-4xl">
-                <a href="/dashboard">See the dashboard</a>
+                <a href="/ledger/expenses">See operating expenses</a>
               </Button>
               <Button
                 variant="outline"

@@ -317,11 +317,81 @@ try {
   check("shares of net sales are the database's: 65.2% and 34.8% of 230",
     Number(acct(amazon)?.share_of_net_sales_pct) === 65.2 && Number(acct(amazon2)?.share_of_net_sales_pct) === 34.8,
     JSON.stringify(accounts.map((a) => [a.account_label, a.net_sales, a.share_of_net_sales_pct])))
+  // 0051: accounts are worked out from line types; every figure must be the
+  // P&L engine's own per-account summary.
+  const perAccount = rows(await rpc("pnl_summary", { p_from: JULY.p_from, p_to: JULY.p_to, p_business_id: businessId }, owner))
+  for (const id of [amazon, amazon2]) {
+    const e = perAccount.find((r) => r.marketplace_account_id === id)
+    const a = acct(id)
+    const costs = e && units(e.marketplace_fees) + units(e.fulfillment) + units(e.advertising) +
+      units(e.other_marketplace_costs) + units(e.non_recoverable_vat)
+    check(`${a?.account_label}: gross, net, costs, contribution and status are pnl_summary()'s own`,
+      a?.gross_sales === e?.gross_sales && a?.net_sales === e?.net_sales && units(a?.marketplace_costs) === costs &&
+        a?.advertising === e?.advertising && a?.contribution === e?.contribution &&
+        a?.contribution_before_open_items === e?.contribution_before_open_items &&
+        a?.contribution_status === e?.contribution_status,
+      JSON.stringify({ a, e: e && [e.gross_sales, e.net_sales, e.contribution, e.contribution_before_open_items, e.contribution_status] }))
+  }
+  const costRows = rows(await rpc("dashboard_cost_breakdown", JULY, owner))
+  check("costs by category still add back to the marketplace costs (0051)",
+    costRows.reduce((sum, c) => sum + units(c.total), BigInt(0)) === units(all?.marketplace_costs), JSON.stringify(costRows))
+  check("marketplace costs as a share of each account's sales: 13.3% (20 of 150)",
+    Number(acct(amazon)?.costs_pct_of_net_sales) === 13.3, String(acct(amazon)?.costs_pct_of_net_sales))
+
+  /* ------------------------------------------------------------------------ */
+  section("4b. THE EXECUTIVE VIEW: ANY PERIOD, MONTH BY MONTH (0049)")
+
+  const JUN_JUL = { ...JULY, p_from: "2026-06-01T00:00:00Z", p_to: "2026-08-01T00:00:00Z" }
+  const monthly = rows(await rpc("dashboard_monthly", JUN_JUL, owner))
+  const cell = (month: string, id: string) => monthly.find((m) => m.month === month && m.marketplace_account_id === id)
+  check("one row per month and AED account, never the SAR one (2 months x 2 accounts)",
+    monthly.length === 4 && !monthly.some((m) => m.marketplace_account_id === saudi), String(monthly.length))
+  check("June: Amazon.ae 200.0000; the second account had no lines",
+    cell("2026-06-01", amazon)?.net_sales === "200.0000" && cell("2026-06-01", amazon)?.has_lines === true &&
+      cell("2026-06-01", amazon2)?.has_lines === false && cell("2026-06-01", amazon2)?.contribution_status === null,
+    JSON.stringify(monthly))
+  for (const [month, from, to] of [["2026-06-01", "2026-06-01T00:00:00Z", "2026-07-01T00:00:00Z"], ["2026-07-01", "2026-07-01T00:00:00Z", "2026-08-01T00:00:00Z"]]) {
+    const engine = rows(await rpc("pnl_summary", { p_from: from, p_to: to, p_business_id: businessId, p_combine_by_currency: true }, owner))
+      .find((r) => r.currency === "AED")
+    const m = cell(month, amazon)
+    check(`${month.slice(0, 7)}: the month's net sales, contribution and status are the P&L engine's own`,
+      m?.month_net_sales === engine?.net_sales && m?.month_contribution === engine?.contribution_before_open_items &&
+        m?.month_status === engine?.contribution_status,
+      JSON.stringify({ m, engine: engine && [engine.net_sales, engine.contribution_before_open_items, engine.contribution_status] }))
+  }
+  check("every bar and point sits on one 0-1000 scale with one zero line",
+    monthly.every((m) => m.bar_from >= 0 && m.bar_to <= 1000 && m.bar_from <= m.bar_to && m.month_contribution_y >= 0 &&
+      m.month_contribution_y <= 1000) && new Set(monthly.map((m) => m.zero_y)).size === 1)
+
+  const overviewRow = rows(await rpc("dashboard_overview", JULY, owner))[0]
+  const fromRow = rows(await rpc("dashboard_waterfall_steps", { p_overview: overviewRow }, owner))
+  const direct = rows(await rpc("dashboard_waterfall", JULY, owner))
+  check("the waterfall worked out from the overview row equals the full recalculation",
+    JSON.stringify(fromRow) === JSON.stringify(direct) && fromRow.length > 0, `${fromRow.length} vs ${direct.length}`)
+
+  // Two months (July-August: only July has data) against the two before (May-June: only June).
+  const twoMonths = rows(await rpc("dashboard_overview", { ...JULY, p_to: "2026-09-01T00:00:00Z" }, owner))[0]
+  check("a two-month period compares with the two months before it: gross sales +15.0% (230 vs 200)",
+    twoMonths?.prev_has_marketplace_data === true && Number(twoMonths?.gross_sales_change_pct) === 15,
+    JSON.stringify([twoMonths?.gross_sales, twoMonths?.gross_sales_change_pct]))
+  check("a single month still compares with the month before", Number(one?.gross_sales_change_pct) === -25)
+
+  // 0050: net profit is worked out from the summary already read; it must be
+  // exactly what pnl_net_profit() says.
+  const netEngine = rows(await rpc("pnl_net_profit", { p_from: JULY.p_from, p_to: JULY.p_to, p_business_id: businessId }, owner))
+    .find((r) => r.currency === "AED")
+  check("the dashboard's net profit, status, reasons and expenses are pnl_net_profit()'s own",
+    overviewRow?.net_profit === netEngine?.net_profit && overviewRow?.net_profit_status === netEngine?.net_profit_status &&
+      overviewRow?.net_profit_before_open_items === netEngine?.net_profit_before_open_items &&
+      JSON.stringify(overviewRow?.net_profit_reasons) === JSON.stringify(netEngine?.net_profit_reasons) &&
+      overviewRow?.operating_expenses === netEngine?.operating_expenses,
+    JSON.stringify({ dash: [overviewRow?.net_profit, overviewRow?.net_profit_status, overviewRow?.net_profit_before_open_items, overviewRow?.net_profit_reasons, overviewRow?.operating_expenses],
+      engine: [netEngine?.net_profit, netEngine?.net_profit_status, netEngine?.net_profit_before_open_items, netEngine?.net_profit_reasons, netEngine?.operating_expenses] }))
 
   /* ------------------------------------------------------------------------ */
   section("5. ISOLATION")
 
-  for (const fn of ["dashboard_overview", "dashboard_waterfall", "dashboard_daily", "dashboard_cost_breakdown"]) {
+  for (const fn of ["dashboard_overview", "dashboard_waterfall", "dashboard_daily", "dashboard_cost_breakdown", "dashboard_monthly"]) {
     const reply = await rpc(fn, JULY, rival)
     const got = rows(reply)
     const leaked = fn === "dashboard_overview"

@@ -1,48 +1,89 @@
+import Image from "next/image"
 import Link from "next/link"
-import { ArrowRight, Play } from "lucide-react"
+import { ArrowRight, Check, Play } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 
 import { hero } from "../content"
-import { ProfitConsole } from "./profit-console"
 
 /**
- * The hero.
+ * The hero, built to the owner's supplied reference (2026-09-30).
  *
- * ASYMMETRIC ON PURPOSE
- * ---------------------
- * Five columns of words, seven of product. A centred headline over empty space
- * is the default shape of every AI landing page written in the last two years,
- * and it makes the reader take the claim on faith. Giving the product the
- * larger half means the first thing they judge is the thing they would buy.
+ * LIGHT, NOT DARK
+ * ----------------
+ * A deliberate reversal of the previous dark-band hero: a pale violet-tinted
+ * surface (`surface-2`, the same token used elsewhere in the product -- no
+ * new colour introduced) with a soft blob field and a faint dot-grid behind
+ * the dashboard image. Matched to the reference exactly, at the owner's
+ * explicit direction; not a restyle of the earlier dark version.
  *
- * NO GRADIENT, NO GLOW
- * --------------------
- * The band is one flat near-black field. Depth comes from the console sitting
- * on it as a raised surface with a hairline border — the same way depth works
- * everywhere else in this product (DESIGN.md §11: there is no glow token).
+ * THE DASHBOARD IS THE OWNER'S SUPPLIED IMAGE, NOT REBUILT UI
+ * --------------------------------------------------------------
+ * Owner correction, 2026-09-30: an earlier pass rebuilt the reference
+ * dashboard as real markup (matching how every other product visual on this
+ * page works) and it came out too large and too busy next to the reference's
+ * own proportions. Rebuilding it wasn't the ask -- so this is now the
+ * supplied image itself (public/hero/dashboard-preview.webp), sized down to
+ * match the reference's balance, nothing drawn.
+ *
+ * REAL LOGO FILES, ON THEIR OWN FULL-WIDTH ROW
+ * ------------------------------------------------
+ * Amazon, noon and Carrefour's own logo files (public/logos/), supplied by
+ * the owner -- not drawn or approximated. DESIGN.md §8's sanctioned
+ * exception for a third-party integration logo grid.
+ *
+ * Owner correction, 2026-09-30: the strip used to live inside the narrower
+ * text column, where four logo chips at a readable size didn't fit on one
+ * line. It now spans the hero's full width below both columns, so the logos
+ * can be sized generously and still sit on a single row -- and the text
+ * column can be given more width for its own sake (the support sentence
+ * wrapping to two lines instead of three) without the two problems trading
+ * off against each other.
  */
 export function Hero() {
   return (
-    <section className="bg-surface-3 pt-14 pb-16 text-surface-3-foreground sm:pt-20 sm:pb-24">
-      <div className="mx-auto max-w-marketing px-5 sm:px-8">
-        <div className="grid items-center gap-12 lg:grid-cols-12 lg:gap-14">
-          <div className="lg:col-span-5">
-            <p className="font-mono text-xs font-medium tracking-widest text-brand-300 uppercase">
-              {hero.eyebrow}
-            </p>
+    <section className="relative overflow-hidden bg-surface-2 pt-14 pb-20 text-surface-2-foreground sm:pt-20 sm:pb-28">
+      {/* Soft blob field, low-contrast, purely atmospheric. */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse 60% 50% at 88% 8%, oklch(0.7 0.09 293 / 0.35), transparent 65%)," +
+            "radial-gradient(ellipse 50% 55% at 0% 100%, oklch(0.75 0.07 293 / 0.3), transparent 60%)",
+        }}
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute inset-0 opacity-70"
+        style={{
+          backgroundImage: "radial-gradient(color-mix(in oklch, var(--color-primary) 14%, transparent) 1px, transparent 1px)",
+          backgroundSize: "24px 24px",
+          maskImage: "radial-gradient(ellipse 65% 55% at 82% 15%, black, transparent 72%)",
+          WebkitMaskImage: "radial-gradient(ellipse 65% 55% at 82% 15%, black, transparent 72%)",
+        }}
+        aria-hidden
+      />
 
-            <h1 className="mt-5 font-heading text-4xl font-bold tracking-tighter text-balance sm:text-5xl">
+      {/* Wider than the rest of the page's max-w-marketing: this hero has a big supplied image and a
+          full-width logo row to fit, and a marketing hero is where extra width is spent on exactly that. */}
+      <div className="relative mx-auto max-w-[90rem] px-5 sm:px-8">
+        <div className="grid items-center gap-12 lg:grid-cols-12 lg:gap-10">
+          <div className="lg:col-span-5">
+            <span className="inline-flex rounded-full bg-primary/10 px-3.5 py-1.5 font-mono text-xs font-bold tracking-widest text-primary">
+              {hero.eyebrow}
+            </span>
+
+            <h1 className="mt-5 font-heading text-4xl leading-[1.05] font-extrabold tracking-tighter text-balance sm:text-[3.2rem]">
               {hero.headline}
               <br />
-              <span className="text-brand-300">{hero.headlineAccent}</span>
+              <span className="text-primary">{hero.headlineAccent}</span>
             </h1>
 
-            <p className="mt-6 max-w-prose-comfortable text-lg text-pretty text-surface-3-muted">
+            <p className="mt-6 max-w-prose-comfortable text-base text-pretty text-surface-2-muted">
               {hero.support}
             </p>
 
-            <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Button asChild size="lg" className="h-12 rounded-4xl px-6">
                 <Link href={hero.primary.href}>
                   {hero.primary.label}
@@ -54,21 +95,59 @@ export function Hero() {
                 asChild
                 size="lg"
                 variant="outline"
-                className="h-12 rounded-4xl border-surface-3-border bg-transparent px-6 text-surface-3-foreground hover:bg-surface-3-raised hover:text-surface-3-foreground"
+                className="h-12 rounded-4xl border-surface-2-border bg-surface-1 px-6 text-surface-2-foreground hover:bg-surface-1"
               >
                 <a href={hero.secondary.href}>
-                  <Play className="size-4 fill-current" aria-hidden />
+                  <span className="flex size-6 items-center justify-center rounded-full bg-surface-2-foreground text-surface-1">
+                    <Play className="size-2.5 fill-current" aria-hidden />
+                  </span>
                   {hero.secondary.label}
                 </a>
               </Button>
             </div>
 
-            <p className="mt-5 text-sm text-surface-3-muted">{hero.note}</p>
+            <ul className="mt-6 flex flex-col gap-2.5 text-sm text-surface-2-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-2">
+              {hero.trust.map((item) => (
+                <li key={item} className="flex items-center gap-2">
+                  <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                    <Check className="size-2.5" aria-hidden />
+                  </span>
+                  {item}
+                </li>
+              ))}
+            </ul>
           </div>
 
           <div className="lg:col-span-7">
-            <ProfitConsole />
+            <div className="mx-auto max-w-2xl overflow-hidden rounded-2xl border border-black/5 shadow-[0_30px_70px_-25px_rgba(76,29,149,0.35)] lg:max-w-none">
+              <Image
+                src="/hero/dashboard-preview.webp"
+                alt="BizMind dashboard: business performance for August 2026, with gross sales, net sales, marketplace costs and contribution, and an insight explaining why contribution changed"
+                width={1639}
+                height={959}
+                className="h-auto w-full"
+                priority
+              />
+            </div>
           </div>
+        </div>
+
+        {/* Real logo files, on their own full-width row so they never have to compete with the text column for space. */}
+        <div className="mt-10 flex flex-wrap items-center gap-3 lg:mt-14">
+          <span className="font-mono text-[11px] font-bold tracking-widest text-surface-2-muted uppercase">
+            Connects to
+          </span>
+          {hero.marketplaces.map((m) => (
+            <span
+              key={m.name}
+              className="inline-flex h-14 items-center rounded-xl border border-surface-2-border bg-surface-1 px-5"
+            >
+              <Image src={m.logo} alt={m.name} width={96} height={28} className="h-7 w-auto object-contain" unoptimized />
+            </span>
+          ))}
+          <span className="inline-flex h-14 items-center rounded-xl border border-dashed border-surface-2-border px-5 font-mono text-sm text-surface-2-muted">
+            + More
+          </span>
         </div>
       </div>
     </section>

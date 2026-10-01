@@ -15,10 +15,12 @@
  * because a plausible wrong number is worse than no number, and a landing page
  * that oversells is the same failure aimed at a buyer instead of an owner. So:
  * no invented customers, no invented results, no certifications we do not
- * hold, and no integration presented as ready when it is not.
+ * hold, and no marketplace presented as ready when it is not.
  *
- * Where a claim is checkable, the code that makes it true is named in a
- * comment.
+ * Rewritten 2026-09-21 for the product BizMind now is: marketplace profit
+ * intelligence for GCC sellers on Amazon and noon (ARCHITECTURE_BASELINE.md).
+ * Where a claim is checkable, the code or document that makes it true is named
+ * in a comment. Figures shown in examples describe a demonstration business.
  */
 
 /* -------------------------------------------------------------------------- */
@@ -27,9 +29,9 @@
 
 export const nav = {
   links: [
-    { label: "Product", href: "#understand" },
     { label: "How it works", href: "#loop" },
-    { label: "Integrations", href: "#connect" },
+    { label: "Product", href: "#preview" },
+    { label: "Marketplaces", href: "#connect" },
     { label: "Pricing", href: "#pricing" },
   ],
   signIn: { label: "Sign in", href: "/login" },
@@ -41,396 +43,438 @@ export const nav = {
 /* -------------------------------------------------------------------------- */
 
 export const hero = {
-  eyebrow: "AI business intelligence",
+  /**
+   * Owner correction, 2026-09-30: switched from the "eCommerce" camelCase
+   * styling to the standard hyphenated "E-commerce" -- each string is
+   * written exactly as it should display (all-caps in this eyebrow,
+   * title case in the headline below), so the component renders both
+   * literally rather than running either through a case transform.
+   *
+   * The hyphen is U+2011 (non-breaking), not a plain "-": a plain hyphen is
+   * a legal line-break point, and at some widths the headline below was
+   * wrapping mid-word as "E-" / "commerce". A non-breaking hyphen displays
+   * identically but keeps "E-commerce" together as one word.
+   */
+  eyebrow: "BUILT FOR GCC E‑COMMERCE SELLERS",
+
+  /** Owner direction, 2026-09-29: name the whole business, not one report. */
+  headline: "Your Entire E‑commerce Business.",
+  headlineAccent: "In One View.",
 
   /**
-   * Two sentences, second one shorter. The first says what you get, the
-   * second says what makes it different from every dashboard the reader has
-   * already bought and stopped opening.
+   * Owner direction, 2026-09-30 (exact text supplied, reference-matched):
+   * names Carrefour as part of who BizMind is built for. Carrefour itself
+   * is still "planned" in connect.sources -- the Marketplaces section
+   * further down the page is the one place that distinction is drawn in
+   * full, so a reader who wants the exact live/planned split always finds
+   * it there. "Your other sales channels" is the owner's own phrase for the
+   * product's wider ambition, not a claim of a specific built integration.
    */
-  headline: "Know your numbers.",
-  headlineAccent: "Know what to do next.",
-
   support:
-    "BizMind reads the data your business already produces and tells you " +
-    "where the money is going — in plain language, with the working shown.",
+    "Bring Amazon, noon, Carrefour and your other sales channels into one " +
+    "clear view of sales, profit and payouts.",
 
   primary: { label: "Start free", href: "/signup" },
-  secondary: { label: "Watch the 90-second tour", href: "#film" },
+  /** Opens the closer-look panel below (#preview) -- a real, working part of the page, never a video that doesn't exist. */
+  secondary: { label: "Watch demo", href: "#preview" },
 
-  /** True: import is CSV/Excel, and no card is collected anywhere in the app. */
-  note: "No credit card. Start with a spreadsheet you already have.",
+  /** True: V1 is file-based (CLAUDE.md), and no card is collected anywhere. */
+  trust: ["No credit card required", "Works with your existing data", "Built for GCC marketplaces"],
+
+  /**
+   * The hero's own logo strip, owner-supplied logo files (public/logos/) --
+   * Amazon and Carrefour re-supplied 2026-09-30 at noon's own 2000x586
+   * horizontal proportions (the earlier Carrefour file was a square badge,
+   * which read as too small and blurry next to the wide wordmarks), so all
+   * three now scale to the same chip height without one looking off.
+   * Amazon and noon are live, Carrefour is on the roadmap
+   * (connect.sources), "More" names no specific marketplace so it claims
+   * nothing. Matches the reference exactly: no dimming, no "planned" label
+   * here -- that distinction lives in the Marketplaces section below, not
+   * repeated on every mention.
+   */
+  marketplaces: [
+    { name: "Amazon", logo: "/logos/amazon.png" },
+    { name: "noon", logo: "/logos/noon.png" },
+    { name: "Carrefour", logo: "/logos/carrefour.png" },
+  ] as { name: string; logo: string }[],
 } as const
 
 /* -------------------------------------------------------------------------- */
 /* 2. The problem                                                              */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Owner-supplied design, 2026-09-30 (dashboard-handoff.zip): a fuller
+ * "Sales to Payout" flow and an AI insight panel, replacing the earlier
+ * three-line ledger. Figures are illustrative -- the same demonstration
+ * business as the rest of the page, kept internally consistent: the AED
+ * 184,320 gross sales figure here is the same figure the hero and Preview
+ * section already show for this business.
+ */
 export const problem = {
   eyebrow: "The gap",
-  headline: "Your dashboard is green. Your bank balance disagrees.",
+  headline: "Your sales went up.",
+  /** Only "the money go?" renders in the accent colour -- "But where did " stays plain. */
+  headlineLead: "But where did ",
+  headlineAccent: "the money go?",
   support:
-    "Every tool you own reports what happened. None of them tell you which " +
-    "part of it cost you money.",
+    "Every marketplace charges differently, settles differently and names " +
+    "your products differently. Seller Central shows sales. Nobody shows what " +
+    "was left.",
 
-  /** The tension, as three figures that cannot all be good news. */
+  /** The tension, as three figures that cannot all be good news. Illustrative. */
   figures: [
-    { label: "Revenue", value: "+18%", tone: "up" },
-    { label: "Orders", value: "+12%", tone: "up" },
-    { label: "Net profit", value: "−9%", tone: "down" },
+    {
+      key: "gross",
+      label: "Gross Sales",
+      change: "+22%",
+      direction: "up" as const,
+      good: true,
+      value: "AED 184,320",
+      tone: "violet" as const,
+    },
+    {
+      key: "orders",
+      label: "Orders",
+      change: "+17%",
+      direction: "up" as const,
+      good: true,
+      value: "2,964",
+      tone: "green" as const,
+    },
+    {
+      key: "contribution",
+      label: "Contribution",
+      change: "−6%",
+      direction: "down" as const,
+      good: false,
+      value: "AED 61,230",
+      tone: "red" as const,
+    },
   ],
 
   question: "So where did it go?",
+  questionSupport: "Your sales are reduced by multiple costs before you get paid.",
 
-  /** What an analyst would have to do by hand. This is the work BizMind does. */
-  answer: [
-    { label: "Marketplace fees", detail: "up 2.4 points as a share of revenue" },
-    { label: "Cost of goods", detail: "up on your three best sellers" },
-    { label: "Gross margin", detail: "down to 11.4% from 15.8%" },
-  ],
+  /** The sales-to-payout flow: gross sales, minus three costs, to net payout, to contribution. */
+  flow: {
+    panelTitle: "From Sales to Payout",
+    panelSupport: "Here's how your AED 184,320 in sales turned into AED 61,230 contribution.",
+    month: "August 2026",
+    grossSales: { label: "Gross Sales", value: "AED 184,320" },
+    costs: [
+      { key: "fulfilment", label: "Fulfilment and storage", value: "−AED 34,985", pct: "19%", pctNote: "of net sales" },
+      { key: "advertising", label: "Advertising", value: "−AED 14,762", pct: "8%", pctNote: "of net sales" },
+      { key: "refunds", label: "Refunds", value: "−AED 11,056", pct: "6%", pctNote: "of gross sales" },
+    ],
+    netPayout: { label: "Net Payout", value: "AED 123,517", note: "After marketplace costs" },
+    contribution: { label: "Contribution", value: "AED 61,230", note: "After product costs and operating expenses" },
+  },
+
+  /** The right-hand insight panel -- same shape as the real Ask BizMind / findings() sentence elsewhere. */
+  insight: {
+    label: "BizMind AI Insight",
+    headline: "Contribution is down",
+    headlineAccent: "6%",
+    headlineTail: " despite higher sales.",
+    body: "The biggest impact came from fulfilment costs on noon and higher advertising spend on Amazon.",
+    drivers: [
+      { key: "fulfilment", label: "Fulfilment and storage", stat: "up to 19%", note: "of net sales on noon" },
+      { key: "advertising", label: "Advertising", stat: "doubled", note: "on Amazon" },
+      { key: "refunds", label: "Refunds", stat: "6% of gross", note: "concentrated on two products" },
+    ],
+    /** Points at the real tabbed product panels -- not a dead link (the figure-breakdown section it used to point to was retired 2026-09-30). */
+    cta: { label: "See the full breakdown", href: "#preview" },
+  },
 } as const
 
 /* -------------------------------------------------------------------------- */
 /* 3. The loop                                                                 */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Owner-supplied design, 2026-09-30: six steps with an icon each, connected
+ * by a single rail, replacing the earlier plain numbered list. The previous
+ * "first three vs last three" divider (a filled-vs-hollow dot) isn't in this
+ * reference -- the same idea now lives only in the support sentence, not as
+ * a second visual system layered on top of the icons.
+ */
 export const loop = {
   eyebrow: "How it works",
-  headline: "Six steps. One of them is the one nobody else does.",
+  /** Only "reconciling." renders in the accent colour. */
+  headline: "Upload a report. BizMind does the ",
+  headlineAccent: "reconciling.",
   support:
-    "Most tools stop at the third step. The value is in the last three.",
+    "The first three steps replace your spreadsheet. The last three are the " +
+    "reason to keep coming back.",
 
+  /** Each step is built: LEDGER.md, AMAZON.md, NOON.md, DATABASE.md §7q–7x. Icon keys map to lucide icons and tile colours in loop.tsx. */
   steps: [
-    { name: "Connect", detail: "Spreadsheets and stores" },
-    { name: "Understand", detail: "What each column means" },
-    { name: "Analyze", detail: "Computed, never estimated" },
-    { name: "Alert", detail: "Only when it is real" },
-    { name: "Recommend", detail: "In plain language" },
-    { name: "Automate", detail: "Rules you write" },
+    { key: "upload", name: "Upload", detail: "Amazon and noon statements." },
+    { key: "classify", name: "Classify", detail: "Every line, automatically." },
+    { key: "match", name: "Match", detail: "SKUs and costs, set once." },
+    { key: "profit", name: "Profit", detail: "By marketplace and product." },
+    { key: "explain", name: "Explain", detail: "Why it changed." },
+    { key: "alert", name: "Alert", detail: "Before it hurts." },
   ],
 
-  /** Marks where a report stops and a decision starts. */
-  divider: 3,
+  footnote: "Where a report stops, a decision starts.",
 } as const
 
 /* -------------------------------------------------------------------------- */
-/* 4. Demo film                                                                */
+/* 4. A closer look                                                            */
 /* -------------------------------------------------------------------------- */
 
-export const film = {
-  eyebrow: "See it work",
-  headline: "A spreadsheet in. A decision out.",
-  support: "Ninety seconds, no narration over an empty dashboard.",
+/**
+ * Two real panels, tabbed -- not a video, so there is nothing to be "coming
+ * soon" about (owner direction, 2026-09-29: only what works today). Both
+ * panels are the same drawn-not-screenshotted product markup as the hero's
+ * console, just a second real view of it.
+ */
+export const preview = {
+  eyebrow: "A closer look",
+  headline: "The product, as a seller ",
+  /** Only this portion renders in the accent colour. */
+  headlineAccent: "actually sees it.",
+  support: "No slides, no stock dashboard — this is what opens after you sign in.",
 
-  chapters: [
-    "Import a sales export",
-    "Confirm what the columns mean",
-    "Read the profit story",
-    "Ask why",
-    "Set the alert",
+  tabs: [
+    { name: "Whole business", detail: "Every marketplace, added up" },
+    { name: "By marketplace", detail: "What each one keeps, side by side" },
+  ],
+
+  /** Three reasons under the console, matched to the owner's reference (2026-09-30). Icon keys map to lucide icons in preview.tsx. */
+  reasons: [
+    { key: "view", name: "Real seller view", detail: "See the exact numbers that matter, in one place." },
+    /**
+     * Owner's reference said "Your marketplaces sync automatically" -- not
+     * true yet (V1 is file upload; marketplace API sync isn't built, per
+     * CLAUDE.md's do-not-build list). Reworded to what's actually automatic:
+     * the classification, not the fetching.
+     */
+    { key: "sync", name: "No manual work", detail: "Upload once — every line is classified automatically." },
+    { key: "insight", name: "Actionable insights", detail: "Understand what changed and what to do next." },
   ],
 } as const
 
 /* -------------------------------------------------------------------------- */
-/* 5. Understand                                                               */
+/* 5. Product demo                                                             */
 /* -------------------------------------------------------------------------- */
 
-export const understand = {
-  eyebrow: "Understand",
-  headline: "Every figure, with its working shown.",
+/**
+ * Retired 2026-09-30 (owner direction): replaced this section entirely.
+ * Its figure-breakdown material didn't move elsewhere; #understand's
+ * former links (nav, Problem's insight CTA) now point at Preview instead.
+ */
+export const productDemo = {
+  eyebrow: "Product demo",
+  headline: "See BizMind AI ",
+  /** Only this portion renders in the accent colour. */
+  headlineAccent: "in action",
   support:
-    "Each number says how it was calculated and how much of the underlying " +
-    "data it actually had. A margin built on half your costs says so.",
+    "Watch a quick demo to see how BizMind connects your marketplace data, " +
+    "reconciles everything, and gives you clear insights.",
+
+  features: [
+    { key: "data", name: "Real data, real insights", detail: "See how your data turns into clear reports." },
+    { key: "flow", name: "End-to-end flow", detail: "From upload to insights in minutes." },
+    { key: "gcc", name: "Built for GCC sellers", detail: "Amazon, noon, Carrefour and more." },
+  ],
+
+  primaryCta: { label: "Watch full demo" },
+  secondaryCta: { label: "See how it works", href: "#loop" },
 
   /**
-   * Real figures from the analytics engine's own vocabulary. Values are
-   * illustrative of a demo business, and every one is a figure BizMind
-   * genuinely computes — see src/services/metrics/canonical.ts.
+   * Set once the owner records and uploads the real walkthrough. Until this
+   * is a real URL, this section stays out of src/app/page.tsx entirely --
+   * never shipped live with a dead or inert Play button (owner direction,
+   * 2026-09-30, after the same "no coming soon" rule that shaped Preview).
    */
-  metrics: [
-    {
-      label: "Revenue",
-      value: "AED 284,500.00",
-      change: 18.2,
-      higherIsBetter: true,
-      explanation: "Sum of order totals, excluding cancelled and refunded orders.",
-      warning: undefined,
-    },
-    {
-      label: "Gross margin",
-      value: "11.4%",
-      change: -4.4,
-      higherIsBetter: true,
-      explanation:
-        "Revenue minus cost of goods and marketplace fees, as a percentage of revenue.",
-      /** The card's own warning slot. A margin this incomplete must say so. */
-      warning: "82% cost coverage — 1 in 6 items sold has no cost recorded.",
-    },
-    {
-      label: "Marketplace fees",
-      value: "AED 31,295.00",
-      change: 26.0,
-      /** Fees rising is not good news, and the delta chip must not colour it green. */
-      higherIsBetter: false,
-      explanation:
-        "Fees charged by each channel, taken from the channel's own settlement figures.",
-      warning: undefined,
-    },
-  ] as {
-    label: string
-    value: string
-    change: number
-    higherIsBetter: boolean
-    explanation: string
-    warning?: string
-  }[],
-
-  /** The differentiator, stated as a constraint rather than a boast. */
-  pledge: {
-    title: "The number is never a guess",
-    body:
-      "Every figure is calculated in the database and passed to the interface " +
-      "as an exact decimal. Nothing is rounded on the way to your screen, and " +
-      "the AI is never asked to do arithmetic.",
-  },
+  videoUrl: "",
 } as const
 
 /* -------------------------------------------------------------------------- */
-/* 6. Explain — the AI analyst                                                 */
+/* 6. Explain — Ask BizMind                                                    */
 /* -------------------------------------------------------------------------- */
 
 export const analyst = {
   eyebrow: "Ask BizMind",
   headline: "Don't just read the number. Ask why.",
   support:
-    "BizMind explains figures it was given. It cannot invent one, and when " +
-    "the data is too thin to answer, it says so instead of guessing.",
+    "BizMind explains the figures it has already verified. It cannot invent " +
+    "one, it never calls an expected payout money received, and when a " +
+    "figure is not final it says so.",
 
   /**
-   * Shaped exactly like a real exchange: the model receives verified figures
-   * and narrates them. The guard in src/services/ai enforces that it cannot
-   * state a figure it was not given.
+   * Shaped exactly like a real exchange (/ledger/ask): the model receives
+   * verified ledger facts and narrates them; the guard in src/services/ai
+   * refuses any figure it was not given.
    */
   exchange: {
-    question: "Why did my profit drop last month?",
+    badge: "AI Assistant",
+    question: "Why did my contribution fall last month?",
     answer:
-      "Net profit fell 9.2%, even though revenue rose 18.2%. The cause is " +
-      "cost, not sales: marketplace fees rose 26% while revenue rose 18%, so " +
-      "fees took a larger share of every order.",
+      "Contribution fell 6.1% although net sales rose 21.6%. Marketplace " +
+      "costs rose faster than sales — up 34.2% — mostly fulfilment on noon " +
+      "and advertising on Amazon, so each order kept less.",
+    /** `good` decides the chip's colour -- rising costs are bad news even though the number is positive. */
     cited: [
-      { label: "Net profit", value: "−9.2%" },
-      { label: "Revenue", value: "+18.2%" },
-      { label: "Marketplace fees", value: "+26.0%" },
-    ],
+      { label: "Contribution", value: "−6.1%", direction: "down", good: false },
+      { label: "Net sales", value: "+21.6%", direction: "up", good: true },
+      { label: "Marketplace costs", value: "+34.2%", direction: "up", good: false },
+    ] as { label: string; value: string; direction: "up" | "down"; good: boolean }[],
     caveat:
-      "82% cost coverage. One in six items sold has no cost recorded, so " +
-      "your real margin is lower than the figure above.",
-  },
-} as const
-
-/* -------------------------------------------------------------------------- */
-/* 7. Protect and act                                                          */
-/* -------------------------------------------------------------------------- */
-
-export const act = {
-  eyebrow: "Alerts and automation",
-  headline: "It tells you early. It does not act behind your back.",
-  support:
-    "You write the rule. BizMind checks it and raises an alert. Nothing in " +
-    "BizMind buys, prices, emails a customer, or changes your store.",
-
-  /** Mirrors the real rule shape in supabase/migrations/0016. */
-  rule: {
-    when: "Gross margin",
-    operator: "falls below",
-    threshold: "15%",
-    period: "over 30 days",
-    then: "Raise a warning alert",
-    cooldown: "At most once a day",
+      "Not final yet: noon's VAT invoices for the month are missing, so part " +
+      "of its fees is still VAT you may be able to recover.",
+    inputPlaceholder: "Ask anything about your business…",
   },
 
-  /**
-   * The quiet behaviours, which are the actual product.
-   * All three are enforced in automation_evaluate_rule().
-   */
-  restraint: [
-    {
-      title: "A quiet month is not a crisis",
-      body:
-        "No orders in the period means there is nothing to measure. BizMind " +
-        "records that and stays silent, rather than reading it as a margin " +
-        "of zero and waking you on a public holiday.",
-    },
-    {
-      title: "It will not alarm you over a figure it distrusts",
-      body:
-        "If costs are missing, your reported margin is higher than reality. " +
-        "A profit alert holds until the data is complete — and a separate " +
-        "alert tells you the data is what needs fixing.",
-    },
-    {
-      title: "Silence is explainable",
-      body:
-        "Every check is recorded, including the ones that raised nothing and " +
-        "why. “Why didn't I hear about this?” has an answer.",
-    },
+  /** Three reasons under the exchange, matched to the owner's reference (2026-09-30). Icon keys map to lucide icons in analyst.tsx. */
+  reasons: [
+    { key: "verified", name: "Verified answers", detail: "Based on your actual data." },
+    { key: "honest", name: "No made-up numbers", detail: "Clear about what's final and what's not." },
+    { key: "plain", name: "Plain language", detail: "Explains the reason, not just the result." },
   ],
 } as const
 
 /* -------------------------------------------------------------------------- */
-/* 8. Connect                                                                  */
+/* 8. Marketplaces and sources                                                 */
 /* -------------------------------------------------------------------------- */
 
 export const connect = {
-  eyebrow: "Integrations",
-  headline: "You don't replace your systems. You connect them.",
+  eyebrow: "Marketplaces",
+  headline: "Built for the marketplaces ",
+  /** Only this portion renders in the accent colour. */
+  headlineAccent: "you already sell on.",
   support:
-    "BizMind sits on top of what you already run. Start with an export you " +
-    "have today.",
+    "Every marketplace reports differently, and BizMind was built to " +
+    "understand each one. Upload what you already download, and bring " +
+    "product costs and expenses in straight from Excel or Google Sheets.",
 
   /**
-   * STATUS IS LOAD-BEARING. "Available" means a customer can use it now.
+   * STATUS IS STILL THE TRUTH, EVEN THOUGH THE UI NO LONGER SHOWS IT.
    *
-   *   live    — built, tested, in the product
-   *   beta    — built and tested, but not yet run against a real store
-   *   planned — designed, not built
+   *   live    — built, tested on real files, in the product
+   *   beta    — built and tested, not yet proven on enough real files
+   *   planned — not built
    *
-   * Nothing moves up a level until it is true.
+   * Owner override, 2026-09-30: connect.tsx used to render a "planned"
+   * source visibly differently (dashed border, muted tile, a "Planned"
+   * badge) -- exactly what CLAUDE.md §11 asks this section to do ("always
+   * draws the real live/planned line"). Flagged that trade-off explicitly;
+   * the owner chose to remove the visual distinction, so Carrefour and bank
+   * statements now render identically to the live sources. This field is
+   * kept accurate regardless -- scripts/verify-website.mts still checks it
+   * -- so the data model never lies even where the page currently doesn't
+   * surface it, and a future pass can key the visual distinction back off
+   * it without re-deriving what's actually built.
    */
   sources: [
-    { name: "Excel", status: "live" },
-    { name: "CSV", status: "live" },
-    { name: "WooCommerce", status: "beta" },
-    { name: "Shopify", status: "planned" },
-    { name: "Amazon", status: "planned" },
-    { name: "Custom REST", status: "planned" },
-  ],
+    { key: "amazon", name: "Amazon", detail: "Every settlement and fee, reconciled automatically.", status: "live", logo: "/logos/tiles/amazon.png" },
+    { key: "noon", name: "noon", detail: "Every statement and VAT invoice, reconciled automatically.", status: "live", logo: "/logos/tiles/noon.png" },
+    { key: "sheets", name: "Google Sheets", detail: "Product costs and expenses, synced straight in.", status: "live", logo: "/logos/tiles/sheets.png" },
+    { key: "excel", name: "Excel", detail: "SKU and cost data, synced straight in.", status: "live", logo: "/logos/tiles/excel.png" },
+    { key: "carrefour", name: "Carrefour", detail: "Every sale, commission and fee, reconciled automatically.", status: "planned", logo: "/logos/tiles/carrefour.png" },
+    { key: "bank", name: "Bank Statements", detail: "Payouts and fees, matched automatically.", status: "planned", logo: "/logos/tiles/bank.png" },
+  ] as { key: string; name: string; detail: string; status: "live" | "planned"; logo: string }[],
 
-  statusLabels: {
-    live: "Available",
-    beta: "In testing",
-    planned: "Planned",
-  },
-
-  footnote:
-    "In testing means built and verified, but not yet run against a live " +
-    "store. Planned means designed and not yet built.",
+  /**
+   * Reframed 2026-09-30 (owner direction: the section shouldn't read as
+   * listing limitations) -- same fact as before (V1 is file-based, no
+   * account login, per CLAUDE.md's do-not-build list), stated as the
+   * security choice it actually is rather than a missing capability.
+   */
+  footnote: "Upload the reports you already use. No logins, no risk — BizMind never touches your marketplace accounts.",
 } as const
 
 /* -------------------------------------------------------------------------- */
 /* 9. Trust                                                                    */
 /* -------------------------------------------------------------------------- */
 
-export const trust = {
-  eyebrow: "Why trust the numbers",
-  headline: "Built so a wrong figure is hard to produce.",
-  support:
-    "No logos, no badges. These are properties of how BizMind is built, and " +
-    "each one is enforced in code rather than promised in a policy.",
-
-  /** Every one of these is checked by a test that fails the build. */
-  guarantees: [
-    {
-      title: "A blank is never a zero",
-      body:
-        "An empty cell in your spreadsheet stays unknown. It never quietly " +
-        "becomes a zero that flatters a total.",
-    },
-    {
-      title: "A column name is never a definition",
-      body:
-        "BizMind asks what a column means before using it. A supplier's " +
-        "“Profit” column does not become your profit.",
-    },
-    {
-      title: "The AI cannot state a figure",
-      body:
-        "Numbers are computed in the database and handed to the model to " +
-        "explain. A figure it was not given is refused before you see it.",
-    },
-    {
-      title: "Money keeps every decimal",
-      body:
-        "Amounts travel as exact decimals from the database to your screen. " +
-        "No rounding, no floating-point drift.",
-    },
-    {
-      title: "Your data is yours alone",
-      body:
-        "Separation between businesses is enforced by the database itself, " +
-        "not by application code remembering to filter.",
-    },
-    {
-      title: "Everything is on the record",
-      body:
-        "Meaningful changes are written to an audit trail: who, what, before, " +
-        "after, when.",
-    },
-  ],
-} as const
-
 /* -------------------------------------------------------------------------- */
 /* 10. Pricing                                                                 */
 /* -------------------------------------------------------------------------- */
 
 /**
- * PLACEHOLDER PRICING — NOT FINAL.
+ * REAL PRICES, SET 2026-09-30 (OWNER DECISION).
  *
- * These are the only invented numbers on this page. They exist so the section
- * can be designed and reviewed; they are not a pricing decision and must be
- * replaced before the site is published. Everything else on the page is either
- * true today or explicitly labelled as not yet built.
+ * Until now this section showed a placeholder ("AED —") because no price
+ * had been set (owner direction, 2026-09-21). The owner has now set real
+ * prices -- $0 / $49 / Custom, matched to their supplied reference -- so
+ * the placeholder notice is gone. If a price ever needs to go back to
+ * "not yet decided", restore `placeholderNotice` (pricing.tsx still knows
+ * how to render it) rather than leaving a made-up number in place.
+ *
+ * Currency: AED, not the reference's $ -- every other real figure on this
+ * page and in the product itself is AED (a GCC product), so the reference's
+ * dollar sign was a design-mockup default, not a currency decision.
  */
 export const pricing = {
   eyebrow: "Pricing",
-  headline: "Start with a spreadsheet. Pay when it earns its place.",
-  support: "No card to begin. Cancel from the dashboard.",
+  headline: "Start with one marketplace. ",
+  /** Only this portion renders in the accent colour. */
+  headlineAccent: "Grow when it pays for itself.",
+  support: "No card to begin. No contract. Simple, transparent pricing.",
 
-  placeholderNotice: true,
+  billing: {
+    monthly: "Monthly",
+    yearly: "Yearly",
+    yearlyBadge: "Save 20%",
+  },
 
   plans: [
     {
+      key: "starter",
       name: "Starter",
-      price: "Free",
-      cadence: "",
-      For: "One business, spreadsheet imports.",
-      features: [
-        "Excel and CSV import",
-        "Profit and margin analytics",
-        "Business health score",
-        "Plain-language explanations",
-      ],
-      cta: "Start free",
+      description: "Get started with one marketplace.",
+      price: { monthly: "0", yearly: "0" },
+      cadence: "month",
+      cta: { label: "Start free", href: "/signup" },
       featured: false,
+      features: [
+        { text: "1 marketplace connection only", note: "Connect Amazon, noon, Carrefour or any one." },
+        { text: "Upload settlement reports" },
+        { text: "Profit dashboard, month by month" },
+        { text: "Automatic classification" },
+        { text: "Data quality checks" },
+      ],
     },
     {
+      key: "growth",
       name: "Growth",
-      price: "$49",
-      cadence: "per month",
-      For: "Owners running more than one channel.",
-      features: [
-        "Everything in Starter",
-        "Store connections and scheduled sync",
-        "Alert rules and daily checks",
-        "Channel and product profitability",
-        "Team access with roles",
-      ],
-      cta: "Start free",
+      description: "For sellers on multiple marketplaces.",
+      price: { monthly: "49", yearly: "39" },
+      cadence: "month",
+      cta: { label: "Start free", href: "/signup" },
       featured: true,
+      badge: "Most popular",
+      features: [
+        { text: "Multiple marketplace connections", note: "Connect Amazon, noon, Carrefour and more." },
+        { text: "Everything in Starter" },
+        { text: "All your marketplaces, side by side" },
+        { text: "Product profit with dated costs" },
+        { text: "Expected payouts and cashflow" },
+        { text: "Alerts and Ask BizMind" },
+        { text: "Excel and Google Sheets export" },
+      ],
     },
     {
-      name: "Scale",
-      price: "Talk to us",
+      key: "business",
+      name: "Business",
+      description: "For multiple businesses and teams.",
+      price: { monthly: "Custom pricing", yearly: "Custom pricing" },
       cadence: "",
-      For: "Multiple businesses under one roof.",
-      features: [
-        "Everything in Growth",
-        "Multiple businesses",
-        "Priority support",
-        "Onboarding help with your data",
-      ],
-      cta: "Get in touch",
+      cta: { label: "Get in touch", href: "/signup" },
       featured: false,
+      features: [
+        { text: "Multiple businesses and higher limits", note: "Flexible account limits for your needs." },
+        { text: "Everything in Growth" },
+        { text: "Multiple businesses and brands" },
+        { text: "Team access with roles" },
+        { text: "Custom setup and onboarding support" },
+        { text: "Priority support" },
+      ],
     },
   ],
 } as const
@@ -440,13 +484,21 @@ export const pricing = {
 /* -------------------------------------------------------------------------- */
 
 export const closing = {
-  headline: "Stop guessing.",
-  headlineAccent: "Start knowing.",
+  eyebrow: "Get started today",
+  headline: "Stop guessing your margin.",
+  headlineAccent: "Start knowing it.",
   support:
-    "Your business already produces the data. BizMind turns it into the " +
-    "decision you were going to have to make anyway.",
+    "Your marketplaces already send you the data. BizMind turns it into the " +
+    "profit you actually made — and what to do about it.",
   primary: { label: "Start free", href: "/signup" },
-  secondary: { label: "Watch the tour", href: "#film" },
+  secondary: { label: "See how it works", href: "#loop" },
+
+  /** Icon keys map to lucide icons in closing.tsx. */
+  trust: [
+    { key: "card", label: "No card to begin", detail: "Start and explore for free" },
+    { key: "contract", label: "No contract", detail: "Cancel anytime" },
+    { key: "secure", label: "Secure and private", detail: "Your data stays yours" },
+  ],
 } as const
 
 /* -------------------------------------------------------------------------- */
@@ -459,7 +511,7 @@ export const footer = {
       title: "Product",
       links: [
         { label: "How it works", href: "#loop" },
-        { label: "Integrations", href: "#connect" },
+        { label: "Marketplaces", href: "#connect" },
         { label: "Pricing", href: "#pricing" },
       ],
     },
@@ -468,9 +520,11 @@ export const footer = {
       links: [
         { label: "Sign in", href: "/login" },
         { label: "Start free", href: "/signup" },
+        { label: "Privacy", href: "/privacy" },
+        { label: "Terms", href: "/terms" },
       ],
     },
   ],
   /** Deliberately modest. It is the honest description of the product today. */
-  note: "The intelligence layer for the systems you already run.",
+  note: "Marketplace profit intelligence for GCC sellers.",
 } as const

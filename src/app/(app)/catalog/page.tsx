@@ -21,6 +21,7 @@ import { ProductForm } from "@/features/catalog/components/product-form"
 import { ProductPanel } from "@/features/catalog/components/product-panel"
 import { SkuSetupExcel } from "@/features/catalog/components/sku-setup-excel"
 import {
+  getProductCostGapQueue,
   getProductDetail,
   getSkuQueue,
   getSkuSummary,
@@ -41,6 +42,8 @@ export const metadata: Metadata = {
 /** Needs attention shows this many SKUs, or up to MORE on "Show more". */
 const FIRST_PAGE = 20
 const MORE = 200
+/** The cost-gap list is business-wide already; cap what renders on this page. */
+const COST_GAP_PREVIEW = 50
 
 /**
  * Products and costs: the one place to set up marketplace SKUs, products and
@@ -51,6 +54,15 @@ const MORE = 200
  * in every past and future report, and the product's dated cost applies to
  * it. Only SKUs with no product appear in Needs attention. An unmatched SKU
  * never stops marketplace profit; only gross profit waits for it.
+ *
+ * "Need your input: 0" is about SKU MAPPING only -- it says nothing about
+ * whether a matched product actually has a cost. Those are genuinely
+ * different questions, and showing only the mapping count next to a products
+ * table that separately flags "No cost" was confusing on its own page (owner
+ * report, 2026-09-28): a brand-new product can be fully matched and still
+ * have zero cost, if the sheet that created it left the cost cell blank.
+ * product_cost_gap_queue() (migration 0055, already built for Marketplace
+ * data quality) surfaces exactly that, reused here -- no new backend.
  *
  * Nothing is calculated here: counts of SKUs only, figures from SQL.
  */
@@ -69,7 +81,7 @@ export default async function CatalogPage(props: PageProps<"/catalog">) {
   const showAll = firstParam(searchParams.all) === "1"
 
   const supabase = await createClient()
-  const [{ data: profile }, products, shown, summary, choices, currencies, detail] = await Promise.all([
+  const [{ data: profile }, products, shown, summary, choices, currencies, detail, costGaps] = await Promise.all([
     supabase.from("profiles").select("full_name").eq("id", user!.id).maybeSingle(),
     listProductOverview(activeBusiness.id),
     // Only the rows on screen are read; the counts come from the summary.
@@ -78,6 +90,7 @@ export default async function CatalogPage(props: PageProps<"/catalog">) {
     listActiveProducts(activeBusiness.id),
     listBusinessCurrencies(activeBusiness.id),
     productId ? getProductDetail(activeBusiness.id, productId) : Promise.resolve(null),
+    getProductCostGapQueue(activeBusiness.id, COST_GAP_PREVIEW),
   ])
   const canManage = activeBusiness.role === "OWNER" || activeBusiness.role === "ADMIN"
   const waiting = summary.needAttention
@@ -100,7 +113,7 @@ export default async function CatalogPage(props: PageProps<"/catalog">) {
 
         {/* ---- where setup stands ------------------------------------------ */}
         {summary.skus > 0 && (
-          <section aria-label="SKU setup" className="grid gap-3 sm:grid-cols-3">
+          <section aria-label="SKU setup" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Stat label="Marketplace SKUs in your files" value={formatNumber(summary.skus)} />
             <Stat
               label="Recognised"
@@ -125,7 +138,23 @@ export default async function CatalogPage(props: PageProps<"/catalog">) {
               note={
                 summary.needAttention > 0
                   ? "Marketplace profit is complete; only gross profit waits for these"
-                  : "Nothing to set up"
+                  : "Every SKU is matched to a product"
+              }
+            />
+            <Stat
+              label="Products with no cost"
+              value={formatNumber(costGaps.length)}
+              icon={
+                costGaps.length > 0 ? (
+                  <CircleAlert className="size-4 text-warning-strong" aria-hidden />
+                ) : (
+                  <CircleCheck className="size-4 text-success-strong" aria-hidden />
+                )
+              }
+              note={
+                costGaps.length > 0
+                  ? "Matched, but gross profit waits for these too"
+                  : "Every matched product has a cost"
               }
             />
           </section>
@@ -221,6 +250,65 @@ export default async function CatalogPage(props: PageProps<"/catalog">) {
             </div>
           )}
         </section>
+
+        {/* ---- products with no cost (0055's reader, shown here too) ------- */}
+        {costGaps.length > 0 && (
+          <section id="cost-gaps" className="scroll-mt-20 overflow-hidden rounded-xl border border-border bg-card">
+            <div className="border-b border-border px-5 py-4">
+              <h2 className="text-sm font-semibold">
+                {formatNumber(costGaps.length)}
+                {costGaps.length === COST_GAP_PREVIEW ? "+" : ""} product{costGaps.length === 1 ? "" : "s"} matched, but
+                with no cost
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Every marketplace SKU below is already matched to one of your products -- that part is done. Gross
+                profit still waits on these because the product itself has no cost in this currency for the sale
+                date. Largest sales first.
+              </p>
+            </div>
+            <div className="overflow-x-auto [&_td:first-child]:pl-5 [&_td:last-child]:pr-5 [&_th:first-child]:pl-5 [&_th:last-child]:pr-5">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Product</TableHead>
+                    <TableHead>Seen on</TableHead>
+                    <TableHead className="text-right">Units sold</TableHead>
+                    <TableHead className="text-right">Sales</TableHead>
+                    <TableHead className="text-right">What to do</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {costGaps.map((row) => (
+                    <TableRow key={`${row.product_id}-${row.currency}`}>
+                      <TableCell className="text-sm">
+                        {row.product_name}
+                        {row.product_sku && (
+                          <span className="block font-mono text-xs text-muted-foreground">{row.product_sku}</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{row.accounts}</TableCell>
+                      <TableCell className="text-right font-mono text-xs tabular-nums">
+                        {formatNumber(row.units_sold, 4)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm tabular-nums">
+                        {formatMoney(row.sales_amount, row.currency)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Link
+                          href={ledgerHref("/catalog", { product: row.product_id })}
+                          scroll={false}
+                          className="text-xs font-medium underline-offset-4 hover:underline"
+                        >
+                          Add a cost
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </section>
+        )}
 
         {canManage && summary.skus > 0 && <SkuSetupExcel needAttention={waiting} />}
 

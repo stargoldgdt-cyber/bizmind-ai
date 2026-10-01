@@ -1,5 +1,6 @@
 import "server-only"
 
+import type { WaterfallStep } from "@/features/overview/queries"
 import { createClient } from "@/lib/supabase/server"
 import type { MetricGroup } from "@/services/classification/model"
 import type {
@@ -9,7 +10,16 @@ import type {
   PnlSummaryRow,
 } from "@/services/ledger/export"
 import type { LedgerMonth } from "@/services/ledger/period"
-import type { ClassificationCategoryRow, ClassificationRule, Database } from "@/types/database"
+import type { ClassificationCategoryRow, ClassificationRule, Database, Json } from "@/types/database"
+
+/**
+ * One shape for every marketplace's payout (migration 0039/0056): a formal
+ * settlement total (Amazon) or a payment the marketplace reports sending
+ * directly (noon), never money received. Read here so the Settlements and
+ * Reconciliation tabs show something meaningful for every marketplace, not
+ * only the ones that file settlement reports.
+ */
+export type ExpectedPayoutRow = Database["public"]["Functions"]["expected_payouts"]["Returns"][number]
 
 /**
  * Reads for the ledger dashboard, all through the signed-in user's session.
@@ -48,69 +58,148 @@ export async function getLedgerPeriods(businessId: string): Promise<LedgerPeriod
   return data ?? []
 }
 
-export type LedgerMonthData = {
-  summary: PnlSummaryRow | null
-  breakdown: PnlBreakdownRow[]
-  settlements: PnlSettlementRow[]
-  quality: LedgerQualityRow[]
+/**
+ * What every P&L reader needs of a period: an exact range and the words for
+ * it. A `LedgerMonth` (services/ledger/period.ts) satisfies this, and so
+ * does a `PnlPeriod` (services/ledger/pnl-period.ts, which also covers This
+ * Quarter and This Year) -- callers may pass either.
+ */
+export type LedgerRange = { from: string; to: string; label: string }
+
+/**
+ * The waterfall reuses `dashboard_waterfall_steps()` (migration 0049) by
+ * reshaping a PnlSummaryRow into the JSON shape it reads -- no arithmetic,
+ * only field names, so the bar math is the same code the executive dashboard
+ * already runs. `net_available: false` stops it at Gross Profit: Net Profit
+ * is business-wide (A7) and stays its own section below.
+ */
+function pnlWaterfallInput(s: PnlSummaryRow): Record<string, unknown> {
+  return {
+    has_marketplace_data: true,
+    figures_status: s.figures_status,
+    gross_sales: s.gross_sales,
+    sales_refunds: s.sales_refunds,
+    seller_discounts: s.seller_discounts,
+    net_sales: s.net_sales,
+    other_income: s.other_income,
+    marketplace_fees: s.marketplace_fees,
+    fulfillment: s.fulfillment,
+    advertising: s.advertising,
+    other_marketplace_costs: s.other_marketplace_costs,
+    non_recoverable_vat: s.non_recoverable_vat,
+    contribution_before_open_items: s.contribution_before_open_items,
+    contribution_status: s.contribution_status,
+    cogs: s.cogs,
+    gross_profit_before_open_items: s.gross_profit_before_open_items,
+    gross_profit_status: s.gross_profit_status,
+    net_available: false,
+  }
 }
 
-/** Everything the overview and the export show for one account and month. */
+export type PnlSummaryChangeRow = Database["public"]["Functions"]["pnl_summary_change"]["Returns"][number]
+
+export type LedgerMonthData = {
+  summary: PnlSummaryRow | null
+  /** vs the period before (migration 0061); null only if that RPC has not been applied yet. */
+  change: PnlSummaryChangeRow | null
+  breakdown: PnlBreakdownRow[]
+  /** Kept for the CSV export (services/ledger/export.ts), which reads this exact shape. */
+  settlements: PnlSettlementRow[]
+  /** One shape for every marketplace's payout (0039/0056); what the Settlements and Reconciliation tabs read. */
+  payouts: ExpectedPayoutRow[]
+  quality: LedgerQualityRow[]
+  waterfall: WaterfallStep[]
+}
+
+/** Everything the P&L screen and the export show for one account and period. */
 export async function getLedgerMonth(
   businessId: string,
   accountId: string,
-  month: LedgerMonth
+  month: LedgerRange
 ): Promise<LedgerMonthData> {
   const supabase = await createClient()
   const range = { p_from: month.from, p_to: month.to, p_account_id: accountId }
 
-  const [summary, breakdown, settlements, quality] = await Promise.all([
+  const [summary, change, breakdown, settlements, payouts, quality] = await Promise.all([
     supabase.rpc("pnl_summary", range),
+    supabase.rpc("pnl_summary_change", range),
     supabase.rpc("pnl_breakdown", range),
     supabase.rpc("pnl_settlements", range),
+    supabase.rpc("expected_payouts", { ...range, p_business_id: businessId }),
     supabase.rpc("ledger_data_quality", { ...range, p_business_id: businessId }),
   ])
 
-  for (const reply of [summary, breakdown, settlements, quality]) {
-    if (reply.error) throw new Error(`Could not load this month's figures: ${reply.error.message}`)
+  for (const reply of [summary, breakdown, settlements, payouts, quality]) {
+    if (reply.error) throw new Error(`Could not load this period's figures: ${reply.error.message}`)
+  }
+
+  const row = summary.data?.[0] ?? null
+  let waterfall: WaterfallStep[] = []
+  if (row) {
+    const steps = await supabase.rpc("dashboard_waterfall_steps", { p_overview: pnlWaterfallInput(row) as Json })
+    if (steps.error) throw new Error(`Could not load the profit waterfall: ${steps.error.message}`)
+    waterfall = steps.data ?? []
   }
 
   return {
-    summary: summary.data?.[0] ?? null,
+    summary: row,
+    change: change.error ? null : (change.data?.[0] ?? null),
     breakdown: breakdown.data ?? [],
     settlements: settlements.data ?? [],
+    payouts: payouts.data ?? [],
     quality: quality.data ?? [],
+    waterfall,
   }
 }
 
 export type CurrencyMonthData = {
   /** All the business's accounts in the currency, added up in SQL. */
   total: PnlSummaryRow | null
+  /** vs the period before (migration 0061); null only if that RPC has not been applied yet. */
+  change: PnlSummaryChangeRow | null
   /** The same figures for each of those accounts, for comparison. */
   perAccount: PnlSummaryRow[]
+  /** Every account's payouts for the period, one shape for every marketplace (0039/0056). */
+  payouts: ExpectedPayoutRow[]
+  /** The combined total's waterfall. */
+  waterfall: WaterfallStep[]
 }
 
-/** One month for every account in one currency. Never across currencies (A12). */
+/** One period for every account in one currency. Never across currencies (A12). */
 export async function getCurrencyMonth(
   businessId: string,
   currency: string,
-  month: LedgerMonth
+  month: LedgerRange
 ): Promise<CurrencyMonthData> {
   const supabase = await createClient()
   const range = { p_from: month.from, p_to: month.to, p_business_id: businessId }
 
-  const [total, perAccount] = await Promise.all([
+  const [total, change, perAccount, payouts] = await Promise.all([
     supabase.rpc("pnl_summary", { ...range, p_combine_by_currency: true }),
+    supabase.rpc("pnl_summary_change", { ...range, p_combine_by_currency: true }),
     supabase.rpc("pnl_summary", range),
+    supabase.rpc("expected_payouts", range),
   ])
 
-  for (const reply of [total, perAccount]) {
-    if (reply.error) throw new Error(`Could not load this month's figures: ${reply.error.message}`)
+  for (const reply of [total, perAccount, payouts]) {
+    if (reply.error) throw new Error(`Could not load this period's figures: ${reply.error.message}`)
+  }
+
+  const totalRow = (total.data ?? []).find((row) => row.currency === currency) ?? null
+  const changeRow = change.error ? null : (change.data ?? []).find((row) => row.currency === currency) ?? null
+  let waterfall: WaterfallStep[] = []
+  if (totalRow) {
+    const steps = await supabase.rpc("dashboard_waterfall_steps", { p_overview: pnlWaterfallInput(totalRow) as Json })
+    if (steps.error) throw new Error(`Could not load the profit waterfall: ${steps.error.message}`)
+    waterfall = steps.data ?? []
   }
 
   return {
-    total: (total.data ?? []).find((row) => row.currency === currency) ?? null,
+    total: totalRow,
+    change: changeRow,
     perAccount: (perAccount.data ?? []).filter((row) => row.currency === currency),
+    payouts: (payouts.data ?? []).filter((row) => row.currency === currency),
+    waterfall,
   }
 }
 

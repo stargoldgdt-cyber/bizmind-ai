@@ -343,6 +343,61 @@ try {
   check("nor count a file's SKUs", !rivalSummary || rivalSummary.skus === 0, JSON.stringify(rivalSummary))
   const anon = await request("/rest/v1/rpc/sku_auto_match", { method: "POST", body: JSON.stringify({ p_business_id: businessId }) }, ANON_KEY)
   check("a signed-out caller cannot run it", !anon.ok, say(anon))
+
+  /* ------------------------------------------------------------------------ */
+  section("6. A SKU MATCHED LATER, WITH EARLIER SALES AT THE SAME COST (0054)")
+
+  // The real bug (owner's live data, 2026-09-26): a product already has a
+  // cost; a SEPARATE, later sheet matches one more marketplace SKU to that
+  // SAME product, at the SAME cost -- but that SKU's own sales reach back
+  // before the cost's effective_from. The old code's "cost unchanged, do
+  // nothing" shortcut left those sales permanently uncosted, with no page
+  // ever pointing at the gap. sgProduct already has 120 AED from 2026-06-05
+  // and 135 AED from today (section 2); May, before either, is the gap.
+  const MAY_SKU = "SG-MAY-EARLY FBA"
+  const MAY = [
+    AMAZON_V2_HEADERS.join("\t"),
+    tsv({ "settlement-id": SID(4), "settlement-start-date": "01.05.2026 00:00:00 UTC",
+      "settlement-end-date": "14.05.2026 00:00:00 UTC", "deposit-date": "18.05.2026 00:00:00 UTC",
+      "total-amount": "90.00", currency: "AED" }),
+    tsv({ "settlement-id": SID(4), "transaction-type": "Order", "order-id": `997-${SID(4)}-0`,
+      "merchant-order-id": `997-${SID(4)}-0`, "marketplace-name": "Amazon.ae", "amount-type": "ItemPrice",
+      "amount-description": "Principal", amount: "90.00", "fulfillment-id": "AFN", "posted-date": "20.05.2026",
+      "posted-date-time": "20.05.2026 10:00:00 UTC", "order-item-code": `5${SID(4)}0`, sku: MAY_SKU,
+      "quantity-purchased": "1" }),
+  ].join("\n") + "\n"
+
+  const mayUpload = await upload(account, `${SID(4)}.txt`, MAY)
+  check("May, with the new SKU, is recorded", mayUpload.ok, say(mayUpload))
+
+  const gapApply = await rpc("sku_setup_apply", {
+    p_business_id: businessId,
+    p_rows: [{ row: 2, marketplace_code: "AMAZON", raw_sku: MAY_SKU, product_id: sgProduct?.id, unit_cost: "135", currency: "AED" }],
+  }, owner)
+  check("matching it at the SAME cost (135) already on file backfills one more cost row",
+    gapApply.ok && gapApply.body.skus_matched === 1 && gapApply.body.costs_added === 1 &&
+      gapApply.body.costs_backfilled === 1 && gapApply.body.costs_unchanged === 0,
+    say(gapApply))
+
+  const historyAfterGapFix = sgProduct ? await costsOf(sgProduct.id) : []
+  check("the new row covers exactly the gap: 135 AED from 20 May 2026, alongside the two already there",
+    historyAfterGapFix.some((c) => c.unit_cost === 135 && c.effective_from === "2026-05-20") &&
+      historyAfterGapFix.some((c) => c.unit_cost === 120 && c.effective_from === "2026-06-05") &&
+      historyAfterGapFix.some((c) => c.unit_cost === 135 && c.effective_from === TODAY),
+    JSON.stringify(historyAfterGapFix))
+
+  const mayAfterFix = rows(await rpc("pnl_by_product", {
+    p_from: "2026-05-01T00:00:00Z", p_to: "2026-06-01T00:00:00Z", p_business_id: businessId,
+  }, owner)).find((r) => r.product_id === sgProduct?.id)
+  check("May is COSTED now, at 1 x 135", mayAfterFix?.cogs_status === "COSTED" &&
+    ["135.0000", "-135.0000"].includes(mayAfterFix?.cogs), JSON.stringify(mayAfterFix))
+
+  const reapply = await rpc("sku_setup_apply", {
+    p_business_id: businessId,
+    p_rows: [{ row: 2, marketplace_code: "AMAZON", raw_sku: MAY_SKU, product_id: sgProduct?.id, unit_cost: "135", currency: "AED" }],
+  }, owner)
+  check("applying the same row again finds no further gap: nothing added",
+    reapply.ok && reapply.body.costs_added === 0 && reapply.body.costs_unchanged === 1, say(reapply))
 } catch (error) {
   failed += 1
   console.log(`\n  FAIL  the suite stopped early: ${(error as Error).message}`)

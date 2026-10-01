@@ -113,6 +113,7 @@ const summary: PnlSummaryRow = {
   row_errors: 0, incomplete_reasons: [], accounts: 1, units_sold: "3.0000", cogs: "-65.0000",
   units_without_product: "0.0000", units_without_cost: "1.0000", sales_without_cost: "50.0000", gross_profit: null,
   gross_profit_status: "INCOMPLETE", gross_profit_before_open_items: "137.0000", gross_profit_reasons: ["COST_MISSING"],
+  orders: 3, average_order_value: "83.3300", profit_per_order: null, gross_margin_pct: null,
 }
 const csv = buildCsv(ledgerExportRows({
   businessName: "Test", accountLabel: "noon", marketplaceCode: "NOON", currency: "AED", month: july,

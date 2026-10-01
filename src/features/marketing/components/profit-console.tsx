@@ -1,148 +1,175 @@
-import { AlertTriangle, TrendingDown, TrendingUp } from "lucide-react"
+import { ArrowRight, CalendarDays, ChevronDown, PiggyBank, Receipt, Sparkles, TrendingDown, TrendingUp, Wallet } from "lucide-react"
+import type { ComponentType, SVGProps } from "react"
 
 import { cn } from "cn"
 
 /**
- * The hero's product visual.
+ * The hero's product visual: the executive dashboard, drawn.
  *
  * WHAT IT IS
  * ----------
- * A faithful rendering of what BizMind actually shows: the figures come from
- * the analytics engine's real vocabulary (revenue, gross margin, marketplace
- * fees, cost coverage), laid out the way the dashboard lays them out — label,
- * then the number as the loudest element, then the change beside it.
- *
- * The values describe a demonstration business. Every LABEL, every unit and
- * every relationship between them is real; nothing here is a figure BizMind
- * could not produce.
+ * A faithful rendering of what BizMind shows on /overview (rebuilt
+ * 2026-09-30, light, per the owner's reference): a real greeting, the
+ * headline KPI cards with their own icon tiles and sparklines, and the
+ * insight card that explains the sharpest change in plain language -- the
+ * same three pieces, in the same order, a signed-in seller actually sees
+ * first. Every label, unit and relationship is real; the values describe a
+ * demonstration business and the frame says so.
  *
  * WHY IT IS DRAWN AND NOT A SCREENSHOT
  * ------------------------------------
  * A screenshot is a picture of one viewport at one moment. This is markup, so
  * it reflows on a phone, respects the reader's theme, and stays legible when
- * text is enlarged. It also cannot go stale in the way a PNG does.
+ * text is enlarged. It also cannot go stale in the way a PNG does, and it
+ * never has to be retaken when the real dashboard changes again.
  *
- * THE COMPOSITION IS THE ARGUMENT
- * -------------------------------
- * A margin sits beside the coverage figure that qualifies it, and the panel
- * ends on a recommendation. That order — figure, caveat, what to do — is the
- * whole product in one frame.
+ * LIGHT, MATCHED TO THE OWNER'S REFERENCE
+ * -----------------------------------------
+ * Previously a dark `surface-3` panel (matching an earlier all-dark preview
+ * section). The owner's reference (2026-09-30) puts this same console on a
+ * white card, on the same light lavender band as the hero, Problem and Loop
+ * sections -- so this rebuild follows that, not a fresh design of its own.
  */
 
-const KPIS = [
-  { label: "Revenue", value: "284,500", unit: "AED", change: "+18.2%", up: true, good: true },
-  { label: "Orders", value: "1,284", unit: "", change: "+12.4%", up: true, good: true },
-  { label: "Marketplace fees", value: "31,295", unit: "AED", change: "+26.0%", up: true, good: false },
-  { label: "Net profit", value: "24,180", unit: "AED", change: "−9.2%", up: false, good: false },
-] as const
+const SPARK: Record<
+  string,
+  { area: string; line: string; color: string }
+> = {
+  /** Real hex, matching --success/--danger/--primary/--info's light-mode values -- SVG stop-color doesn't reliably resolve a CSS var (see problem.tsx). */
+  up: {
+    area: "M2 46 C14 40 22 30 32 32 S48 40 58 28 S72 18 82 20 S96 14 108 16 S124 10 138 8 V60 H2Z",
+    line: "M2 46 C14 40 22 30 32 32 S48 40 58 28 S72 18 82 20 S96 14 108 16 S124 10 138 8",
+    color: "#15803d",
+  },
+  down: {
+    area: "M2 14 C14 20 22 26 32 24 S48 30 58 34 S72 40 82 38 S96 44 108 42 S124 48 138 50 V60 H2Z",
+    line: "M2 14 C14 20 22 26 32 24 S48 30 58 34 S72 40 82 38 S96 44 108 42 S124 48 138 50",
+    color: "#b91c1c",
+  },
+  downViolet: {
+    area: "M2 16 C14 22 22 20 32 26 S48 24 58 32 S72 30 82 38 S96 40 108 44 S124 42 138 48 V60 H2Z",
+    line: "M2 16 C14 22 22 20 32 26 S48 24 58 32 S72 30 82 38 S96 40 108 44 S124 42 138 48",
+    color: "#6d28d9",
+  },
+  flat: {
+    area: "M2 34 C20 30 34 38 50 32 S78 28 96 34 S120 30 138 32 V60 H2Z",
+    line: "M2 34 C20 30 34 38 50 32 S78 28 96 34 S120 30 138 32",
+    color: "#2563eb",
+  },
+}
 
-const CHANNELS = [
-  { name: "Amazon", revenue: "142,250", margin: "8.1%", width: "w-[50%]", weak: true },
-  { name: "Website", revenue: "96,730", margin: "19.4%", width: "w-[34%]", weak: false },
-  { name: "Retail", revenue: "45,520", margin: "14.2%", width: "w-[16%]", weak: false },
-] as const
+function Sparkline({ id, spark }: { id: string; spark: keyof typeof SPARK }) {
+  const s = SPARK[spark]
+  return (
+    <svg viewBox="0 0 140 60" className="absolute right-0 bottom-0 h-12 w-24 opacity-80" aria-hidden>
+      <defs>
+        <linearGradient id={`console-spark-${id}`} x1="0" x2="0" y1="0" y2="1">
+          <stop stopColor={s.color} stopOpacity="0.18" />
+          <stop offset="1" stopColor={s.color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={s.area} fill={`url(#console-spark-${id})`} />
+      <path d={s.line} fill="none" stroke={s.color} strokeWidth="2" />
+    </svg>
+  )
+}
+
+const KPIS: {
+  key: string
+  icon: ComponentType<SVGProps<SVGSVGElement>>
+  label: string
+  value: string
+  change: string
+  good: boolean | null
+  spark: keyof typeof SPARK
+}[] = [
+  { key: "net", icon: Receipt, label: "Net sales", value: "184,320", change: "21.6%", good: true, spark: "up" },
+  { key: "contribution", icon: PiggyBank, label: "Contribution", value: "114,470", change: "6.1%", good: false, spark: "down" },
+  { key: "gross", icon: TrendingUp, label: "Gross profit", value: "44,430", change: "12.8%", good: false, spark: "downViolet" },
+  { key: "payouts", icon: Wallet, label: "Expected payouts", value: "96,210", change: "Not received", good: null, spark: "flat" },
+]
+
+const TONE: Record<string, string> = {
+  net: "bg-success-subtle text-success-strong",
+  contribution: "bg-rose-100 text-rose-600",
+  gross: "bg-primary/10 text-primary",
+  payouts: "bg-info-subtle text-info-strong",
+}
 
 export function ProfitConsole() {
   return (
-    <div className="overflow-hidden rounded-2xl border border-surface-3-border bg-surface-3-raised">
-      {/* Window chrome. Establishes "this is an application", quietly. */}
-      <div className="flex items-center justify-between border-b border-surface-3-border px-4 py-3 sm:px-5">
+    <div className="overflow-hidden rounded-3xl border border-surface-1-border bg-surface-1 shadow-[0_30px_60px_-35px_rgba(76,29,149,0.3)]">
+      {/* Window chrome, doubling as the real-time greeting your own dashboard shows. */}
+      <div className="flex items-center justify-between gap-3 border-b border-surface-1-border px-4 py-3.5 sm:px-6">
         <div className="flex items-center gap-2.5">
-          <span className="size-2 rounded-full bg-success" aria-hidden />
-          <p className="font-mono text-[11px] tracking-wider text-surface-3-muted uppercase">
-            Profit intelligence
-          </p>
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary font-mono text-[11px] font-bold text-primary-foreground">
+            YA
+          </span>
+          <div>
+            <p className="text-sm font-semibold">Good afternoon, Yousef 👋</p>
+            <p className="text-xs text-surface-1-muted">Business performance · demo</p>
+          </div>
         </div>
-        <p className="font-mono text-[11px] text-surface-3-muted">Last 30 days</p>
+        <span className="hidden items-center gap-1.5 rounded-full border border-surface-1-border px-3 py-1.5 font-mono text-xs text-surface-1-muted sm:flex">
+          <CalendarDays className="size-3.5" aria-hidden />
+          Last 3 months
+          <ChevronDown className="size-3.5" aria-hidden />
+        </span>
       </div>
 
-      <div className="p-4 sm:p-5">
-        {/* Four figures. Tabular so the digits line up down the columns. */}
-        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-surface-3-border bg-surface-3-border sm:grid-cols-4">
+      <div className="p-4 sm:p-6">
+        {/* Headline figures, each with its own icon tile and sparkline -- the same card the real dashboard uses. */}
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {KPIS.map((kpi) => (
-            <div key={kpi.label} className="bg-surface-3-raised p-3.5">
-              <p className="truncate text-[11px] text-surface-3-muted">{kpi.label}</p>
-              <p className="mt-1.5 font-mono text-lg font-semibold tabular-nums">
-                {kpi.value}
-                {kpi.unit && (
-                  <span className="ml-1 text-[11px] font-normal text-surface-3-muted">
-                    {kpi.unit}
-                  </span>
-                )}
-              </p>
+            <div key={kpi.key} className="relative min-w-0 overflow-hidden rounded-2xl border border-surface-1-border p-3.5">
+              <div className="flex items-start gap-2">
+                <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-lg", TONE[kpi.key])}>
+                  <kpi.icon className="size-4" aria-hidden />
+                </span>
+                <p className="min-w-0 text-pretty font-mono text-[10px] leading-tight tracking-wide text-surface-1-muted uppercase">
+                  {kpi.label}
+                </p>
+              </div>
+              <p className="relative mt-3 font-mono text-lg font-bold tabular-nums sm:text-xl">{kpi.value}</p>
               <p
                 className={cn(
-                  "mt-1 flex items-center gap-1 font-mono text-[11px] tabular-nums",
-                  kpi.good ? "text-success" : "text-danger"
+                  "relative mt-1 flex items-center gap-1 font-mono text-xs tabular-nums",
+                  kpi.good === null ? "text-surface-1-muted" : kpi.good ? "text-success" : "text-danger"
                 )}
               >
-                {kpi.up ? (
+                {kpi.good === null ? null : kpi.good ? (
                   <TrendingUp className="size-3" aria-hidden />
                 ) : (
                   <TrendingDown className="size-3" aria-hidden />
                 )}
                 {kpi.change}
               </p>
+              <Sparkline id={kpi.key} spark={kpi.spark} />
             </div>
           ))}
         </div>
 
-        {/* Where the money actually comes from, and what it keeps. */}
-        <div className="mt-4 rounded-xl border border-surface-3-border p-4">
-          <div className="flex items-baseline justify-between">
-            <p className="font-mono text-[11px] tracking-wider text-surface-3-muted uppercase">
-              By channel
-            </p>
-            <p className="font-mono text-[11px] text-surface-3-muted">Gross margin</p>
+        {/* The insight card: the one sentence that explains the sharpest change, exactly as the real dashboard writes it. */}
+        <div className="mt-3 flex flex-col gap-3 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3.5">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+              <Sparkles className="size-5" aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <p className="font-mono text-[10.5px] tracking-wider text-primary uppercase">BizMind insight</p>
+              <p className="mt-1.5 text-sm text-pretty">
+                <span className="font-semibold">Contribution is down 6.1% vs last period.</span>{" "}
+                <span className="text-surface-1-muted">
+                  The biggest reason: fulfilment on noon rose faster than sales, and advertising on Amazon added AED
+                  4,120.
+                </span>
+              </p>
+            </div>
           </div>
-
-          <ul className="mt-3.5 space-y-3">
-            {CHANNELS.map((channel) => (
-              <li key={channel.name}>
-                <div className="flex items-baseline justify-between gap-3 text-sm">
-                  <span className="truncate">{channel.name}</span>
-                  <span className="flex shrink-0 items-baseline gap-3 font-mono text-xs tabular-nums">
-                    <span className="text-surface-3-muted">{channel.revenue}</span>
-                    <span
-                      className={cn(
-                        "w-12 text-right",
-                        channel.weak ? "text-warning" : "text-surface-3-foreground"
-                      )}
-                    >
-                      {channel.margin}
-                    </span>
-                  </span>
-                </div>
-                <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-surface-3-border">
-                  <div
-                    className={cn(
-                      "h-full rounded-full",
-                      channel.width,
-                      channel.weak ? "bg-warning" : "bg-brand-400"
-                    )}
-                  />
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/*
-          The point of the whole panel. A figure, the reason it is not the
-          whole truth, and the thing to do about it.
-        */}
-        <div className="mt-4 flex gap-3 rounded-xl border border-warning/40 bg-warning/10 p-4">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
-          <div>
-            <p className="text-sm font-medium">
-              Amazon takes half your revenue and returns the least margin.
-            </p>
-            <p className="mt-1 text-xs text-surface-3-muted">
-              Fees there rose 26% while revenue rose 18%. Based on 82% cost
-              coverage — one in six items sold has no cost recorded, so the real
-              margin is lower.
-            </p>
-          </div>
+          <span className="inline-flex shrink-0 items-center gap-1 self-start rounded-full bg-primary/10 px-4 py-2 text-xs font-semibold text-primary sm:self-center">
+            See why
+            <ArrowRight className="size-3" aria-hidden />
+          </span>
         </div>
       </div>
     </div>

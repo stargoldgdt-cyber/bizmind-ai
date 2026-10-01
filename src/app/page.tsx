@@ -1,18 +1,16 @@
 import type { Metadata } from "next"
 
 import { siteConfig } from "@/config/site"
-import { Act } from "@/features/marketing/components/act"
 import { Analyst } from "@/features/marketing/components/analyst"
 import { Closing } from "@/features/marketing/components/closing"
 import { Connect } from "@/features/marketing/components/connect"
-import { Film } from "@/features/marketing/components/film"
 import { Hero } from "@/features/marketing/components/hero"
 import { Loop } from "@/features/marketing/components/loop"
 import { MarketingNav } from "@/features/marketing/components/nav"
+import { Preview } from "@/features/marketing/components/preview"
 import { Pricing } from "@/features/marketing/components/pricing"
 import { Problem } from "@/features/marketing/components/problem"
-import { Trust } from "@/features/marketing/components/trust"
-import { Understand } from "@/features/marketing/components/understand"
+import { ProductDemo } from "@/features/marketing/components/product-demo"
 
 /**
  * The BizMind landing page.
@@ -22,17 +20,17 @@ import { Understand } from "@/features/marketing/components/understand"
  * Each band answers one question, and each one is only asked because the band
  * before it earned the right to:
  *
- *   Hero       what is this, and what does it look like
- *   Problem    why your current dashboard is not enough
- *   Loop       where BizMind goes further than a report
- *   Film       show me, then
- *   Understand can I believe the numbers
- *   Analyst    can it tell me WHY
- *   Act        will it warn me, and will it act without asking
- *   Connect    will it work with what I already run
- *   Trust      why should I believe any of this
- *   Pricing    what does it cost
- *   Closing    fine — what now
+ *   Hero         what is this, and what does it look like
+ *   Problem      why your current dashboard is not enough
+ *   Loop         where BizMind goes further than a report
+ *   Preview      show me, then -- two real panels, tabbed, nothing "coming soon"
+ *   Product demo see it in motion (owner override, 2026-09-30: live with no
+ *                real recording yet -- Play links to Loop instead; see
+ *                product-demo.tsx's header comment)
+ *   Analyst      can it tell me WHY
+ *   Connect      will it work with what I already run
+ *   Pricing      what does it cost
+ *   Closing      fine — what now
  *
  * NO TWO ADJACENT BANDS SHARE A COMPOSITION
  * -----------------------------------------
@@ -41,25 +39,36 @@ import { Understand } from "@/features/marketing/components/understand"
  * three plans, centred close. The repeated text-left/image-right rhythm is
  * the single clearest tell of a generated page, so it appears nowhere.
  *
- * Surface levels alternate 3 → 1 → 2 → 3 → 1 → 3 → 1 → 1 → 3 → 1 → brand.
- * The violet band is spent once, at the close.
+ * MOSTLY ONE LIGHT SURFACE NOW, NOT AN ALTERNATION
+ * ---------------------------------------------------
+ * DESIGN.md's original band rhythm (surfaces alternating 3 → 1 → 2 → 3 → …,
+ * violet spent once at the close) no longer describes this page: every
+ * section from Problem through Closing was rebuilt light (bg-surface-2,
+ * the same blob-and-dot-grid treatment) against owner-supplied references
+ * over the course of 2026-09-30, and Closing itself dropped the violet
+ * band. Only Analyst... no, nothing dark remains except the footer
+ * (surface-3). DESIGN.md hasn't been updated to match; treat the code as
+ * the current truth until it is.
  *
- * EVERY SECTION IS A SERVER COMPONENT except the nav and the film, which need
- * state for the mobile menu and the play control.
+ * EVERY SECTION IS A SERVER COMPONENT except the nav, the preview and
+ * pricing, which need state for the mobile menu, the tab switch and the
+ * monthly/yearly toggle.
  */
 
+const TITLE = `${siteConfig.name} — Marketplace profit for Amazon and noon sellers`
+
 export const metadata: Metadata = {
-  title: `${siteConfig.name} — Know your numbers. Know what to do next.`,
+  title: TITLE,
   description: siteConfig.description,
   openGraph: {
-    title: `${siteConfig.name} — Know your numbers. Know what to do next.`,
+    title: TITLE,
     description: siteConfig.description,
     type: "website",
     siteName: siteConfig.name,
   },
   twitter: {
     card: "summary_large_image",
-    title: `${siteConfig.name} — Know your numbers. Know what to do next.`,
+    title: TITLE,
     description: siteConfig.description,
   },
 }
@@ -81,12 +90,10 @@ export default function LandingPage() {
         <Hero />
         <Problem />
         <Loop />
-        <Film />
-        <Understand />
+        <Preview />
+        <ProductDemo />
         <Analyst />
-        <Act />
         <Connect />
-        <Trust />
         <Pricing />
       </main>
 

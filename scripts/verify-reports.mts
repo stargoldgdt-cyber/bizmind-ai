@@ -82,6 +82,7 @@ const summary = {
   units_without_product: "296.0000", units_without_cost: "0.0000", sales_without_cost: "59000.0000", gross_profit: null,
   gross_profit_status: "INCOMPLETE", gross_profit_before_open_items: "36552.7600",
   gross_profit_reasons: ["VAT_TREATMENT_UNKNOWN", "SKU_NOT_MAPPED"],
+  orders: 296, average_order_value: "188.8700", profit_per_order: null, gross_margin_pct: null,
 } satisfies Fn["pnl_summary"]["Returns"][number]
 
 const payout = {
@@ -90,7 +91,7 @@ const payout = {
   file_name: null, period_start: "2026-06-20T00:00:00Z", period_end: "2026-07-04T00:00:00Z",
   expected_date: "2026-07-04T08:00:00Z", expected_amount: "9999999999999999.9999", settlement_lines_total: "9999999999999999.9999",
   settlement_lines: 3, marketplace_status: "ADDS_UP", bank_receipt_status: "NOT_CONNECTED", bank_receipt_amount: null,
-  bank_receipt_date: null,
+  bank_receipt_date: null, difference: "0.0000",
 } satisfies Fn["expected_payouts"]["Returns"][number]
 
 const report: Report = {

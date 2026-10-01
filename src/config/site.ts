@@ -10,11 +10,11 @@ export const siteConfig = {
   shortName: "BizMind",
 
   /** The one-line promise. Used in the hero and in page metadata. */
-  tagline: "Your ERP records what happened. BizMind tells you what to do about it.",
+  tagline: "Know what every marketplace really pays you.",
 
   /** The functional description, for search engines and social cards. */
   description:
-    "BizMind AI is the intelligence and automation layer for your business. Connect your sales channels, understand your numbers, and know what to do next.",
+    "BizMind AI shows Amazon and noon sellers in the GCC their true profit per marketplace, per product and per month, worked out line by line from the marketplaces' own settlement reports.",
 
   /** The product loop, shown in marketing and used to structure the app. */
   pillars: [

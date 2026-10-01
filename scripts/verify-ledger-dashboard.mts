@@ -21,6 +21,7 @@ import {
   text,
   type PnlSummaryRow,
 } from "../src/services/ledger/export"
+import { previousPeriodLabel, resolvePnlPeriod } from "../src/services/ledger/pnl-period"
 import { monthKeyOf, parseLedgerMonth } from "../src/services/ledger/period"
 
 let passed = 0
@@ -58,6 +59,31 @@ for (const bad of ["2026-13", "2026-00", "2026-7", "July", "1999-01", "2026-07-0
   check(`refused: ${JSON.stringify(bad)}`, parseLedgerMonth(bad as string | null | undefined) === null)
 }
 check("a database month becomes its key", monthKeyOf("2026-07-01") === "2026-07")
+
+/* -------------------------------------------------------------------------- */
+section("1b. THE PREVIOUS-PERIOD LABEL (migration 0061)")
+
+const thisMonth = resolvePnlPeriod("this_month", july!, null)
+check("This Month vs the month before it: 'Jun 2026'", previousPeriodLabel(thisMonth) === "Jun 2026", previousPeriodLabel(thisMonth))
+
+const lastMonth = resolvePnlPeriod("last_month", july!, null)
+check("Last Month (June) vs the month before it: 'May 2026'", previousPeriodLabel(lastMonth) === "May 2026", previousPeriodLabel(lastMonth))
+
+const thisQuarter = resolvePnlPeriod("this_quarter", july!, null)
+check("This Quarter (Jul-Sep, Q3) vs the quarter before it: 'Q2 2026'", previousPeriodLabel(thisQuarter) === "Q2 2026", previousPeriodLabel(thisQuarter))
+
+const thisYear = resolvePnlPeriod("this_year", july!, null)
+check("This Year (2026) vs the year before it: '2025'", previousPeriodLabel(thisYear) === "2025", previousPeriodLabel(thisYear))
+
+const september = parseLedgerMonth("2026-09")
+const custom = resolvePnlPeriod("custom", july!, september)
+check("Custom Range (Sep 2026) vs the month before it: 'Aug 2026'", previousPeriodLabel(custom) === "Aug 2026", previousPeriodLabel(custom))
+
+check(
+  "a period spanning any other number of whole months still produces a sane label, never a crash",
+  previousPeriodLabel({ key: "custom", from: "2026-07-01T00:00:00.000Z", to: "2026-09-01T00:00:00.000Z", label: "x" }) ===
+    "May – Jun 2026"
+)
 
 /* -------------------------------------------------------------------------- */
 section("2. THE EXPORT WRITES MONEY EXACTLY AND SAFELY")
@@ -129,6 +155,10 @@ const summary: PnlSummaryRow = {
   gross_profit_status: "INCOMPLETE",
   gross_profit_before_open_items: "36552.7600",
   gross_profit_reasons: ["VAT_TREATMENT_UNKNOWN", "SKU_NOT_MAPPED"],
+  orders: 1000,
+  average_order_value: "61.4300",
+  profit_per_order: null,
+  gross_margin_pct: null,
 }
 const exported = buildCsv(
   ledgerExportRows({
@@ -188,6 +218,31 @@ check(
 check(
   "the VAT warning reads 'VAT treatment unknown'",
   overview.includes("VAT treatment unknown:")
+)
+check(
+  "the page-local FigureCard is retired -- KpiCard carries every headline figure now (owner request, 2026-09-29)",
+  !overview.includes("FigureCard") && overview.includes('from "@/features/overview/components/kpi-card"')
+)
+check(
+  "every headline figure is compared against the period before it, via pnl_summary_change() (migration 0061)",
+  overview.includes("change={pct(change?.gross_sales_change_pct)}") &&
+    overview.includes("change={pct(change?.contribution_change_pct)}") &&
+    overview.includes("change={pct(change?.gross_profit_change_pct)}") &&
+    overview.includes("changeLabel={vs}")
+)
+check(
+  "costs, fees and COGS are marked risingIsGood=false -- a bigger fee is never shown as green",
+  overview.includes('label="Marketplace fees"') &&
+    /label="Marketplace fees"[\s\S]{0,300}?risingIsGood={false}/.test(overview) &&
+    /label="Cost of goods sold"[\s\S]{0,400}?risingIsGood={false}/.test(overview)
+)
+
+const queries = read("src/features/ledger/queries.ts")
+check(
+  "getLedgerMonth() and getCurrencyMonth() both call pnl_summary_change() and degrade to null instead of throwing",
+  (queries.match(/rpc\("pnl_summary_change"/g) ?? []).length === 2 &&
+    queries.includes("change: change.error ? null : (change.data?.[0] ?? null)") &&
+    queries.includes("change: changeRow")
 )
 
 const ledgerFiles = [

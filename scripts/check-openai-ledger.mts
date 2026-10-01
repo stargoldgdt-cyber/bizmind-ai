@@ -40,6 +40,7 @@ const input: LedgerFactInput = {
     units_without_product: "1700.0000", units_without_cost: "0.0000", sales_without_cost: "200000.0000",
     gross_profit: null, gross_profit_status: "INCOMPLETE", gross_profit_before_open_items: "148993.3800",
     gross_profit_reasons: ["VAT_TREATMENT_UNKNOWN", "SKU_NOT_MAPPED"],
+    orders: 1200, average_order_value: "174.1600", profit_per_order: null, gross_margin_pct: null,
   }],
   net: [],
   payouts: [{
@@ -47,7 +48,7 @@ const input: LedgerFactInput = {
     marketplace_code: "AMAZON", currency: "AED", reference: "INVENTED", source_file_id: null, file_name: null,
     period_start: null, period_end: null, expected_date: "2026-07-18T08:00:00Z", expected_amount: "24323.3800",
     settlement_lines_total: "24323.3800", settlement_lines: 300, marketplace_status: "ADDS_UP",
-    bank_receipt_status: "NOT_CONNECTED", bank_receipt_amount: null, bank_receipt_date: null,
+    bank_receipt_status: "NOT_CONNECTED", bank_receipt_amount: null, bank_receipt_date: null, difference: "0.0000",
   }],
 }
 

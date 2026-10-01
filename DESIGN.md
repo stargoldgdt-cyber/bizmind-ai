@@ -356,7 +356,12 @@ tables scroll inside their card.
 ```
 
 - **One primary CTA per section.** Never two competing primaries.
-- **There is no glow token, and buttons never glow.** See `DECISIONS.md`.
+- **There is no glow token, and buttons never glow — inside the product.**
+  See `DECISIONS.md`. The marketing homepage's hero is the one named
+  exception (`DECISIONS.md`, 2026-09-29): a violet glow and soft gradient on
+  its background, its product console and its own primary buttons, written
+  as plain classes on marketing components only, never as a token, and never
+  present on a screen behind sign-in.
 
 ---
 

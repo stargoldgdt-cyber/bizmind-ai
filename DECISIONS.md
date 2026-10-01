@@ -2259,3 +2259,82 @@ withdraw-and-reupload is the only sanctioned correction.
 **Cost to change:** Low for the rule itself (one migration, the established
 retire-and-supersede pattern). Cost to the owner: four files withdrawn and
 re-uploaded, a few minutes.
+
+---
+
+## 2026-09-29 — Glow, back on the marketing homepage only
+
+**Decided:** the marketing homepage's hero — its background, the product
+console's border, and the "Start free" button in the nav and the hero
+(never the closing band's white-on-violet button, which already sits on
+the page's one full-bleed brand colour and needs no glow to stand out) —
+may use a violet glow and a soft radial-gradient background. Reverses part
+of "Removed the glow token"
+(2026-09-08) above, but narrowly: **only** `src/features/marketing/`. The
+product itself (`/overview`, `/ledger`, every screen behind sign-in) is
+unchanged — flat surfaces, hairline borders, no shadow, no glow, exactly as
+DESIGN.md §10–11 still say. No token was re-added; the glow is written as
+plain Tailwind arbitrary values on marketing components only, so it cannot
+leak into a shared component (`Button` itself is untouched) or into the
+product by a careless import.
+
+**Why:** owner direction, after reviewing two rounds of hero mockups
+side by side — a flat hero read as "less finished" than the AI-generated
+reference the request started from, and a glowing hero, kept to the one
+band that already gets the product's one full-bleed brand colour (DESIGN.md
+§3, "the violet band is spent once"), doesn't contradict the calm-surface
+rule inside the product. A marketing page and a dashboard a seller reads
+every day are different jobs: the first has one moment to look expensive,
+the second must stay quiet enough to read for years.
+
+**Rejected:** re-adding `--shadow-glow` as a token — that would make it
+reachable from any component, including the product, which is exactly what
+the 2026-09-08 decision was written to prevent.
+
+**Cost to change:** Low. Deleting the glow classes from the marketing
+components returns to the flat 2026-09-08 look; nothing elsewhere depends
+on them.
+
+---
+
+## 2026-09-30 — Hero rebuilt light, to an owner-supplied reference; glow retired again
+
+**Decided:** less than a day after the glow decision above, the owner
+supplied a concrete reference (a light, violet-tinted hero with a dense
+dashboard mockup) and two competitor screenshots, and asked for the hero
+built "100%" to it. That reference has no glow at all — a pale
+`surface-2`-tinted band, a soft blob field and a faint dot-grid instead. The
+hero (`src/features/marketing/components/hero.tsx`) and the header
+(`nav.tsx`) were rebuilt to it exactly, and `glow.ts` was deleted as dead
+code once nothing imported it. The 2026-09-29 decision stands as a record
+of that day's direction; it is superseded by this one, not deleted, because
+the sequence (dark and flat → dark and glowing → light and reference-matched)
+is itself the useful part of the record for the next time this page changes.
+
+**The dashboard mockup's icon tiles are multicoloured** (violet, emerald,
+sky, rose, amber, teal, pink — Tailwind's own default palette, not new
+tokens), matched to the reference exactly. This is a second named, scoped
+exception to DESIGN.md's colour hierarchy, same shape as the glow one: it
+lives only in `dashboard-showcase.tsx`, a marketing-only component, and
+never reaches the real product's own `KpiCard` (`src/features/overview/
+components/kpi-card.tsx`), which keeps its violet-or-status-only rule
+unchanged.
+
+**Real logo files, not drawn wordmarks:** the owner supplied Amazon's,
+noon's and Carrefour's own logo files directly (`public/logos/`), the
+first files in the project's first `public/` directory. Used as-is via
+`next/image`, unoptimized (static files, no remote source to optimise).
+This replaces the brand-coloured text wordmarks used in earlier rounds,
+which existed only because no real logo files were available yet.
+
+**Carrefour is named again, at full visual weight, in the hero.** Reverses
+part of the 2026-09-29 direction (name only what's live). The owner's
+instruction this round was explicit and exact-text, given twice now after
+an earlier correction; `connect.sources` still marks it `planned`, and the
+Marketplaces section still draws the real live/planned line for a reader
+who wants it — see `scripts/verify-website.mts`, which was updated to check
+that boundary instead of the hero's wording.
+
+**Cost to change:** Low for the hero itself. Retiring the multicoloured
+tiles or the real logo files, if ever wanted, touches only
+`dashboard-showcase.tsx` and `hero.tsx` respectively.

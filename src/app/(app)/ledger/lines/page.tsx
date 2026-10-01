@@ -50,7 +50,7 @@ const GROUP_LABEL: Record<MetricGroup, string> = {
   SELLER_DISCOUNTS: "Seller-funded discounts",
   OTHER_INCOME: "Other income",
   MARKETPLACE_FEES: "Marketplace fees",
-  FULFILLMENT: "Fulfillment and storage",
+  FULFILLMENT: "Fulfillment & Logistics",
   ADVERTISING: "Advertising",
   OTHER_MARKETPLACE_COSTS: "Other marketplace costs",
   INPUT_VAT: "Input VAT",

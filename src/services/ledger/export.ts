@@ -91,7 +91,7 @@ export function ledgerExportRows(input: LedgerExportInput): CsvCell[][] {
       [text("Net sales"), money(s.net_sales), text(figures)],
       [text("Other income"), money(s.other_income), text(figures)],
       [text("Marketplace fees"), money(s.marketplace_fees), text(figures)],
-      [text("Fulfillment and storage"), money(s.fulfillment), text(figures)],
+      [text("Fulfillment & Logistics"), money(s.fulfillment), text(figures)],
       [text("Advertising"), money(s.advertising), text(figures)],
       [text("Other marketplace costs"), money(s.other_marketplace_costs), text(figures)],
       [text("Non-recoverable VAT on fees"), money(s.non_recoverable_vat), text(figures)],

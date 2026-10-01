@@ -164,7 +164,7 @@ export default async function ProductProfitPage(props: PageProps<"/ledger/produc
                   {[
                     summary.gross_profit_reasons.includes("SKU_NOT_MAPPED") && "Some SKUs are not matched to a product.",
                     summary.gross_profit_reasons.includes("COST_MISSING") && "Some products have no cost for the sale date.",
-                    summary.contribution === null && "Contribution itself is still incomplete (see Marketplace profit).",
+                    summary.contribution === null && "Contribution itself is still incomplete (see Marketplace P&L).",
                   ]
                     .filter(Boolean)
                     .join(" ")}

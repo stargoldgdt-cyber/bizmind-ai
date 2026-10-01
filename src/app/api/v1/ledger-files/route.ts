@@ -105,10 +105,11 @@ export async function POST(request: Request) {
     return refuse(422, "More than one marketplace format matches this file, so BizMind will not guess which it is.")
   }
   if (detection.kind === "unknown") {
-    return refuse(
-      422,
-      "BizMind does not recognise this file. For Amazon, upload the settlement report downloaded as Flat File V2."
-    )
+    const help =
+      account.marketplace_code === "NOON"
+        ? "For noon, upload from Finance → Transaction View (item level) or Invoices and Credit Notes — both are needed for the same period."
+        : "For Amazon, upload the settlement report downloaded as Flat File V2."
+    return refuse(422, `BizMind does not recognise this file. ${help}`)
   }
   if (detection.adapter.marketplace !== account.marketplace_code) {
     return refuse(

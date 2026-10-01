@@ -141,3 +141,13 @@ even if application code is wrong.
 **The AI never calculates a business number.** Every financial figure is
 computed by our own code and verified; the AI only explains figures it was
 given. A wrong number here would be worse than no number at all.
+
+---
+
+## Deployment
+
+Hosted on Vercel, built from the `main` branch on
+[github.com/stargoldgdt-cyber/bizmind-ai](https://github.com/stargoldgdt-cyber/bizmind-ai).
+A push to `main` triggers a production deploy automatically. Production
+environment variables (Supabase, OpenAI, Google OAuth, `CRON_SECRET`) are set
+in the Vercel project's Environment Variables screen, not in this repo.

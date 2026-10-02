@@ -264,6 +264,33 @@ try {
     Number(pctReply.body) === -12.5 && pctZero.body === null, `${say(pctReply)} ${say(pctZero)}`)
 
   /* ------------------------------------------------------------------------ */
+  section("2b. THE PROFIT BRIDGE READS THE OVERVIEW ROW, NOT THE LEDGER AGAIN (0064)")
+
+  const juneOne = rows(await rpc("dashboard_overview", {
+    ...JULY, p_from: "2026-06-01T00:00:00Z", p_to: "2026-07-01T00:00:00Z", p_account_id: amazon,
+  }, owner))[0]
+  const bridgeOne = rows(await rpc("dashboard_profit_bridge", { p_overview: one }, owner))
+  check("dashboard_profit_bridge takes the overview row as jsonb and returns steps",
+    bridgeOne.length > 0, JSON.stringify(bridgeOne).slice(0, 300))
+  check("its first step is the previous period's own contribution, read from prev_snapshot -- not recomputed",
+    bridgeOne[0]?.kind === "START" && bridgeOne[0]?.amount === juneOne?.contribution_before_open_items,
+    `${bridgeOne[0]?.amount} vs ${juneOne?.contribution_before_open_items}`)
+  check("its last step is the current period's own contribution, read straight off the overview row",
+    bridgeOne[bridgeOne.length - 1]?.kind === "END" &&
+      bridgeOne[bridgeOne.length - 1]?.amount === one?.contribution_before_open_items,
+    `${bridgeOne[bridgeOne.length - 1]?.amount} vs ${one?.contribution_before_open_items}`)
+  const bridgeSum = bridgeOne.reduce((total, step, index) => {
+    if (index === 0 || index === bridgeOne.length - 1) return total
+    return total + units(step.amount as string)
+  }, units(bridgeOne[0]?.amount as string))
+  check("the steps reconcile exactly: previous contribution + every delta = current contribution",
+    bridgeSum === units(bridgeOne[bridgeOne.length - 1]?.amount as string),
+    `${bridgeSum} vs ${units(bridgeOne[bridgeOne.length - 1]?.amount as string)}`)
+  const noCompare = rows(await rpc("dashboard_profit_bridge", { p_overview: june }, owner))
+  check("a period with no comparison (June itself has no May) yields no bridge steps, not a guess",
+    noCompare.length === 0, JSON.stringify(noCompare).slice(0, 200))
+
+  /* ------------------------------------------------------------------------ */
   section("3. THE WATERFALL")
 
   const steps = rows(await rpc("dashboard_waterfall", JULY, owner))

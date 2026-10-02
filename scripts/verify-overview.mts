@@ -116,6 +116,7 @@ const base: Overview = {
   net_profit_before_open_items: "190.0000", net_profit_reasons: [], input_vat_treatment: "RECOVERABLE",
   refunds_pct_of_gross: 6, costs_pct_of_net_sales: 37.2, fees_pct_of_net_sales: 16, advertising_pct_of_net_sales: 12.8,
   contribution_margin_pct: 62.8, gross_margin_pct: 30.9, net_margin_pct: 20.2, prev_has_marketplace_data: true,
+  prev_snapshot: null,
   gross_sales_change_pct: 5, net_sales_change_pct: 4, marketplace_costs_change_pct: 2, contribution_change_pct: 3,
   gross_profit_change_pct: 1, net_profit_change_pct: -2, expected_payouts: 3, expected_inflow: "700.0000",
   payouts_in_doubt: 0, open_quality_items: 0, unmatched_skus: 0, unplaced_expense_categories: 0,

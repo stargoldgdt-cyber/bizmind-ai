@@ -52,7 +52,7 @@ export async function getOverviewData(
   }
   const scoped = { ...range, p_account_id: scope.accountId }
 
-  const [overview, daily, monthly, costs, accounts, products, payouts, bridge] = await Promise.all([
+  const [overview, daily, monthly, costs, accounts, products, payouts] = await Promise.all([
     supabase.rpc("dashboard_overview", scoped),
     period.single ? supabase.rpc("dashboard_daily", scoped) : Promise.resolve({ data: [], error: null }),
     // The trend always shows the whole period's months, so a single month still
@@ -75,24 +75,28 @@ export async function getOverviewData(
       p_to: period.to,
       p_account_id: scope.accountId,
     }),
-    // Why contribution changed since the period before: previous period's own
-    // date range is worked out in SQL (0060), the same rule dashboard_overview
-    // already uses, so the two never disagree.
-    supabase.rpc("dashboard_profit_bridge", scoped),
   ])
 
-  for (const reply of [overview, daily, monthly, costs, accounts, products, payouts, bridge]) {
+  for (const reply of [overview, daily, monthly, costs, accounts, products, payouts]) {
     if (reply.error) throw new Error(`Could not load the dashboard: ${reply.error.message}`)
   }
 
   const row = overview.data?.[0] ?? null
-  // The waterfall is worked out from the overview row already read (0049),
-  // instead of reading the ledger a second time.
+  // The waterfall and the profit bridge are both worked out from the overview
+  // row already read (0049, 0064), instead of reading the ledger again for
+  // each one -- dashboard_profit_bridge used to call pnl_summary() a second
+  // time for the exact same two periods dashboard_overview already computed.
   let waterfall: WaterfallStep[] = []
+  let bridge: BridgeStep[] = []
   if (row) {
-    const steps = await supabase.rpc("dashboard_waterfall_steps", { p_overview: row as unknown as Json })
+    const [steps, bridgeSteps] = await Promise.all([
+      supabase.rpc("dashboard_waterfall_steps", { p_overview: row as unknown as Json }),
+      supabase.rpc("dashboard_profit_bridge", { p_overview: row as unknown as Json }),
+    ])
     if (steps.error) throw new Error(`Could not load the dashboard: ${steps.error.message}`)
+    if (bridgeSteps.error) throw new Error(`Could not load the dashboard: ${bridgeSteps.error.message}`)
     waterfall = steps.data ?? []
+    bridge = bridgeSteps.data ?? []
   }
 
   return {
@@ -104,7 +108,7 @@ export async function getOverviewData(
     accounts: accounts.data ?? [],
     products: (products.data ?? []).filter((p) => p.currency === scope.currency),
     payouts: (payouts.data ?? []).filter((p) => p.currency === scope.currency),
-    bridge: bridge.data ?? [],
+    bridge,
   }
 }
 

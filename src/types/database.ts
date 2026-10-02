@@ -2402,6 +2402,8 @@ export type Database = {
           gross_margin_pct: number | null
           net_margin_pct: number | null
           prev_has_marketplace_data: boolean
+          /** Migration 0064: the previous period's own raw fields, so dashboard_profit_bridge never recomputes them. */
+          prev_snapshot: Json | null
           gross_sales_change_pct: number | null
           net_sales_change_pct: number | null
           marketplace_costs_change_pct: number | null
@@ -2500,9 +2502,9 @@ export type Database = {
         }[]
       }
 
-      /** Migration 0060: why contribution changed, previous period to current. */
+      /** Migration 0060: why contribution changed, previous period to current. 0064: reads the overview row already fetched, no longer recomputes it. */
       dashboard_profit_bridge: {
-        Args: { p_business_id: string; p_currency: string; p_from: string; p_to: string; p_account_id?: string | null }
+        Args: { p_overview: Json }
         Returns: {
           step: number
           label: string

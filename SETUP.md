@@ -222,6 +222,56 @@ Expected result: **Success. No rows returned**
 Without this, the link in the confirmation email points at the wrong place and
 signing up appears to hang.
 
+The same list governs the password-reset and "send a new confirmation link"
+emails. They ask Supabase to send people back to `<your site>/auth/confirm`, and
+Supabase only honours an address on **Redirect URLs** (otherwise it falls back
+to the Site URL). For a live domain add both spellings, for example
+`https://example.com/**` and `https://www.example.com/**`.
+
+`/auth/confirm` accepts both link shapes Supabase can send: the default
+templates' `code` link, and a `token_hash` link.
+
+**The default `code` link only works in the browser that asked for the email**
+(it needs a one-time secret stored there), so a reset or confirmation opened on
+a phone, or in a different browser, fails with "That link did not work".
+Customers do this all the time, so switch both emails to the `token_hash`
+shape under **Authentication → Email Templates**. Change only the link or
+button address and keep the rest of the template:
+
+- **Confirm signup:** `{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=signup`
+- **Reset Password:** `{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=recovery`
+
+`{{ .RedirectTo }}` is the address the app asked for (`<this site>/auth/confirm`,
+plus `?next=/reset-password` for a reset), so the same templates work on
+localhost and on the live domain, with no domain written into them.
+
+### Turn on "Continue with Google"
+
+The button is in the code. Until Google is enabled in Supabase, pressing it
+shows `Unsupported provider: provider is not enabled`.
+
+1. **Google Cloud Console** → **APIs & Services** → **Credentials** → open (or
+   create) an **OAuth client ID** of type *Web application*. The one used for
+   Google Sheets works too.
+2. Under **Authorized redirect URIs** add
+   `https://<your-project-ref>.supabase.co/auth/v1/callback`. This is
+   Supabase's address, not the site's. Save.
+3. **Google Auth Platform** (or *OAuth consent screen*) → set the publishing
+   status to **In production**. While it says *Testing*, only listed test users
+   can sign in. Sign-in only asks for email, name and picture, which Google
+   approves without a review.
+4. **Supabase** → **Authentication** → **Sign In / Providers** → **Google** →
+   switch it on and paste the client ID and client secret from step 1. The
+   secret goes only into this Supabase screen: never into the repo, chat or
+   `.env` files.
+5. **Authentication** → **URL Configuration**: the Redirect URLs from the
+   section above must already include your site (`https://example.com/**`);
+   Google sign-in returns through `/auth/confirm`.
+
+A person who already has an account under the same verified email is signed
+into it; Supabase links the Google identity to that account. Keep **Confirm
+email** switched on.
+
 ### Restart
 
 ```bash

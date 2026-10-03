@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { SignupForm } from "@/features/auth/components/signup-form"
 
 export const metadata: Metadata = {
@@ -10,13 +10,7 @@ export const metadata: Metadata = {
 export default function SignupPage() {
   return (
     <Card className="shadow-sm">
-      <CardHeader>
-        <CardTitle className="text-xl">Create your account</CardTitle>
-        <CardDescription>
-          Start connecting your business. No credit card needed.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+      <CardContent className="px-6 py-4 sm:px-8 sm:py-6">
         <SignupForm />
       </CardContent>
     </Card>

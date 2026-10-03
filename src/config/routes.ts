@@ -71,7 +71,16 @@ export const PROTECTED_PREFIXES = [
  * Pages that only make sense when signed OUT. A signed-in user hitting these
  * is redirected onward rather than shown a login form they do not need.
  */
-export const AUTH_ROUTES = ["/login", "/signup"] as const
+export const AUTH_ROUTES = ["/login", "/signup", "/forgot-password"] as const
+
+/**
+ * Deliberately NOT in AUTH_ROUTES: a password-reset link signs the person in
+ * with a short-lived recovery session, and they must still be able to reach
+ * this page while "signed in". The page itself shows what to do when there is
+ * no session (an expired or reused link).
+ */
+export const RESET_PASSWORD_ROUTE = "/reset-password"
+export const FORGOT_PASSWORD_ROUTE = "/forgot-password"
 
 /** The query parameter used to return someone to where they were headed. */
 export const REDIRECT_PARAM = "next"
@@ -99,7 +108,21 @@ export function isAuthPath(pathname: string): boolean {
 export function safeRedirectPath(candidate: string | null | undefined): string | null {
   if (!candidate) return null
   if (!candidate.startsWith("/")) return null
-  // "//host" and "/\host" are protocol-relative URLs pointing off-site.
-  if (candidate.startsWith("//") || candidate.startsWith("/\\")) return null
+  // "//host" is a protocol-relative URL pointing off-site.
+  if (candidate.startsWith("//")) return null
+  // Browsers and URL parsers strip tabs and newlines and treat a backslash as a
+  // slash, so "/<tab>/host" and "/\host" both become "//host". Refuse any
+  // control character or backslash anywhere in the value.
+  for (let i = 0; i < candidate.length; i += 1) {
+    const code = candidate.charCodeAt(i)
+    if (code <= 0x1f || code === 0x7f || code === 0x5c) return null
+  }
+  // Belt and braces: resolved against a throwaway origin, it must stay on it.
+  try {
+    const base = "http://bizmind.invalid"
+    if (new URL(candidate, base).origin !== base) return null
+  } catch {
+    return null
+  }
   return candidate
 }

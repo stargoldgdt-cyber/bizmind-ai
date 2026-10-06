@@ -164,11 +164,13 @@ export default async function OverviewPage(props: PageProps<"/overview">) {
   const overviewHref = (id: string) => ledgerHref("/overview", { account: id, period: periodKey, month: endMonth?.key })
 
   const scopeAlerts = alerts.filter((a) => a.currency === null || a.currency === currency)
+  // Every product and unmatched SKU goes to the card, in sales order. The card
+  // groups them by margin and shows the first few of each group. Cutting to the
+  // top five sellers HERE, before grouping, meant a product losing money on low
+  // volume could never appear under "Losing money".
   const topProducts = (data?.products ?? [])
-    // Unmatched SKUs are shown too (labelled), so a period before matching is not empty.
     .filter((p) => p.row_kind === "PRODUCT" || p.row_kind === "UNMAPPED_SKU")
     .sort((a, b) => compareMoney(b.net_sales, a.net_sales))
-    .slice(0, 5)
 
   return (
     <AppShell

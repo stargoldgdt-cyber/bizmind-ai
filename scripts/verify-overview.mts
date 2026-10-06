@@ -256,9 +256,9 @@ const product = (margin: string | null, cogsStatus: ProductRow["cogs_status"] = 
   cogs_status: cogsStatus,
 })
 
-check("a healthy margin (>= 15%) is Best Performers", bucketOf(product("22.5000")) === "best")
-check("exactly 15% is still Best Performers (the boundary is inclusive on the good side)", bucketOf(product("15.0000")) === "best")
-check("a thin margin (0% up to 15%) is Watch", bucketOf(product("6.4000")) === "watch")
+check("a healthy margin (5% or more) is Best Performers", bucketOf(product("22.5000")) === "best")
+check("exactly 5% is still Best Performers (the line is inclusive on the good side)", bucketOf(product("5.0000")) === "best")
+check("a thin margin (0% up to 5%) is Watch", bucketOf(product("4.9000")) === "watch")
 check("exactly 0% is Watch, not Losing (breakeven is not a loss)", bucketOf(product("0.0000")) === "watch")
 check("a negative margin is Losing Money", bucketOf(product("-3.2000")) === "losing")
 check("a product with no final cost is bucketed nowhere, not guessed", bucketOf(product(null, "NO_COST")) === null)

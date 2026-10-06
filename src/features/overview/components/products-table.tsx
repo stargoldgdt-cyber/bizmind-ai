@@ -9,6 +9,7 @@ import { StatusLabel } from "@/features/ledger/components/status-label"
 import type { ProductRow } from "@/features/overview/queries"
 import { formatMoney, formatNumber, formatPercent } from "@/lib/format"
 import { compareMoney } from "@/services/analytics/money"
+import { LOW_MARGIN_BELOW, statusOf } from "@/services/catalog/product-profit-view"
 
 /**
  * Product profitability, grouped into three tabs by an already-final margin
@@ -17,23 +18,45 @@ import { compareMoney } from "@/services/analytics/money"
  * margin to a number: `compareMoney` orders the digits directly (same rule
  * as everywhere else money-shaped text is compared).
  *
- * A product whose cost is not fully known yet (`cogs_status !== "COSTED"`)
- * has no final margin to bucket by, so it stays out of all three tabs --
- * exactly as it was excluded from the single list before this.
+ * The lines between the groups are the Product profitability page's
+ * (services/catalog/product-profit-view.ts), so "low margin" means the same on
+ * both screens.
+ *
+ * A product whose cost is not fully known yet, and an unmatched SKU, have no
+ * final margin to group by, so they stay out of all three tabs and are counted
+ * in a note instead.
  */
 
 const TAB = {
-  best: { label: "Best Performers", icon: "text-success-strong" },
-  watch: { label: "Watch (Low Margin)", icon: "text-warning-strong" },
-  losing: { label: "Losing Money", icon: "text-danger-strong" },
+  best: { label: "Best performers" },
+  watch: { label: `Watch (below ${LOW_MARGIN_BELOW}%)` },
+  losing: { label: "Losing money" },
 } as const
 type TabKey = keyof typeof TAB
 
+/** How many of each group the card lists; the rest are one click away. */
+const PER_TAB = 5
+
 export function bucketOf(row: ProductRow): TabKey | null {
-  if (row.cogs_status !== "COSTED" || row.gross_margin_percent === null) return null
-  if (compareMoney(row.gross_margin_percent, "0") < 0) return "losing"
-  if (compareMoney(row.gross_margin_percent, "15") < 0) return "watch"
-  return "best"
+  switch (statusOf(row)) {
+    case "GOOD":
+    case "HIGH_MARGIN":
+      return "best"
+    case "LOW_MARGIN":
+      return "watch"
+    case "LOSS":
+      return "losing"
+    default:
+      return null
+  }
+}
+
+/** Orders a group's gross profits: best first, or worst (largest loss) first. */
+function byProfit(direction: "best" | "worst") {
+  return (a: ProductRow, b: ProductRow) => {
+    if (a.gross_profit === null || b.gross_profit === null) return a.gross_profit === b.gross_profit ? 0 : a.gross_profit === null ? 1 : -1
+    return direction === "best" ? compareMoney(b.gross_profit, a.gross_profit) : compareMoney(a.gross_profit, b.gross_profit)
+  }
 }
 
 export function ProductsTable({ rows, currency, href }: { rows: ProductRow[]; currency: string; href: string }) {
@@ -46,26 +69,31 @@ export function ProductsTable({ rows, currency, href }: { rows: ProductRow[]; cu
       const bucket = bucketOf(row)
       if (bucket) out[bucket].push(row)
     }
+    out.best.sort(byProfit("best"))
+    out.watch.sort(byProfit("worst"))
+    out.losing.sort(byProfit("worst"))
     return out
   }, [rows])
-  const uncosted = rows.filter((r) => bucketOf(r) === null)
-  const shown = buckets[tab]
+  const ungrouped = rows.filter((r) => bucketOf(r) === null)
+  const inTab = buckets[tab]
+  const shown = inTab.slice(0, PER_TAB)
 
   return (
     <Card
       title="Product profitability"
-      description="Your best sellers in this period, including SKUs not yet matched to a product. Marketplace-level fees and advertising are not split across products."
+      description="Products grouped by margin. Marketplace-level fees and advertising are not split across products."
       icon={TrendingUp}
     >
       {rows.length === 0 ? (
         <p className="px-5 py-8 text-center text-sm text-muted-foreground">No product sales in this period.</p>
       ) : (
         <>
-          <div className="flex flex-wrap gap-2 px-5 pt-4">
+          <div className="flex flex-wrap gap-2 px-5 pt-4" role="group" aria-label="Product groups">
             {(Object.keys(TAB) as TabKey[]).map((key) => (
               <button
                 key={key}
                 type="button"
+                aria-pressed={tab === key}
                 onClick={() => setTab(key)}
                 className={
                   tab === key
@@ -73,15 +101,15 @@ export function ProductsTable({ rows, currency, href }: { rows: ProductRow[]; cu
                     : "rounded-full border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:border-primary/30 hover:text-foreground"
                 }
               >
-                {TAB[key].label} ({buckets[key].length})
+                {TAB[key].label} ({formatNumber(buckets[key].length)})
               </button>
             ))}
           </div>
 
           {shown.length === 0 ? (
             <p className="px-5 py-8 text-center text-sm text-muted-foreground">
-              {uncosted.length > 0
-                ? `No products in this group yet. ${formatNumber(uncosted.length)} product${uncosted.length === 1 ? " has" : "s have"} no final cost yet, so they can't be grouped by margin.`
+              {ungrouped.length > 0
+                ? `No products in this group yet. ${formatNumber(ungrouped.length)} product${ungrouped.length === 1 ? " has" : "s have"} no final cost or SKU match yet, so ${ungrouped.length === 1 ? "it" : "they"} can't be grouped by margin.`
                 : "No products in this group."}
             </p>
           ) : (
@@ -118,11 +146,17 @@ export function ProductsTable({ rows, currency, href }: { rows: ProductRow[]; cu
             </div>
           )}
 
-          {uncosted.length > 0 && (
+          {inTab.length > shown.length && (
+            <p className="border-t border-border px-5 py-2.5 text-xs text-muted-foreground">
+              Showing {formatNumber(shown.length)} of {formatNumber(inTab.length)} in this group.
+            </p>
+          )}
+
+          {ungrouped.length > 0 && (
             <p className="flex items-center gap-1.5 border-t border-border px-5 py-2.5 text-xs text-warning-strong">
               <CircleAlert className="size-3.5 shrink-0" aria-hidden />
-              {formatNumber(uncosted.length)} product{uncosted.length === 1 ? "" : "s"} not shown above: no final cost yet, or no SKU
-              match, so margin can&apos;t be worked out.
+              {formatNumber(ungrouped.length)} product{ungrouped.length === 1 ? "" : "s"} or SKU{ungrouped.length === 1 ? "" : "s"} not grouped:
+              no final cost or no SKU match, so margin can&apos;t be worked out.
             </p>
           )}
         </>

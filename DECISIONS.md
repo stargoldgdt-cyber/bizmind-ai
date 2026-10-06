@@ -2338,3 +2338,51 @@ that boundary instead of the hero's wording.
 **Cost to change:** Low for the hero itself. Retiring the multicoloured
 tiles or the real logo files, if ever wanted, touches only
 `dashboard-showcase.tsx` and `hero.tsx` respectively.
+
+---
+
+## 2026-10-05 — Product profitability: one set of rules, built to the owner's reference
+
+**Context.** The owner supplied a reference design for the Product
+profitability page and, after seeing it on real data, asked for a better
+visual view, table and highlighting. An audit the day before had found that
+the dashboard's product card grouped only the top five sellers, so a
+loss-making product outside them could never appear under "Losing money".
+
+**Decided:**
+
+- **One rules module, two screens.** `services/catalog/product-profit-view.ts`
+  groups products by comparing the SQL-computed margin with fixed lines (below
+  0% Loss, below 5% Low margin, 25% and over High margin, otherwise Good), and
+  ranks and counts. It never adds, subtracts or converts a figure; ordering
+  uses `compareMoney`. The dashboard card and the page both use it, so "low
+  margin" means the same on both. This moved the dashboard's old 15% line to
+  5%: products between 5% and 15% now sit under "Best performers".
+- **The dashboard card is no longer cut to the top five before grouping.** It
+  groups every product and lists the first five of each group.
+- **"Insights" and "Recommendation", not "AI".** They are fixed sentences chosen
+  by group, written from verified figures; no model writes them and none
+  contains a figure of its own (CLAUDE.md section 5). The reference's
+  "increase price by about AED 90" line was left out: it would need a computed
+  price gap and amounts to repricing, which section 11 rules out.
+- **Actions are navigation, not repricing:** Review product, View product, Add
+  cost, Match SKU. No price-change or "price suggestion" feature.
+- **No product photos.** Settlement files carry none and nothing is invented;
+  a placeholder tile marks the one place a photo would go. No checkbox column
+  or row menu: nothing exists for them to act on.
+- **Problems loud, health quiet.** Loss and low-margin rows are tinted and
+  edged, backed by a pill and a sign; healthy rows get no tint and no sentence.
+  The portfolio-health bar's widths are whole-number product counts.
+- **Column order is the owner's.** Product, units, net sales, gross profit,
+  margin, marketplace costs, COGS, status, action. Status and action sit at the
+  right, so on a laptop they are reached by scrolling sideways; the owner chose
+  this order on 2026-10-06. The contribution column was dropped. Filter chips
+  are All, Loss-making, Low margin, High margin and Needs setup (missing cost
+  or unmatched SKU); the "High sales" tag stays on rows. Cells have column and
+  row borders; the row's coloured edge is an inset shadow so it never breaks them.
+- **A layout bug found with real data:** a wide table inside a CSS grid with an
+  automatic column stretched the whole page past the screen. The page grid is
+  now `minmax(0, 1fr)`; any new full-width table on this page needs the same.
+
+**Cost to change:** Low. The lines are two constants (`LOW_MARGIN_BELOW`,
+`HIGH_MARGIN_FROM`); the sentences are one table in the same file.

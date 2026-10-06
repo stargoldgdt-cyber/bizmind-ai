@@ -72,6 +72,8 @@ export function SettlementUploader({
 
     let recorded = 0
     let parts = 1
+    // Set when a whole-file attempt ran out of time: the same file is then sent again, in parts.
+    let split = false
     try {
       const total = { rows: 0, transactions: 0, settlements: 0, payouts: 0, issues: 0, unmapped: 0 }
       let allDuplicate = true
@@ -82,9 +84,17 @@ export function SettlementUploader({
         form.append("file", file)
         form.append("marketplaceAccountId", accountId)
         form.append("part", String(part))
+        if (split) form.append("split", "1")
 
         const response = await fetch("/api/v1/ledger-files", { method: "POST", body: form })
         const body = await response.json()
+        if (!response.ok && body.retryInParts && !split && recorded === 0) {
+          // Nothing was written (the attempt rolled back). Start again in parts, without asking.
+          split = true
+          parts = 1
+          part = -1
+          continue
+        }
         if (!response.ok) {
           const earlier =
             recorded > 0
@@ -227,8 +237,9 @@ export function SettlementUploader({
                 </p>
                 {outcome.parts > 1 && (
                   <p className="text-sm text-muted-foreground">
-                    This is a large file, so it was recorded in {outcome.parts} parts. They are listed
-                    separately under Import data.
+                    This is a large file, so it was recorded in {outcome.parts} parts to stay within the
+                    database&apos;s time limit. Under Import data it shows as one file, and you can withdraw
+                    or put it back as one.
                   </p>
                 )}
                 {outcome.unmapped > 0 && (

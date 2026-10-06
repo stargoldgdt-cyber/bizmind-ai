@@ -12,7 +12,7 @@ import { matchIdenticalSkus } from "@/services/catalog/auto-match"
 import { applyLedgerFile } from "@/services/marketplaces/apply"
 import type { MappingRuleSummary, SourceRow } from "@/services/marketplaces/contract"
 import { buildLedgerFilePayload } from "@/services/marketplaces/ledger-file"
-import { splitLedgerFilePayload } from "@/services/marketplaces/ledger-file-parts"
+import { LEDGER_PART_ROWS, LEDGER_SINGLE_FILE_ROWS, splitLedgerFilePayload } from "@/services/marketplaces/ledger-file-parts"
 
 /**
  * POST /api/v1/ledger-files — upload one marketplace settlement file.
@@ -22,8 +22,10 @@ import { splitLedgerFilePayload } from "@/services/marketplaces/ledger-file-part
  *   read → recognise the format → the marketplace's adapter → customer-data
  *   filter and payload checks → ledger_apply_file() (one transaction)
  *
- * A large file is recorded in parts, one request each (the database records
- * about 1,000 source rows within its time limit; see ledger-file-parts.ts). The
+ * A normal file is recorded whole. A large one is recorded in parts, one
+ * request each (the database records about 1,000 source rows within its time
+ * limit; see ledger-file-parts.ts), and a whole file that runs out of time is
+ * sent again in parts by the screen with `split`, with no choice for the user. The
  * client sends the same file with `part` = 0, 1, 2 ... and each answer says how
  * many parts there are. Parts are deterministic and each carries its own
  * fingerprint, so a failed upload is repeated by sending the same file again:
@@ -39,6 +41,8 @@ const fieldsSchema = z.object({
   marketplaceAccountId: z.string().uuid(),
   // Which part of a large file to record (see ledger-file-parts.ts). Absent means the first.
   part: z.coerce.number().int().min(0).max(1000).default(0),
+  // Set by the screen after a whole-file attempt ran out of time: record it in parts instead.
+  split: z.enum(["1"]).optional(),
 })
 
 const ACCEPTED = ["txt", "csv", "xlsx", "pdf"] as const
@@ -70,6 +74,7 @@ export async function POST(request: Request) {
   const fields = fieldsSchema.safeParse({
     marketplaceAccountId: form.get("marketplaceAccountId"),
     part: form.get("part") ?? undefined,
+    split: form.get("split") ?? undefined,
   })
   if (!fields.success) return refuse(400, "Choose the marketplace account this file belongs to.")
 
@@ -195,7 +200,7 @@ export async function POST(request: Request) {
 
   let parts: ReturnType<typeof splitLedgerFilePayload>
   try {
-    parts = splitLedgerFilePayload(built.payload)
+    parts = splitLedgerFilePayload(built.payload, LEDGER_PART_ROWS, LEDGER_SINGLE_FILE_ROWS, fields.data.split === "1")
   } catch (error) {
     return refuse(422, (error as Error).message)
   }
@@ -203,7 +208,12 @@ export async function POST(request: Request) {
   if (partIndex >= parts.length) return refuse(400, "That part of the file does not exist.")
 
   const applied = await applyLedgerFile(parts[partIndex])
-  if (!applied.ok) return refuse(422, applied.error, { part: partIndex, parts: parts.length })
+  if (!applied.ok) {
+    // A file recorded whole that ran out of time (the database's statement limit) is not lost or half
+    // written: the transaction rolled back. Tell the screen to send it again in parts, automatically.
+    const outOfTime = parts.length === 1 && fields.data.split !== "1" && /statement timeout/i.test(applied.error)
+    return refuse(422, applied.error, { part: partIndex, parts: parts.length, ...(outOfTime ? { retryInParts: true } : {}) })
+  }
 
   // Known SKUs written differently (spaces, dashes, capitals) are matched to
   // their product at once, after the last part. The file is recorded whether

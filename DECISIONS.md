@@ -2491,12 +2491,35 @@ however the function is tuned.
   server re-reads and re-splits it each time (about 0.2 s) and records only that
   part. Each request therefore stays well inside the host's function time limit.
   Automatic SKU matching runs after the last part.
-- **Parts are separate files in the ledger.** They are named "(part 2 of 11)" and
-  listed separately under Import data; withdrawing one withdraws only that part.
-  A single "withdraw all parts" is not built.
+- **Parts are separate files in the ledger, but shown as one.** Each is named
+  "(part 2 of 11)" in the database. Added the same day, after the owner saw six
+  lines for February and said that was not a good idea: the History list shows a
+  file recorded in parts as ONE row (totals, a "6 parts" note and a toggle to the
+  parts); its detail page speaks of the whole file and lists the parts; and
+  Withdraw / Put back act on every part together, one audited withdrawal per part,
+  stopping at the first failure (withdrawing one part alone would leave the month
+  half counted). Parts are recognised by name, account, format and being recorded
+  within 30 minutes of each other, so the same file name uploaded another day is a
+  new file. No database change.
 - **Checked live:** a 10,500-row file (21,262 ledger lines) recorded in 11 parts,
   every row and line present exactly once, each part 3-6 s including the upload,
-  and sending the same parts again skipped all of them.
+  and sending the same parts again skipped all of them. The owner then uploaded
+  the real February noon file (4,616 rows, 6 parts) on the live site. The grouped
+  History, the whole-file detail page, withdraw-all and put-back-all were checked
+  in a throwaway business signed in with the test account.
+
+**The choice between one file and parts is automatic (owner request, same day).**
+- Up to 1,500 source rows (`LEDGER_SINGLE_FILE_ROWS`) a file is recorded whole, as
+  one file: a normal month. Measured: three whole 1,500-row files all recorded
+  within the limit on the live database.
+- Above that it is split into parts of at most 800 rows (`LEDGER_PART_ROWS`), as
+  February was. The split does not depend on the single-file limit, so a file
+  already recorded in parts is still recognised if sent again.
+- If a whole file runs out of time on a busy moment, nothing is written (the
+  attempt rolls back), the route answers `retryInParts`, and the screen sends the
+  same file again in parts by itself. Only for a file that was recorded whole and
+  only when nothing is recorded yet, so it cannot loop.
+- Nobody chooses anything and no setting exists.
 
 **Not done, and why.** Speeding up the function itself would only move the
 limit, not remove it, and cannot be profiled without direct database access.

@@ -18,7 +18,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
   restoreLedgerFileAction,
+  restoreLedgerFilesAction,
   withdrawLedgerFileAction,
+  withdrawLedgerFilesAction,
 } from "@/features/imports/ledger-actions"
 
 /**
@@ -27,9 +29,13 @@ import {
  * Simpler than withdrawing an order import: every ledger line belongs to
  * exactly one file, so nothing is ever shared with another source. The
  * confirmation states exactly what stops counting, and that nothing is deleted.
+ *
+ * A file recorded in parts (a large settlement) is withdrawn and put back as a
+ * whole: pass every part in `sourceFileIds`. One part alone would leave the
+ * month half counted.
  */
 export function LedgerFilePanel({
-  sourceFileId,
+  sourceFileIds,
   fileName,
   transactions,
   settlements,
@@ -37,7 +43,8 @@ export function LedgerFilePanel({
   withdrawnAt,
   withdrawalReason,
 }: {
-  sourceFileId: string
+  /** The file, or every part of a file recorded in parts. Only the ones to act on. */
+  sourceFileIds: string[]
   fileName: string
   transactions: number
   settlements: number
@@ -50,6 +57,7 @@ export function LedgerFilePanel({
   const [reason, setReason] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+  const parts = sourceFileIds.length
 
   if (withdrawnAt) {
     return (
@@ -74,14 +82,14 @@ export function LedgerFilePanel({
           onClick={() =>
             startTransition(async () => {
               setError(null)
-              const result = await restoreLedgerFileAction(sourceFileId)
+              const result = parts > 1 ? await restoreLedgerFilesAction(sourceFileIds) : await restoreLedgerFileAction(sourceFileIds[0])
               if (!result.ok) setError(result.error)
               else router.refresh()
             })
           }
         >
           <RotateCcw className="size-4" aria-hidden />
-          {pending ? "Putting it back…" : "Put this file back"}
+          {pending ? "Putting it back…" : parts > 1 ? `Put all ${parts} parts back` : "Put this file back"}
         </Button>
       </div>
     )
@@ -89,10 +97,13 @@ export function LedgerFilePanel({
 
   return (
     <div className="rounded-xl border border-border bg-card px-5 py-4">
-      <p className="text-sm font-medium">Withdraw this file from your figures</p>
+      <p className="text-sm font-medium">
+        {parts > 1 ? `Withdraw this file (all ${parts} parts) from your figures` : "Withdraw this file from your figures"}
+      </p>
       <p className="mt-1 max-w-prose-comfortable text-sm text-muted-foreground">
         Use this if the wrong file was uploaded. Its lines stop counting; nothing
         is deleted, and you can put it back.
+        {parts > 1 && " This file was recorded in parts, so they are withdrawn together: one part alone would leave the month half counted."}
       </p>
 
       {error && (
@@ -105,7 +116,7 @@ export function LedgerFilePanel({
         <DialogTrigger asChild>
           <Button variant="outline" className="mt-4 rounded-4xl">
             <Undo2 className="size-4" aria-hidden />
-            Withdraw this file
+            {parts > 1 ? `Withdraw all ${parts} parts` : "Withdraw this file"}
           </Button>
         </DialogTrigger>
         <DialogContent>
@@ -149,14 +160,15 @@ export function LedgerFilePanel({
               onClick={() =>
                 startTransition(async () => {
                   setError(null)
-                  const result = await withdrawLedgerFileAction(sourceFileId, reason)
+                  const result =
+                    parts > 1 ? await withdrawLedgerFilesAction(sourceFileIds, reason) : await withdrawLedgerFileAction(sourceFileIds[0], reason)
                   setOpen(false)
                   if (!result.ok) setError(result.error)
                   else router.refresh()
                 })
               }
             >
-              {pending ? "Withdrawing…" : "Yes, withdraw it"}
+              {pending ? "Withdrawing…" : parts > 1 ? "Yes, withdraw all of it" : "Yes, withdraw it"}
             </Button>
           </DialogFooter>
         </DialogContent>

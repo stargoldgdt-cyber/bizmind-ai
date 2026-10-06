@@ -33,6 +33,14 @@ import type { LedgerFilePayload } from "./ledger-file"
 /** Rows per part. About 2.5 s of database work at the measured rate, leaving room for a busy moment. */
 export const LEDGER_PART_ROWS = 800
 
+/**
+ * A file up to this many rows is recorded whole. About 4.5 s of database work at
+ * the measured rate against an 8 s limit, so a normal month goes in as one file.
+ * A busier moment than usual can still push it over; the upload then retries
+ * itself in parts (see `forceParts`), so nobody has to decide anything.
+ */
+export const LEDGER_SINGLE_FILE_ROWS = 1_500
+
 /** The most parts one file may split into (a safety stop, not a target). */
 export const MAX_LEDGER_PARTS = 60
 
@@ -70,9 +78,20 @@ function partName(name: string, index: number, count: number): string {
   return `${name.slice(0, 255 - suffix.length)}${suffix}`
 }
 
-export function splitLedgerFilePayload(payload: LedgerFilePayload, maxRows = LEDGER_PART_ROWS): LedgerFilePayload[] {
+/**
+ * `maxRows` is the size of a part. `singleUpTo` is how many rows may still be
+ * recorded whole (it defaults to `maxRows`: split as soon as it would not fit in
+ * one part). `forceParts` splits even a file within `singleUpTo`, which is what
+ * the upload does after a whole-file attempt ran out of time.
+ */
+export function splitLedgerFilePayload(
+  payload: LedgerFilePayload,
+  maxRows = LEDGER_PART_ROWS,
+  singleUpTo = maxRows,
+  forceParts = false
+): LedgerFilePayload[] {
   const rows = [...payload.rows].sort((a, b) => a.row_number - b.row_number)
-  if (rows.length <= maxRows) return [payload]
+  if (rows.length <= (forceParts ? maxRows : singleUpTo)) return [payload]
 
   const indexOfRow = new Map<number, number>()
   rows.forEach((row, index) => indexOfRow.set(row.row_number, index))

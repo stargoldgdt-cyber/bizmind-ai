@@ -6,20 +6,13 @@ import { FileSpreadsheet, Plus, Upload } from "lucide-react"
 import { AppShell } from "@/components/layout/app-shell"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ONBOARDING_ROUTE } from "@/config/routes"
 import { getActiveBusiness, getUserBusinesses } from "@/features/businesses/queries"
-import { listDataSources, type DataSource } from "@/features/imports/queries"
-import { formatNumber } from "@/lib/format"
+import { HistoryGroup, HistoryRow } from "@/features/imports/components/history-rows"
+import { groupDataSources } from "@/features/imports/groups"
+import { listDataSources } from "@/features/imports/queries"
 import { createClient, getCurrentUser } from "@/lib/supabase/server"
-import { importEntityLabel } from "@/services/ingestion/entities"
 
 export const metadata: Metadata = {
   title: "Data sources",
@@ -53,7 +46,9 @@ export default async function DataSourcesPage() {
     .eq("id", user!.id)
     .maybeSingle()
 
-  const { rows, matchedCount } = await listDataSources({ limit: 50 })
+  const { rows, matchedCount } = await listDataSources({ limit: 200 })
+  // A large file is recorded in parts; they show as one file, parts a click away.
+  const entries = groupDataSources(rows)
   const canImport = activeBusiness.role !== "VIEWER"
 
   return (
@@ -138,68 +133,13 @@ export default async function DataSourcesPage() {
                   </TableHeader>
 
                   <TableBody>
-                    {rows.map((row) => (
-                      <TableRow key={row.batch_id} className={row.withdrawn_at ? "opacity-60" : ""}>
-                        <TableCell className="max-w-56">
-                          <Link
-                            href={`/imports/${row.batch_id}`}
-                            className="block truncate font-medium underline-offset-4 hover:underline"
-                          >
-                            {row.file_name}
-                          </Link>
-                          <span className="block truncate text-[11px] text-muted-foreground">
-                            {sourceLabel(row)}
-                          </span>
-                        </TableCell>
-
-                        <TableCell className="text-xs">
-                          {row.dataset === "LEDGER"
-                            ? "Settlement"
-                            : importEntityLabel(row.entity)}
-                        </TableCell>
-
-                        <TableCell className="text-xs text-muted-foreground">
-                          {new Date(row.created_at).toLocaleDateString()}
-                        </TableCell>
-
-                        <TableCell>
-                          <StatusBadge row={row} />
-                        </TableCell>
-
-                        <TableCell className="text-right font-mono text-xs tabular-nums">
-                          {formatNumber(row.row_count)}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-xs tabular-nums">
-                          {row.created_count === null ? "—" : formatNumber(row.created_count)}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-xs tabular-nums">
-                          {row.updated_count === null ? "—" : formatNumber(row.updated_count)}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-xs tabular-nums">
-                          {row.rows_failed === null ? "—" : formatNumber(row.rows_failed)}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">
-                          {row.warnings_count === 0 ? "—" : formatNumber(row.warnings_count)}
-                        </TableCell>
-
-                        <TableCell className="text-right font-mono text-xs tabular-nums">
-                          {row.withdrawn_at
-                            ? "withdrawn"
-                            : row.records_written === 0
-                              ? "—"
-                              : formatNumber(row.records_written)}
-                        </TableCell>
-
-                        <TableCell className="text-right">
-                          <Link
-                            href={`/imports/${row.batch_id}`}
-                            className="text-xs font-medium underline-offset-4 hover:underline"
-                          >
-                            Details
-                          </Link>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {entries.map((entry) =>
+                      entry.kind === "group" ? (
+                        <HistoryGroup key={entry.key} group={entry} />
+                      ) : (
+                        <HistoryRow key={entry.row.batch_id} row={entry.row} />
+                      )
+                    )}
                   </TableBody>
                 </Table>
 
@@ -214,47 +154,5 @@ export default async function DataSourcesPage() {
         </Card>
       </div>
     </AppShell>
-  )
-}
-
-/** Where this data came from, in the owner's language. */
-function sourceLabel(row: DataSource): string {
-  if (row.dataset === "LEDGER") return row.marketplace_label ?? "Marketplace file"
-  if (row.connection_name) return row.connection_name
-  if (row.file_type === "api") return "Synced"
-  return row.source ? `File · ${row.source}` : "File"
-}
-
-function StatusBadge({ row }: { row: DataSource }) {
-  if (row.withdrawn_at) {
-    return (
-      <span className="inline-flex rounded-4xl bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-        Withdrawn
-      </span>
-    )
-  }
-
-  const styles: Record<string, string> = {
-    COMPLETED: "bg-success-subtle text-success-strong",
-    FAILED: "bg-danger-subtle text-danger-strong",
-    DRAFT: "bg-muted text-muted-foreground",
-    READY: "bg-info-subtle text-info-strong",
-    CANCELLED: "bg-muted text-muted-foreground",
-  }
-
-  const labels: Record<string, string> = {
-    COMPLETED: "Imported",
-    FAILED: "Failed",
-    DRAFT: "Not finished",
-    READY: "Ready",
-    CANCELLED: "Cancelled",
-  }
-
-  return (
-    <span
-      className={`inline-flex rounded-4xl px-2 py-0.5 text-[11px] font-medium ${styles[row.status]}`}
-    >
-      {labels[row.status]}
-    </span>
   )
 }

@@ -22,12 +22,13 @@ import {
   LedgerFileSettlements,
 } from "@/features/imports/components/ledger-file-sections"
 import { WithdrawPanel } from "@/features/imports/components/withdraw-panel"
+import { groupOf, groupTotals, partOf } from "@/features/imports/groups"
 import {
-  getDataSource,
   getImportIssues,
   getLedgerFileSettlements,
   getLedgerFileSummary,
   getWithdrawalPreview,
+  listDataSources,
   type DataSource,
 } from "@/features/imports/queries"
 import { formatNumber } from "@/lib/format"
@@ -63,8 +64,18 @@ export default async function ImportDetailPage(props: PageProps<"/imports/[id]">
 
   if (!activeBusiness) redirect(ONBOARDING_ROUTE)
 
-  const source = await getDataSource(id)
+  const { rows: allSources } = await listDataSources({ limit: 200 })
+  const source = allSources.find((row) => row.batch_id === id)
   if (!source) notFound()
+
+  // A large file was recorded in parts; this page speaks of the whole file and
+  // lists the parts, so the owner never has to think about them.
+  const group = groupOf(allSources, id)
+  const totals = group ? groupTotals(group) : null
+  const thisPart = partOf(source.file_name)
+  const allWithdrawn = group ? totals!.withdrawn === group.parts.length : Boolean(source.withdrawn_at)
+  // Withdraw what still counts; put back everything once it is all withdrawn.
+  const actOn = group ? group.parts.filter((part) => (allWithdrawn ? true : !part.withdrawn_at)) : [source]
 
   // The preview is owner/admin-only in the database, so it is not even asked
   // for on behalf of someone who could not act on it.
@@ -102,7 +113,7 @@ export default async function ImportDetailPage(props: PageProps<"/imports/[id]">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight break-all">
-              {source.file_name}
+              {group ? group.name : source.file_name}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
               {isLedger
@@ -112,7 +123,7 @@ export default async function ImportDetailPage(props: PageProps<"/imports/[id]">
               {new Date(source.created_at).toLocaleString()}
             </p>
           </div>
-          {source.withdrawn_at && (
+          {allWithdrawn && (
             <span className="rounded-4xl bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
               Withdrawn from your figures
             </span>
@@ -125,18 +136,30 @@ export default async function ImportDetailPage(props: PageProps<"/imports/[id]">
             <section className="mt-6 rounded-xl border border-border bg-card px-5 py-4">
               <h2 className="text-sm font-semibold">What this file recorded</h2>
               <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-5">
-                <Stat label="Rows in the file" value={source.row_count} />
-                <Stat label="Ledger lines" value={source.transactions_count} />
-                <Stat label="Settlements" value={source.settlements_count} />
-                <Stat label="Payouts reported" value={source.payouts_count} />
-                <Stat label="Not recognised yet" value={source.unmapped_count} />
+                <Stat label="Rows in the file" value={totals ? totals.rows : source.row_count} />
+                <Stat label="Ledger lines" value={totals ? totals.lines : source.transactions_count} />
+                <Stat label="Settlements" value={totals ? totals.settlements : source.settlements_count} />
+                <Stat label="Payouts reported" value={totals ? totals.payouts : source.payouts_count} />
+                <Stat
+                  label="Not recognised yet"
+                  value={group ? group.parts.reduce((sum, part) => sum + part.unmapped_count, 0) : source.unmapped_count}
+                />
               </dl>
               <p className="mt-4 max-w-prose-comfortable text-sm text-muted-foreground">
-                {source.withdrawn_at
+                {allWithdrawn
                   ? "Every line is still stored, but none of them counts towards anything until you put the file back."
                   : "Recorded exactly as the marketplace reported it. Nothing in the ledger is ever edited; a wrong file is withdrawn, not changed."}
               </p>
             </section>
+            {group && (
+              <PartsList
+                parts={group.parts}
+                currentId={id}
+                of={group.of}
+                complete={totals!.complete}
+                thisPart={thisPart?.part ?? null}
+              />
+            )}
             {skus && skus.skus > 0 && !source.withdrawn_at && <FileSkus skus={skus} />}
             <LedgerFileSettlements settlements={settlements} />
             <LedgerFileContents summary={summary} />
@@ -165,7 +188,7 @@ export default async function ImportDetailPage(props: PageProps<"/imports/[id]">
         <section className="mt-6 overflow-hidden rounded-xl border border-border bg-card">
           <div className="border-b border-border px-5 py-4">
             <h2 className="text-sm font-semibold">
-              Rows BizMind could not use ({formatNumber(issues.length)}
+              Rows BizMind could not use{group && thisPart ? ` in part ${thisPart.part}` : ""} ({formatNumber(issues.length)}
               {issues.length === 200 ? "+" : ""})
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -234,13 +257,13 @@ export default async function ImportDetailPage(props: PageProps<"/imports/[id]">
           <div className="mt-3">
             {canManage && isLedger ? (
               <LedgerFilePanel
-                sourceFileId={source.batch_id}
-                fileName={source.file_name}
-                transactions={source.transactions_count}
-                settlements={source.settlements_count}
-                payouts={source.payouts_count}
-                withdrawnAt={source.withdrawn_at}
-                withdrawalReason={source.withdrawal_reason}
+                sourceFileIds={actOn.map((part) => part.batch_id)}
+                fileName={group ? group.name : source.file_name}
+                transactions={actOn.reduce((sum, part) => sum + part.transactions_count, 0)}
+                settlements={actOn.reduce((sum, part) => sum + part.settlements_count, 0)}
+                payouts={actOn.reduce((sum, part) => sum + part.payouts_count, 0)}
+                withdrawnAt={allWithdrawn ? (group ? group.parts[0].withdrawn_at : source.withdrawn_at) : null}
+                withdrawalReason={group ? group.parts[0].withdrawal_reason : source.withdrawal_reason}
               />
             ) : canManage ? (
               <WithdrawPanel
@@ -322,6 +345,53 @@ function FileSkus({ skus }: { skus: FileSkuSummary }) {
       ) : (
         <p className="text-muted-foreground">Every SKU has a product; their costs apply automatically.</p>
       )}
+    </section>
+  )
+}
+
+/** The parts of a file recorded in parts, each a click away. */
+function PartsList({
+  parts,
+  currentId,
+  of,
+  complete,
+  thisPart,
+}: {
+  parts: DataSource[]
+  currentId: string
+  of: number
+  complete: boolean
+  thisPart: number | null
+}) {
+  return (
+    <section className="mt-4 rounded-xl border border-border bg-card px-5 py-4">
+      <h2 className="text-sm font-semibold">Recorded in {of} parts</h2>
+      <p className="mt-1 max-w-prose-comfortable text-sm text-muted-foreground">
+        This is a large file, so BizMind recorded it in {of} parts to stay within the database&apos;s time limit. The
+        figures above are for the whole file.
+        {thisPart !== null && ` You are looking at part ${thisPart}; the rows listed below are from that part.`}
+        {!complete && ` Only ${parts.length} of the ${of} parts were recorded. Upload the same file again to record the rest.`}
+      </p>
+      <ul className="mt-3 flex flex-wrap gap-2">
+        {parts.map((part) => {
+          const info = partOf(part.file_name)
+          return (
+            <li key={part.batch_id}>
+              <Link
+                href={`/imports/${part.batch_id}`}
+                aria-current={part.batch_id === currentId ? "page" : undefined}
+                className={`inline-flex items-center gap-1.5 rounded-4xl border px-3 py-1 text-xs font-medium tabular-nums ${
+                  part.batch_id === currentId
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                }`}
+              >
+                Part {info?.part} · {formatNumber(part.row_count)} rows{part.withdrawn_at ? " · withdrawn" : ""}
+              </Link>
+            </li>
+          )
+        })}
+      </ul>
     </section>
   )
 }

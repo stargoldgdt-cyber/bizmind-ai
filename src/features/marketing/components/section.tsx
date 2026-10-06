@@ -100,6 +100,7 @@ export function SectionHeader({
 }) {
   return (
     <header
+      data-reveal="0"
       className={cn(
         align === "center" && "mx-auto text-center",
         align === "center" ? "max-w-2xl" : "max-w-3xl",

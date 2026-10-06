@@ -142,7 +142,7 @@ export function Preview() {
           align="center"
         />
 
-        <div className="mx-auto mt-8 flex w-fit max-w-full flex-col gap-1.5 rounded-full border border-surface-2-border bg-surface-1 p-2 sm:flex-row">
+        <div data-reveal="0" className="mx-auto mt-8 flex w-fit max-w-full flex-col gap-1.5 rounded-full border border-surface-2-border bg-surface-1 p-2 sm:flex-row">
           {preview.tabs.map((tab, index) => {
             const Icon = index === 0 ? LayoutGrid : Store
             return (
@@ -175,13 +175,13 @@ export function Preview() {
           })}
         </div>
 
-        <div className="mt-8">{active === 0 ? <ProfitConsole /> : <MarketplaceCompare />}</div>
+        <div data-reveal="1" className="mt-8">{active === 0 ? <ProfitConsole /> : <MarketplaceCompare />}</div>
 
         <div className="mt-12 grid gap-x-6 gap-y-8 sm:grid-cols-3">
-          {preview.reasons.map((reason) => {
+          {preview.reasons.map((reason, index) => {
             const Icon = REASON_ICON[reason.key]
             return (
-              <div key={reason.key} className="flex min-w-0 items-start gap-4">
+              <div key={reason.key} data-reveal={index} className="flex min-w-0 items-start gap-4">
                 <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                   <Icon className="size-5" aria-hidden />
                 </span>

@@ -88,10 +88,10 @@ export function Analyst() {
             />
 
             <ul className="mt-8 flex flex-col gap-5">
-              {analyst.reasons.map((reason) => {
+              {analyst.reasons.map((reason, index) => {
                 const Icon = REASON_ICON[reason.key]
                 return (
-                  <li key={reason.key} className="flex min-w-0 items-start gap-3.5">
+                  <li key={reason.key} data-reveal={index} className="flex min-w-0 items-start gap-3.5">
                     <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                       <Icon className="size-5" aria-hidden />
                     </span>
@@ -105,7 +105,7 @@ export function Analyst() {
             </ul>
           </div>
 
-          <div className="lg:col-span-7">
+          <div data-reveal="1" className="lg:col-span-7">
             <div
               className="overflow-hidden rounded-3xl border border-surface-1-border bg-surface-1"
               style={{ boxShadow: "0 30px 70px -25px rgba(76,29,149,0.3)" }}

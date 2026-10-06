@@ -108,12 +108,14 @@ export function Connect() {
         />
 
         <div className="mx-auto mt-12 grid max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {ordered.map((source) => (
-            <SourceCard key={source.key} source={source} />
+          {ordered.map((source, index) => (
+            <div key={source.key} data-reveal={index % 3} className="min-w-0">
+              <SourceCard source={source} />
+            </div>
           ))}
         </div>
 
-        <p className="mx-auto mt-8 flex max-w-prose-comfortable items-center justify-center gap-2.5 text-center text-sm text-surface-2-muted">
+        <p data-reveal="0" className="mx-auto mt-8 flex max-w-prose-comfortable items-center justify-center gap-2.5 text-center text-sm text-surface-2-muted">
           <FileSpreadsheet className="size-4 shrink-0 text-primary" aria-hidden />
           {connect.footnote}
         </p>

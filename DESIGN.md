@@ -378,8 +378,18 @@ tables scroll inside their card.
   ordinary cards.
 - **Motion:** short, functional transitions on state change only. State is
   communicated by **colour and position**, not by movement. No parallax, no
-  scroll-jacking, no entrance choreography. `prefers-reduced-motion` is
-  respected globally in `globals.css` — never override it.
+  scroll-jacking. `prefers-reduced-motion` is respected globally in
+  `globals.css` — never override it.
+  **One exception, marketing register only (owner decision, 2026-10-06):**
+  scroll reveals. A band's header and blocks fade and rise 18px once, as they
+  enter the viewport, staggered 80ms apart (at most five steps), over 700ms;
+  chart lines on the landing page draw themselves; the hero rises in order on
+  load. Done with a `data-reveal` attribute and `ScrollReveal`
+  (`src/features/marketing/components/scroll-reveal.tsx`); styles live in
+  `globals.css`. Nothing is hidden until the script runs, nothing hides for a
+  visitor who prefers reduced motion, each element plays once, and nothing
+  shifts layout. **The product register never uses it**: a dashboard must not
+  make anyone wait to read a number.
 
 ---
 

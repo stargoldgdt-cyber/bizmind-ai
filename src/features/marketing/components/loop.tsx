@@ -77,7 +77,7 @@ export function Loop() {
           {loop.steps.map((step, index) => {
             const meta = STEP_META[step.key]
             return (
-              <div key={step.key} className="flex min-w-0 flex-1 items-start">
+              <div key={step.key} data-reveal={index} className="flex min-w-0 flex-1 items-start">
                 <div className="min-w-0 flex-1 text-center">
                   <p className="font-mono text-[11px] tabular-nums text-surface-2-muted">
                     {String(index + 1).padStart(2, "0")}
@@ -114,7 +114,7 @@ export function Loop() {
           {loop.steps.map((step, index) => {
             const meta = STEP_META[step.key]
             return (
-              <div key={step.key} className="flex min-w-0 items-start gap-4">
+              <div key={step.key} data-reveal={index % 2} className="flex min-w-0 items-start gap-4">
                 <span
                   className={cn(
                     "flex size-12 shrink-0 items-center justify-center rounded-xl",
@@ -137,7 +137,7 @@ export function Loop() {
           })}
         </div>
 
-        <p className="mt-10 flex items-center justify-center gap-2.5 text-center text-sm text-surface-2-muted">
+        <p data-reveal="0" className="mt-10 flex items-center justify-center gap-2.5 text-center text-sm text-surface-2-muted">
           <span className="size-2.5 shrink-0 rounded-full bg-primary" aria-hidden />
           {loop.footnote}
         </p>

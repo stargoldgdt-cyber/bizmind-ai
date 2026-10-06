@@ -59,8 +59,8 @@ function Sparkline({ id, area, line, color }: { id: string; area: string; line: 
           <stop offset="1" stopColor={color} stopOpacity="0" />
         </linearGradient>
       </defs>
-      <path d={area} fill={`url(#spark-${id})`} />
-      <path d={line} fill="none" stroke={color} strokeWidth="2" />
+      <path d={area} fill={`url(#spark-${id})`} className="draw-fade" />
+      <path d={line} fill="none" stroke={color} strokeWidth="2" pathLength={1} className="draw-line" />
     </svg>
   )
 }
@@ -123,12 +123,13 @@ export function Problem() {
 
       {/* ---- three headline figures ---- */}
       <div className="mx-auto mt-12 grid max-w-5xl gap-4 sm:grid-cols-3">
-        {problem.figures.map((figure) => {
+        {problem.figures.map((figure, index) => {
           const Icon = FIGURE_ICON[figure.key as keyof typeof FIGURE_ICON]
           const spark = FIGURE_SPARKS[figure.key]
           return (
             <div
               key={figure.key}
+              data-reveal={index}
               className="flex min-w-0 items-start justify-between gap-3 rounded-2xl border border-surface-1-border bg-surface-1 p-5 shadow-xs"
             >
               <div className="flex min-w-0 gap-3.5">
@@ -164,7 +165,7 @@ export function Problem() {
       </div>
 
       {/* ---- "so where did it go" ---- */}
-      <div className="mx-auto mt-16 max-w-2xl text-center">
+      <div data-reveal="0" className="mx-auto mt-16 max-w-2xl text-center">
         <h3 className="font-heading text-3xl font-extrabold tracking-tight text-balance">{problem.question}</h3>
         <p className="mt-2 text-surface-1-muted">{problem.questionSupport}</p>
       </div>
@@ -183,7 +184,7 @@ export function Problem() {
       */}
       <div className="mx-auto mt-8 grid max-w-7xl items-stretch gap-4 xl:grid-cols-[2fr_1fr]">
         {/* From Sales to Payout */}
-        <div className="min-w-0 rounded-3xl border border-surface-1-border bg-surface-1 p-6 sm:p-7">
+        <div data-reveal="0" className="min-w-0 rounded-3xl border border-surface-1-border bg-surface-1 p-6 sm:p-7">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h4 className="font-heading text-xl font-extrabold tracking-tight sm:text-2xl">{problem.flow.panelTitle}</h4>
@@ -231,7 +232,7 @@ export function Problem() {
         </div>
 
         {/* BizMind AI Insight */}
-        <div className="min-w-0 rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/8 to-primary/3 p-6 sm:p-7">
+        <div data-reveal="1" className="min-w-0 rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/8 to-primary/3 p-6 sm:p-7">
           <p className="flex items-center gap-2 text-sm font-bold text-primary">
             <Sparkles className="size-4" aria-hidden />
             {problem.insight.label}

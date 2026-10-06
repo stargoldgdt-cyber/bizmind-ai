@@ -69,7 +69,7 @@ export function Closing() {
             support={closing.support}
           />
 
-          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <div data-reveal="1" className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Button asChild size="lg" className="h-12 rounded-4xl px-6">
               <Link href={closing.primary.href}>
                 {closing.primary.label}
@@ -92,7 +92,7 @@ export function Closing() {
             </Button>
           </div>
 
-          <ul className="mt-9 flex flex-col items-center justify-center gap-3 text-sm sm:flex-row sm:flex-wrap sm:gap-x-7 sm:gap-y-2">
+          <ul data-reveal="2" className="mt-9 flex flex-col items-center justify-center gap-3 text-sm sm:flex-row sm:flex-wrap sm:gap-x-7 sm:gap-y-2">
             {closing.trust.map((item) => {
               const Icon = TRUST_ICON[item.key]
               return (

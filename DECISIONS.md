@@ -2428,3 +2428,33 @@ details page, and supplied a reference image.
 
 **Cost to change:** Low. Wording and the two cost-share lines are constants and
 fixed sentences in `product-analysis-view.ts`; the SQL is one function.
+
+---
+
+## 2026-10-06 — Landing page scroll animations (relaxes DESIGN.md section 11 for marketing only)
+
+**Context.** DESIGN.md section 11 said "no entrance choreography". The owner
+audited the landing page, found it plain on scroll, and asked for animation so
+it reads as premium.
+
+**Decision.**
+- **Marketing register only.** Bands reveal as they enter view: a fade and an
+  18px rise, once, over 700ms, staggered 80ms per item (at most five steps). The
+  hero rises in order on load. The chart lines in the landing page's mock
+  dashboards draw themselves. Smooth anchor scrolling for the nav links.
+- **Still forbidden:** parallax, scroll-jacking, looping or decorative motion,
+  count-up numbers (a figure that counts up looks like a live figure; these are
+  demo numbers), and any of it inside the product.
+- **Built so it cannot hurt.** Sections only add a `data-reveal` attribute, so
+  they stay server components; one client component, `ScrollReveal`, does the
+  rest. The server renders everything visible; only elements still below the
+  fold when the script runs are hidden, so there is no flash and a page without
+  scripts is complete. It does nothing for visitors who prefer reduced motion.
+  Each element reveals once and is released. Opacity and a short rise only, so no
+  layout shift.
+- **Checked in a real rendered Chrome** at desktop and phone width and with
+  reduced motion on: 53 elements start hidden below the fold and all reveal on
+  scroll; with reduced motion none are ever hidden; no horizontal overflow.
+
+**Cost to change:** Low. Remove `<ScrollReveal />` from `src/app/page.tsx` and
+every section shows normally, because nothing is hidden without it.

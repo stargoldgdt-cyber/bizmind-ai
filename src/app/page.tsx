@@ -11,6 +11,7 @@ import { Preview } from "@/features/marketing/components/preview"
 import { Pricing } from "@/features/marketing/components/pricing"
 import { Problem } from "@/features/marketing/components/problem"
 import { ProductDemo } from "@/features/marketing/components/product-demo"
+import { ScrollReveal } from "@/features/marketing/components/scroll-reveal"
 
 /**
  * The BizMind landing page.
@@ -53,6 +54,10 @@ import { ProductDemo } from "@/features/marketing/components/product-demo"
  * EVERY SECTION IS A SERVER COMPONENT except the nav, the preview and
  * pricing, which need state for the mobile menu, the tab switch and the
  * monthly/yearly toggle.
+ *
+ * SCROLL MOTION (owner request, 2026-10-06): sections mark what reveals with a
+ * `data-reveal` attribute and <ScrollReveal /> does the rest, so the sections
+ * stay server components. See scroll-reveal.tsx and DESIGN.md section 11.
  */
 
 const TITLE = `${siteConfig.name} — Marketplace profit for Amazon and noon sellers`
@@ -85,6 +90,7 @@ export default function LandingPage() {
       </a>
 
       <MarketingNav />
+      <ScrollReveal />
 
       <main id="main">
         <Hero />

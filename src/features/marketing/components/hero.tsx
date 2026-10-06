@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { ArrowRight, Check, Play } from "lucide-react"
@@ -40,6 +41,9 @@ import { hero } from "../content"
  * wrapping to two lines instead of three) without the two problems trading
  * off against each other.
  */
+/** The hero rises on load, in order: the position in the sequence, as a CSS variable the stylesheet reads. */
+const step = (index: number) => ({ "--i": index }) as CSSProperties
+
 export function Hero() {
   return (
     <section className="relative overflow-hidden bg-surface-2 pt-14 pb-20 text-surface-2-foreground sm:pt-20 sm:pb-28">
@@ -69,21 +73,24 @@ export function Hero() {
       <div className="relative mx-auto max-w-[90rem] px-5 sm:px-8">
         <div className="grid items-center gap-12 lg:grid-cols-12 lg:gap-10">
           <div className="lg:col-span-5">
-            <span className="inline-flex rounded-full bg-primary/10 px-3.5 py-1.5 font-mono text-xs font-bold tracking-widest text-primary">
+            <span
+              className="hero-in inline-flex rounded-full bg-primary/10 px-3.5 py-1.5 font-mono text-xs font-bold tracking-widest text-primary"
+              style={step(0)}
+            >
               {hero.eyebrow}
             </span>
 
-            <h1 className="mt-5 font-heading text-4xl leading-[1.05] font-extrabold tracking-tighter text-balance sm:text-[3.2rem]">
+            <h1 style={step(1)} className="hero-in mt-5 font-heading text-4xl leading-[1.05] font-extrabold tracking-tighter text-balance sm:text-[3.2rem]">
               {hero.headline}
               <br />
               <span className="text-primary">{hero.headlineAccent}</span>
             </h1>
 
-            <p className="mt-6 max-w-prose-comfortable text-base text-pretty text-surface-2-muted">
+            <p style={step(2)} className="hero-in mt-6 max-w-prose-comfortable text-base text-pretty text-surface-2-muted">
               {hero.support}
             </p>
 
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div style={step(3)} className="hero-in mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Button asChild size="lg" className="h-12 rounded-4xl px-6">
                 <Link href={hero.primary.href}>
                   {hero.primary.label}
@@ -106,7 +113,7 @@ export function Hero() {
               </Button>
             </div>
 
-            <ul className="mt-6 flex flex-col gap-2.5 text-sm text-surface-2-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-2">
+            <ul style={step(4)} className="hero-in mt-6 flex flex-col gap-2.5 text-sm text-surface-2-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-2">
               {hero.trust.map((item) => (
                 <li key={item} className="flex items-center gap-2">
                   <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
@@ -119,7 +126,7 @@ export function Hero() {
           </div>
 
           <div className="lg:col-span-7">
-            <div className="mx-auto max-w-2xl overflow-hidden rounded-2xl border border-black/5 shadow-[0_30px_70px_-25px_rgba(76,29,149,0.35)] lg:max-w-none">
+            <div style={step(2)} className="hero-in mx-auto max-w-2xl overflow-hidden rounded-2xl border border-black/5 shadow-[0_30px_70px_-25px_rgba(76,29,149,0.35)] lg:max-w-none">
               <Image
                 src="/hero/dashboard-preview.webp"
                 alt="BizMind dashboard: business performance for August 2026, with gross sales, net sales, marketplace costs and contribution, and an insight explaining why contribution changed"
@@ -133,7 +140,7 @@ export function Hero() {
         </div>
 
         {/* Real logo files, on their own full-width row so they never have to compete with the text column for space. */}
-        <div className="mt-10 flex flex-wrap items-center gap-3 lg:mt-14">
+        <div data-reveal="0" className="mt-10 flex flex-wrap items-center gap-3 lg:mt-14">
           <span className="font-mono text-[11px] font-bold tracking-widest text-surface-2-muted uppercase">
             Connects to
           </span>

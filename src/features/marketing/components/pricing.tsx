@@ -39,7 +39,7 @@ export function Pricing() {
         align="center"
       />
 
-      <div className="mx-auto mt-8 flex w-fit items-center gap-1 rounded-full border border-surface-1-border bg-surface-1 p-1">
+      <div data-reveal="0" className="mx-auto mt-8 flex w-fit items-center gap-1 rounded-full border border-surface-1-border bg-surface-1 p-1">
         <button
           type="button"
           onClick={() => setYearly(false)}
@@ -73,13 +73,14 @@ export function Pricing() {
       </div>
 
       <div className="mt-10 grid items-start gap-4 lg:grid-cols-3">
-        {pricing.plans.map((plan) => {
+        {pricing.plans.map((plan, index) => {
           const price = yearly ? plan.price.yearly : plan.price.monthly
           const isCustom = price === "Custom pricing"
 
           return (
             <div
               key={plan.key}
+              data-reveal={index}
               className={cn(
                 "flex h-full flex-col rounded-2xl border p-6 sm:p-7",
                 plan.featured ? "border-primary bg-primary/[0.04]" : "border-surface-1-border bg-surface-1"

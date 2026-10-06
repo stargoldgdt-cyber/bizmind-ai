@@ -158,10 +158,10 @@ export function ProductDemo() {
             />
 
             <ul className="mt-8 flex flex-col gap-5">
-              {productDemo.features.map((feature) => {
+              {productDemo.features.map((feature, index) => {
                 const Icon = FEATURE_ICON[feature.key]
                 return (
-                  <li key={feature.key} className="flex min-w-0 items-start gap-3.5">
+                  <li key={feature.key} data-reveal={index} className="flex min-w-0 items-start gap-3.5">
                     <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                       <Icon className="size-5" aria-hidden />
                     </span>
@@ -174,7 +174,7 @@ export function ProductDemo() {
               })}
             </ul>
 
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div data-reveal="3" className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Button asChild size="lg" className="h-12 rounded-4xl px-6">
                 <Link href={productDemo.videoUrl || productDemo.secondaryCta.href}>
                   <span className="flex size-6 items-center justify-center rounded-full bg-primary-foreground/20">
@@ -195,7 +195,7 @@ export function ProductDemo() {
             </div>
           </div>
 
-          <div className="lg:col-span-7">
+          <div data-reveal="1" className="lg:col-span-7">
             <VideoFrame />
           </div>
         </div>

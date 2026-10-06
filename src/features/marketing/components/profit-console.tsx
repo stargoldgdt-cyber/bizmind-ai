@@ -68,8 +68,8 @@ function Sparkline({ id, spark }: { id: string; spark: keyof typeof SPARK }) {
           <stop offset="1" stopColor={s.color} stopOpacity="0" />
         </linearGradient>
       </defs>
-      <path d={s.area} fill={`url(#console-spark-${id})`} />
-      <path d={s.line} fill="none" stroke={s.color} strokeWidth="2" />
+      <path d={s.area} fill={`url(#console-spark-${id})`} className="draw-fade" />
+      <path d={s.line} fill="none" stroke={s.color} strokeWidth="2" pathLength={1} className="draw-line" />
     </svg>
   )
 }
@@ -120,8 +120,8 @@ export function ProfitConsole() {
       <div className="p-4 sm:p-6">
         {/* Headline figures, each with its own icon tile and sparkline -- the same card the real dashboard uses. */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {KPIS.map((kpi) => (
-            <div key={kpi.key} className="relative min-w-0 overflow-hidden rounded-2xl border border-surface-1-border p-3.5">
+          {KPIS.map((kpi, index) => (
+            <div key={kpi.key} data-reveal={index} className="relative min-w-0 overflow-hidden rounded-2xl border border-surface-1-border p-3.5">
               <div className="flex items-start gap-2">
                 <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-lg", TONE[kpi.key])}>
                   <kpi.icon className="size-4" aria-hidden />
@@ -150,7 +150,7 @@ export function ProfitConsole() {
         </div>
 
         {/* The insight card: the one sentence that explains the sharpest change, exactly as the real dashboard writes it. */}
-        <div className="mt-3 flex flex-col gap-3 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div data-reveal="3" className="mt-3 flex flex-col gap-3 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-start gap-3.5">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
               <Sparkles className="size-5" aria-hidden />

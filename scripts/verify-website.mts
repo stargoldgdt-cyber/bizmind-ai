@@ -17,7 +17,7 @@
  *   - the legal pages exist and the footer links to them
  */
 
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 
 import { legal } from "../src/config/legal"
 import { connect, footer, hero, pricing } from "../src/features/marketing/content"
@@ -113,6 +113,22 @@ check("the footer links to the privacy policy and terms, and both pages exist",
   links.includes("/privacy") && links.includes("/terms") &&
     readFileSync("src/app/privacy/page.tsx", "utf8").includes("privacyPolicy") &&
     readFileSync("src/app/terms/page.tsx", "utf8").includes("termsOfService"))
+
+// Scroll motion (owner request, 2026-10-06; DESIGN.md section 11). It must never be able to hide the page.
+const reveal = readFileSync("src/features/marketing/components/scroll-reveal.tsx", "utf8")
+const css = readFileSync("src/app/globals.css", "utf8")
+const marketingFiles = readdirSync("src/features/marketing/components")
+check("scroll reveals do nothing for visitors who prefer reduced motion, in script and in styles",
+  /prefers-reduced-motion: reduce/.test(reveal) && /@media \(prefers-reduced-motion: no-preference\)[\s\S]*data-reveal-state="hidden"/.test(css))
+check("nothing is hidden by the server: only the script marks an element hidden, so a page without scripts is complete",
+  !/data-reveal-state/.test(readFileSync("src/app/page.tsx", "utf8")) &&
+    marketingFiles.every((f) => f === "scroll-reveal.tsx" || !/data-reveal-state/.test(readFileSync(`src/features/marketing/components/${f}`, "utf8"))))
+check("only elements below the fold are hidden, each reveals once, and no parallax or scroll-jacking exists",
+  /getBoundingClientRect\(\)\.top < window\.innerHeight\) continue/.test(reveal) && /unobserve/.test(reveal) &&
+    !/parallax|scroll-snap|wheel/i.test((reveal + css.slice(css.lastIndexOf("/*", css.indexOf("Marketing scroll motion")))).replace(/\/\*[\s\S]*?\*\//g, "")))
+check("the landing page mounts ScrollReveal, and no product screen does",
+  /<ScrollReveal \/>/.test(readFileSync("src/app/page.tsx", "utf8")) &&
+    !readdirSync("src/app/(app)", { recursive: true }).some((f) => String(f).endsWith(".tsx") && /ScrollReveal|data-reveal/.test(readFileSync(`src/app/(app)/${f}`, "utf8"))))
 
 console.log(`\n${"=".repeat(74)}`)
 console.log(` RESULT: ${passed} passed, ${failed} failed`)

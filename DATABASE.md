@@ -1167,6 +1167,20 @@ the P&L engine:
 
 ---
 
+## 7y. The product analysis reader (0070)
+
+`product_analysis(business, product, currency, from, to, account?, target_margin)`
+returns one jsonb document for the product analysis page: `current` and
+`previous` (units, net sales, marketplace costs, COGS, gross profit, margin,
+cost shares), `changes` against the month before, `months` (12 months ending
+with the selected one, bars and points pre-scaled 0-1000), `marketplaces`,
+`costs` (dashboard_cost_breakdown's shape), `price` (average price, break-even,
+price for the target margin) and `orders` (latest ten). `SECURITY INVOKER`, closed
+to anon, read-only. It counts the same lines as `pnl_by_product()` (ORDER_LINE
+attribution, the same three P&L treatments), so a product's page equals its table
+row. Money is exact text; a figure that needs a cost for every unit is null when
+one is missing. Parsed with Zod in `services/catalog/product-analysis.ts`.
+
 ## 8. Regenerating types
 
 `src/types/database.ts` is currently hand-written to match the migrations. Keep

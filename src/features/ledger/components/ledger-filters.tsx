@@ -27,8 +27,8 @@ export function LedgerFilters({
   months: { key: string; label: string }[]
   accountId: string
   monthKey: string | null
-  /** The screen the choice reloads: the overview or product profit. */
-  basePath?: "/ledger" | "/ledger/products" | "/overview"
+  /** The screen the choice reloads: the overview, product profit or one product. */
+  basePath?: string
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()

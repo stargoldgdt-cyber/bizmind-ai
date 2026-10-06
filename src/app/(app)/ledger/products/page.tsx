@@ -9,18 +9,12 @@ import { getActiveBusiness, getUserBusinesses } from "@/features/businesses/quer
 import { ProductProfitBody } from "@/features/catalog/components/product-profit/product-profit-body"
 import { getProductProfit, listActiveProducts, type ProductProfitRow } from "@/features/catalog/queries"
 import { LedgerFilters } from "@/features/ledger/components/ledger-filters"
-import { firstParam, ledgerHref } from "@/features/ledger/params"
-import {
-  getCurrencyMonth,
-  getLedgerMonth,
-  getLedgerPeriods,
-  listLedgerAccounts,
-  type LedgerAccount,
-} from "@/features/ledger/queries"
+import { ledgerHref } from "@/features/ledger/params"
+import { getCurrencyMonth, getLedgerMonth, getLedgerPeriods, listLedgerAccounts } from "@/features/ledger/queries"
+import { resolveLedgerScope } from "@/features/ledger/scope"
 import { createClient, getCurrentUser } from "@/lib/supabase/server"
 import { buildProfitRows } from "@/services/catalog/product-profit-view"
 import type { PnlSummaryRow } from "@/services/ledger/export"
-import { monthKeyOf, parseLedgerMonth, type LedgerMonth } from "@/services/ledger/period"
 
 export const metadata: Metadata = {
   title: "Product profitability",
@@ -37,8 +31,6 @@ export const metadata: Metadata = {
  * spread across products (A7); they stay in their own row, so all rows
  * together equal the account's contribution less COGS.
  */
-
-const ALL_PREFIX = "all-"
 
 export default async function ProductProfitPage(props: PageProps<"/ledger/products">) {
   const searchParams = await props.searchParams
@@ -59,29 +51,11 @@ export default async function ProductProfitPage(props: PageProps<"/ledger/produc
     listActiveProducts(activeBusiness.id),
   ])
 
-  const byCurrency = new Map<string, LedgerAccount[]>()
-  for (const a of accounts) byCurrency.set(a.currency, [...(byCurrency.get(a.currency) ?? []), a])
-  const currencyGroups = [...byCurrency.entries()].filter(([, list]) => list.length > 1)
-
-  const requested = firstParam(searchParams.account)
-  const requestedCurrency = requested?.startsWith(ALL_PREFIX) ? requested.slice(ALL_PREFIX.length) : null
-  const combined = currencyGroups.find(([currency]) => currency === requestedCurrency)?.[0] ?? null
-  const account = combined
-    ? null
-    : (accounts.find((a) => a.id === requested) ??
-      accounts.find((a) => periods.some((p) => p.marketplace_account_id === a.id)) ??
-      accounts[0] ??
-      null)
-
-  const inScope = new Set(
-    combined ? (byCurrency.get(combined) ?? []).map((a) => a.id) : account ? [account.id] : []
+  const { account, combined, month, monthOptions, filterOptions, selectedAccount } = resolveLedgerScope(
+    accounts,
+    periods,
+    searchParams
   )
-  const monthKeys = [...new Set(periods.filter((p) => inScope.has(p.marketplace_account_id)).map((p) => monthKeyOf(p.month)))]
-    .sort()
-    .reverse()
-  const monthOptions = monthKeys.map((key) => parseLedgerMonth(key)).filter((m): m is LedgerMonth => m !== null)
-  const month = parseLedgerMonth(firstParam(searchParams.month)) ?? monthOptions[0] ?? null
-  if (month && !monthOptions.some((m) => m.key === month.key)) monthOptions.unshift(month)
 
   let rows: ProductProfitRow[] = []
   let summary: PnlSummaryRow | null = null
@@ -101,17 +75,13 @@ export default async function ProductProfitPage(props: PageProps<"/ledger/produc
     summary = single.summary
   }
 
-  const filterOptions = [
-    ...accounts.map((a) => ({ id: a.id, label: a.label, detail: `${a.marketplace_code} · ${a.currency}` })),
-    ...currencyGroups.map(([currency, list]) => ({
-      id: `${ALL_PREFIX}${currency}`,
-      label: `All ${currency} accounts`,
-      detail: `${list.length} accounts, added up`,
-    })),
-  ]
   const currency = summary?.currency ?? combined ?? account?.currency ?? ""
 
-  const items = buildProfitRows(rows, new Map(products.map((p) => [p.id, p.sku_code])))
+  const items = buildProfitRows(
+    rows,
+    new Map(products.map((p) => [p.id, p.sku_code])),
+    month ? { account: selectedAccount, month: month.key } : null
+  )
   const notAllocated = rows.find((row) => row.row_kind === "NOT_ALLOCATED") ?? null
 
   return (
@@ -135,7 +105,7 @@ export default async function ProductProfitPage(props: PageProps<"/ledger/produc
                 basePath="/ledger/products"
                 accounts={filterOptions}
                 months={monthOptions.map((m) => ({ key: m.key, label: m.label }))}
-                accountId={combined ? `${ALL_PREFIX}${combined}` : (account?.id ?? "")}
+                accountId={selectedAccount}
                 monthKey={month?.key ?? null}
               />
               <Button asChild className="h-9 gap-2 rounded-4xl">

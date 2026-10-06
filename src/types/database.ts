@@ -2711,6 +2711,20 @@ export type Database = {
         }[]
       }
 
+      /** Migration 0070. One jsonb document; parsed with Zod in services/catalog/product-analysis.ts. */
+      product_analysis: {
+        Args: {
+          p_business_id: string
+          p_product_id: string
+          p_currency: string
+          p_from: string
+          p_to: string
+          p_account_id?: string | null
+          p_target_margin?: number
+        }
+        Returns: Json
+      }
+
       /* ---- SKU setup (migration 0045) ----------------------------------- */
 
       sku_auto_match: {

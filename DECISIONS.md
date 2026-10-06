@@ -2386,3 +2386,45 @@ loss-making product outside them could never appear under "Losing money".
 
 **Cost to change:** Low. The lines are two constants (`LOW_MARGIN_BELOW`,
 `HIGH_MARGIN_FROM`); the sentences are one table in the same file.
+
+---
+
+## 2026-10-06 — Product analysis page: "Review product" and "Review price" open a real analysis
+
+**Context.** The owner asked that "Review product" / "Review price" on Product
+profitability open a dedicated page with evidence-based insights, not a basic
+details page, and supplied a reference image.
+
+**Decision.**
+- **New page `/ledger/products/[id]`; the old `/catalog/products/[id]` stays** for
+  editing costs and SKUs, and "Add cost" still goes there. Loss -> "Review
+  product", low margin -> "Review price", healthy -> "View product", all to the
+  new page, carrying the chosen account and month in the URL.
+- **One SQL function, `product_analysis()` (migration 0070),** works out every
+  figure: this month and last month, the change (a percentage, or points for
+  margin), the 12-month trend with chart positions pre-scaled to 0-1000, the
+  marketplace comparison, the cost breakdown (same shape as
+  `dashboard_cost_breakdown`, so the overview's donut is reused), the price
+  check and the latest orders. It reads the same lines as `pnl_by_product`, so
+  the page and the table cannot disagree (checked on live data: identical).
+  The result is parsed with Zod at the boundary (jsonb is untyped).
+- **Insights are fixed rules over those figures** (`product-analysis-view.ts`),
+  labelled "Insights", never "AI". They compare and word; they calculate nothing.
+  The cost-share warnings ("high", "significant") only appear for a product that
+  needs attention.
+- **Price check overrides one line of the 2026-10-05 decision.** That entry left
+  out "increase price by about AED X" as repricing. The owner has now asked for a
+  price review explicitly, so the page shows what price a chosen margin (5-25%)
+  would need, worked out in SQL and labelled as an estimate that keeps marketplace
+  costs per unit unchanged. It is information only: nothing changes a price, and
+  no feature suggests or sets one automatically.
+- **Left out because the data is not there or a rule forbids it:** stock and
+  sales velocity (no inventory data; forecasting is ruled out), product photo,
+  dimensions and weight (never imported), AI-written advice, and any advertising
+  action (marketplaces report ads without a SKU and V1 never allocates them to
+  products, A7).
+- **One scope helper, `features/ledger/scope.ts`,** now decides the account and
+  month for both product pages, so a choice carries from one to the other.
+
+**Cost to change:** Low. Wording and the two cost-share lines are constants and
+fixed sentences in `product-analysis-view.ts`; the SQL is one function.

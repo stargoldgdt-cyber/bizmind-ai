@@ -152,7 +152,11 @@ check("every recommendation is a fixed sentence with no figure in it", recommend
 check("no recommendation tells anyone to change a price automatically or promises a number",
   recommendations.every((text) => !/\bAED\b|\bSAR\b|%|automatic/i.test(text)))
 const actions = new Map(items.map((i) => [i.status, i.action]))
-check("a loss and a low margin are sent to the product", actions.get("LOSS")?.href === "/catalog/products/b" && actions.get("LOW_MARGIN")?.label === "Review product")
+check("a loss is sent to the product analysis as 'Review product', a low margin as 'Review price'",
+  actions.get("LOSS")?.href === "/ledger/products/b" && actions.get("LOSS")?.label === "Review product" &&
+    actions.get("LOW_MARGIN")?.label === "Review price" && actions.get("LOW_MARGIN")?.href.startsWith("/ledger/products/") === true)
+check("the analysis link carries the chosen account and month",
+  buildProfitRows([row()], new Map(), { account: "all-AED", month: "2026-08" })[0]?.action.href.endsWith("?account=all-AED&month=2026-08") === true)
 check("a missing cost goes to where the cost is added; an unmatched SKU to where it is matched",
   actions.get("MISSING_COST")?.label === "Add cost" && actions.get("NEEDS_MAPPING")?.href === "/catalog#needs-attention")
 

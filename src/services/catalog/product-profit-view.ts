@@ -51,15 +51,27 @@ export const STATUS_LABEL: Record<ProfitStatus, string> = {
 export function statusOf(row: ProfitRow): ProfitStatus | null {
   if (row.row_kind === "NOT_ALLOCATED") return null
   if (row.row_kind === "UNMAPPED_SKU") return "NEEDS_MAPPING"
-  if (row.cogs_status !== "COSTED") return "MISSING_COST"
+  return statusOfFigures({ cogsStatus: row.cogs_status, margin: row.gross_margin_percent, grossProfit: row.gross_profit })
+}
+
+/**
+ * The same grouping from a product's own figures, for the product analysis
+ * page, which gets them from product_analysis() rather than a table row.
+ */
+export function statusOfFigures(figures: {
+  cogsStatus: string
+  margin: string | null
+  grossProfit: string | null
+}): ProfitStatus {
+  if (figures.cogsStatus !== "COSTED") return "MISSING_COST"
 
   // Costed, but a margin does not exist when net sales are zero (everything
   // refunded). The sign of the gross profit still says which side it is on.
-  if (row.gross_margin_percent === null) {
-    return row.gross_profit !== null && compareMoney(row.gross_profit, "0") < 0 ? "LOSS" : "GOOD"
+  if (figures.margin === null) {
+    return figures.grossProfit !== null && compareMoney(figures.grossProfit, "0") < 0 ? "LOSS" : "GOOD"
   }
 
-  const margin = row.gross_margin_percent
+  const margin = figures.margin
   if (compareMoney(margin, "0") < 0) return "LOSS"
   if (compareMoney(margin, LOW_MARGIN_BELOW) < 0) return "LOW_MARGIN"
   if (compareMoney(margin, HIGH_MARGIN_FROM) >= 0) return "HIGH_MARGIN"
@@ -77,17 +89,29 @@ const RECOMMENDATION: Record<ProfitStatus, string> = {
 
 export type ProfitAction = { label: string; href: string }
 
-function actionOf(status: ProfitStatus, productId: string | null): ProfitAction {
-  const product = productId ? `/catalog/products/${productId}` : "/catalog#needs-attention"
+/** The account and month the table is showing, so the analysis page opens on the same ones. */
+export type ProfitScope = { account: string; month: string }
+
+/** Where a product's analysis lives. Link target only; nothing is worked out. */
+export function analysisHref(productId: string, scope: ProfitScope | null): string {
+  const query = scope ? `?${new URLSearchParams({ account: scope.account, month: scope.month }).toString()}` : ""
+  return `/ledger/products/${productId}${query}`
+}
+
+function actionOf(status: ProfitStatus, productId: string | null, scope: ProfitScope | null): ProfitAction {
+  const analysis = productId ? analysisHref(productId, scope) : "/catalog#needs-attention"
+  // Costs are added where the product's dated costs live.
+  const catalog = productId ? `/catalog/products/${productId}` : "/catalog#needs-attention"
   switch (status) {
     case "LOSS":
+      return { label: "Review product", href: analysis }
     case "LOW_MARGIN":
-      return { label: "Review product", href: product }
+      return { label: "Review price", href: analysis }
     case "GOOD":
     case "HIGH_MARGIN":
-      return { label: "View product", href: product }
+      return { label: "View product", href: analysis }
     case "MISSING_COST":
-      return { label: "Add cost", href: product }
+      return { label: "Add cost", href: catalog }
     case "NEEDS_MAPPING":
       return { label: "Match SKU", href: "/catalog#needs-attention" }
   }
@@ -118,7 +142,8 @@ export type ProfitViewRow = {
 
 export function buildProfitRows(
   rows: readonly ProfitRow[],
-  skuByProductId: ReadonlyMap<string, string | null>
+  skuByProductId: ReadonlyMap<string, string | null>,
+  scope: ProfitScope | null = null
 ): ProfitViewRow[] {
   const items = rows.filter(
     (row): row is ProfitRow & { row_kind: "PRODUCT" | "UNMAPPED_SKU" } => row.row_kind !== "NOT_ALLOCATED"
@@ -151,7 +176,7 @@ export function buildProfitRows(
       status,
       highSales: topKeys.has(rowKey(row)),
       recommendation: RECOMMENDATION[status],
-      action: actionOf(status, row.product_id),
+      action: actionOf(status, row.product_id, scope),
     }
   })
 }

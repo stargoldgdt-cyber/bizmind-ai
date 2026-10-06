@@ -1,6 +1,7 @@
 import "server-only"
 
 import { createClient } from "@/lib/supabase/server"
+import { parseProductAnalysis, type ProductAnalysis } from "@/services/catalog/product-analysis"
 import type { LedgerMonth } from "@/services/ledger/period"
 import type { CatalogProduct, Database, ProductCost, SkuAliasMethod } from "@/types/database"
 
@@ -211,4 +212,30 @@ export async function getProductProfit(
   if (error) throw new Error(`Could not load product profit: ${error.message}`)
   const rows = data ?? []
   return "currency" in scope ? rows.filter((row) => row.currency === scope.currency) : rows
+}
+
+/**
+ * Everything the product analysis page shows, worked out in SQL
+ * (product_analysis, migration 0070) for one product, one currency, and the
+ * month asked for (and the eleven before it, for the trend).
+ */
+export async function getProductAnalysis(
+  businessId: string,
+  productId: string,
+  scope: { currency: string; accountId: string | null },
+  month: LedgerMonth,
+  targetMargin: number
+): Promise<ProductAnalysis> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("product_analysis", {
+    p_business_id: businessId,
+    p_product_id: productId,
+    p_currency: scope.currency,
+    p_from: month.from,
+    p_to: month.to,
+    p_account_id: scope.accountId,
+    p_target_margin: targetMargin,
+  })
+  if (error) throw new Error(`Could not load the product analysis: ${error.message}`)
+  return parseProductAnalysis(data)
 }

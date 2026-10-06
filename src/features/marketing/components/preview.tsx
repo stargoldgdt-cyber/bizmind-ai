@@ -142,7 +142,7 @@ export function Preview() {
           align="center"
         />
 
-        <div data-reveal="0" className="mx-auto mt-8 flex w-fit max-w-full flex-col gap-1.5 rounded-full border border-surface-2-border bg-surface-1 p-2 sm:flex-row">
+        <div data-reveal="0" className="mx-auto mt-8 flex w-full max-w-full flex-col gap-1.5 rounded-3xl border border-surface-2-border bg-surface-1 p-2 sm:w-fit sm:flex-row sm:rounded-full">
           {preview.tabs.map((tab, index) => {
             const Icon = index === 0 ? LayoutGrid : Store
             return (
@@ -152,7 +152,7 @@ export function Preview() {
                 onClick={() => setActive(index)}
                 aria-pressed={active === index}
                 className={cn(
-                  "flex items-center gap-3 rounded-full px-4 py-2.5 text-left transition-colors",
+                  "flex items-center gap-3 rounded-2xl px-4 py-2.5 text-left transition-colors sm:rounded-full",
                   active === index ? "bg-primary text-primary-foreground" : "text-surface-1-foreground hover:bg-surface-2"
                 )}
               >

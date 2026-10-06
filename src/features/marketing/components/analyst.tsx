@@ -71,7 +71,7 @@ export function Analyst() {
       />
 
       <div className="relative mx-auto max-w-marketing px-5 sm:px-8">
-        <div className="grid items-center gap-12 lg:grid-cols-12 lg:gap-16">
+        <div className="grid grid-cols-[minmax(0,1fr)] items-center gap-12 lg:grid-cols-12 lg:gap-16">
           <div className="lg:col-span-5">
             <SectionHeader
               level="2"

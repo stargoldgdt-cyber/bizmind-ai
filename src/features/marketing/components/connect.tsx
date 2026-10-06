@@ -115,7 +115,7 @@ export function Connect() {
           ))}
         </div>
 
-        <p data-reveal="0" className="mx-auto mt-8 flex max-w-prose-comfortable items-center justify-center gap-2.5 text-center text-sm text-surface-2-muted">
+        <p data-reveal="0" className="mx-auto mt-8 flex max-w-prose-comfortable flex-col items-center justify-center gap-2.5 text-center sm:flex-row text-sm text-surface-2-muted">
           <FileSpreadsheet className="size-4 shrink-0 text-primary" aria-hidden />
           {connect.footnote}
         </p>

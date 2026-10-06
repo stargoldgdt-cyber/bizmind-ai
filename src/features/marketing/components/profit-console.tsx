@@ -61,7 +61,7 @@ const SPARK: Record<
 function Sparkline({ id, spark }: { id: string; spark: keyof typeof SPARK }) {
   const s = SPARK[spark]
   return (
-    <svg viewBox="0 0 140 60" className="absolute right-0 bottom-0 h-12 w-24 opacity-80" aria-hidden>
+    <svg viewBox="0 0 140 60" className="absolute right-0 bottom-0 hidden h-12 w-24 opacity-80 sm:block" aria-hidden>
       <defs>
         <linearGradient id={`console-spark-${id}`} x1="0" x2="0" y1="0" y2="1">
           <stop stopColor={s.color} stopOpacity="0.18" />

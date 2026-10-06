@@ -71,7 +71,7 @@ export function Hero() {
       {/* Wider than the rest of the page's max-w-marketing: this hero has a big supplied image and a
           full-width logo row to fit, and a marketing hero is where extra width is spent on exactly that. */}
       <div className="relative mx-auto max-w-[90rem] px-5 sm:px-8">
-        <div className="grid items-center gap-12 lg:grid-cols-12 lg:gap-10">
+        <div className="grid grid-cols-[minmax(0,1fr)] items-center gap-12 lg:grid-cols-12 lg:gap-10">
           <div className="lg:col-span-5">
             <span
               className="hero-in inline-flex rounded-full bg-primary/10 px-3.5 py-1.5 font-mono text-xs font-bold tracking-widest text-primary"
@@ -140,21 +140,24 @@ export function Hero() {
         </div>
 
         {/* Real logo files, on their own full-width row so they never have to compete with the text column for space. */}
-        <div data-reveal="0" className="mt-10 flex flex-wrap items-center gap-3 lg:mt-14">
+        <div data-reveal="0" className="mt-10 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center lg:mt-14">
           <span className="font-mono text-[11px] font-bold tracking-widest text-surface-2-muted uppercase">
             Connects to
           </span>
-          {hero.marketplaces.map((m) => (
-            <span
-              key={m.name}
-              className="inline-flex h-14 items-center rounded-xl border border-surface-2-border bg-surface-1 px-5"
-            >
-              <Image src={m.logo} alt={m.name} width={96} height={28} className="h-7 w-auto object-contain" unoptimized />
+          {/* Two by two on a phone, so the chips line up under the label instead of wrapping unevenly; one row from sm up. */}
+          <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-center">
+            {hero.marketplaces.map((m) => (
+              <span
+                key={m.name}
+                className="inline-flex h-14 items-center justify-center rounded-xl border border-surface-2-border bg-surface-1 px-5"
+              >
+                <Image src={m.logo} alt={m.name} width={96} height={28} className="h-7 w-auto object-contain" unoptimized />
+              </span>
+            ))}
+            <span className="inline-flex h-14 items-center justify-center rounded-xl border border-dashed border-surface-2-border px-5 font-mono text-sm text-surface-2-muted">
+              + More
             </span>
-          ))}
-          <span className="inline-flex h-14 items-center rounded-xl border border-dashed border-surface-2-border px-5 font-mono text-sm text-surface-2-muted">
-            + More
-          </span>
+          </div>
         </div>
       </div>
     </section>

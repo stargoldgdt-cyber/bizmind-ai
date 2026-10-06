@@ -89,6 +89,7 @@ Full instructions, including how secrets are handled, are in
 | `npm run test:auth` | Sign-in, create-account, forgot and reset password, Google sign-in wiring, the redirect rule and security headers, offline |
 | `npm run test:product-profit` | Product profitability: grouping, ranking, wording, layout rules and no money arithmetic, offline |
 | `npm run test:product-analysis` | Product analysis page: the shape of what SQL returns, the insight rules, and no money arithmetic, offline |
+| `npm run test:ledger-parts` | Large settlement files split into parts: nothing lost or doubled, related rows kept together, repeatable, offline |
 | `npm run test:integration-live` | Tenant isolation and idempotency, live |
 | `npm run test:automation` | Alert rules, thresholds and the migration guards, no database |
 | `npm run test:automation-live` | Proves a rule stays silent when it should, live |

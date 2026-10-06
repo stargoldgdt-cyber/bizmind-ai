@@ -12,6 +12,7 @@ import { matchIdenticalSkus } from "@/services/catalog/auto-match"
 import { applyLedgerFile } from "@/services/marketplaces/apply"
 import type { MappingRuleSummary, SourceRow } from "@/services/marketplaces/contract"
 import { buildLedgerFilePayload } from "@/services/marketplaces/ledger-file"
+import { splitLedgerFilePayload } from "@/services/marketplaces/ledger-file-parts"
 
 /**
  * POST /api/v1/ledger-files — upload one marketplace settlement file.
@@ -21,13 +22,24 @@ import { buildLedgerFilePayload } from "@/services/marketplaces/ledger-file"
  *   read → recognise the format → the marketplace's adapter → customer-data
  *   filter and payload checks → ledger_apply_file() (one transaction)
  *
+ * A large file is recorded in parts, one request each (the database records
+ * about 1,000 source rows within its time limit; see ledger-file-parts.ts). The
+ * client sends the same file with `part` = 0, 1, 2 ... and each answer says how
+ * many parts there are. Parts are deterministic and each carries its own
+ * fingerprint, so a failed upload is repeated by sending the same file again:
+ * parts already recorded are skipped, never written twice.
+ *
  * The business comes from the session, never from the request. The account
  * must belong to it, and the database checks membership and role again
  * (STAFF and above may import, decision B11). A known-bad report (Amazon's Date
  * Range report, the old flat file) is refused with what to download instead.
  */
 
-const fieldsSchema = z.object({ marketplaceAccountId: z.string().uuid() })
+const fieldsSchema = z.object({
+  marketplaceAccountId: z.string().uuid(),
+  // Which part of a large file to record (see ledger-file-parts.ts). Absent means the first.
+  part: z.coerce.number().int().min(0).max(1000).default(0),
+})
 
 const ACCEPTED = ["txt", "csv", "xlsx", "pdf"] as const
 type Accepted = (typeof ACCEPTED)[number]
@@ -55,7 +67,10 @@ export async function POST(request: Request) {
   const file = form.get("file")
   if (!(file instanceof File)) return refuse(400, "No file was attached.")
 
-  const fields = fieldsSchema.safeParse({ marketplaceAccountId: form.get("marketplaceAccountId") })
+  const fields = fieldsSchema.safeParse({
+    marketplaceAccountId: form.get("marketplaceAccountId"),
+    part: form.get("part") ?? undefined,
+  })
   if (!fields.success) return refuse(400, "Choose the marketplace account this file belongs to.")
 
   const extension = (file.name.toLowerCase().split(".").pop() ?? "") as Accepted
@@ -178,15 +193,26 @@ export async function POST(request: Request) {
     return refuse(422, "This file could not be recorded. Nothing was saved.", { problems: built.problems })
   }
 
-  const applied = await applyLedgerFile(built.payload)
-  if (!applied.ok) return refuse(422, applied.error)
+  let parts: ReturnType<typeof splitLedgerFilePayload>
+  try {
+    parts = splitLedgerFilePayload(built.payload)
+  } catch (error) {
+    return refuse(422, (error as Error).message)
+  }
+  const partIndex = fields.data.part
+  if (partIndex >= parts.length) return refuse(400, "That part of the file does not exist.")
+
+  const applied = await applyLedgerFile(parts[partIndex])
+  if (!applied.ok) return refuse(422, applied.error, { part: partIndex, parts: parts.length })
 
   // Known SKUs written differently (spaces, dashes, capitals) are matched to
-  // their product at once. The file is recorded whether or not this succeeds.
-  const matched = await matchIdenticalSkus(business.id)
+  // their product at once, after the last part. The file is recorded whether
+  // or not this succeeds.
+  const last = partIndex === parts.length - 1
+  const matched = last ? await matchIdenticalSkus(business.id) : 0
 
   revalidatePath("/imports")
-  revalidatePath("/catalog")
+  if (last) revalidatePath("/catalog")
 
   return NextResponse.json({
     sourceFileId: applied.value.source_file_id,
@@ -201,5 +227,7 @@ export async function POST(request: Request) {
     errors: result.issues.filter((issue) => issue.severity === "ERROR").length,
     warnings: result.issues.filter((issue) => issue.severity === "WARNING").length,
     skusMatchedAutomatically: matched,
+    part: partIndex,
+    parts: parts.length,
   })
 }

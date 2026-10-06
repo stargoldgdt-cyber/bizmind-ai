@@ -23,6 +23,12 @@ import {
  * every line, refusing customer data, writing the ledger in one transaction.
  * This component sends the file and says, in words, what happened: recorded,
  * already recorded, or refused and why. It shows no figure it did not receive.
+ *
+ * A large file is recorded in parts (the database records about 1,000 source
+ * rows within its time limit). The server splits it the same way every time and
+ * answers each request with how many parts there are, so this sends the same
+ * file once per part and adds up what each part reported. If a part fails, the
+ * ones before it stay recorded, and sending the same file again skips them.
  */
 
 type Outcome =
@@ -31,6 +37,7 @@ type Outcome =
       sourceFileId: string
       duplicate: boolean
       format: string
+      parts: number
       rows: number
       transactions: number
       settlements: number
@@ -53,6 +60,7 @@ export function SettlementUploader({
   const [fileName, setFileName] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
   const [outcome, setOutcome] = useState<Outcome | null>(null)
+  const [progress, setProgress] = useState<{ part: number; parts: number } | null>(null)
 
   async function upload() {
     const file = fileInput.current?.files?.[0]
@@ -60,23 +68,69 @@ export function SettlementUploader({
 
     setPending(true)
     setOutcome(null)
-    const form = new FormData()
-    form.append("file", file)
-    form.append("marketplaceAccountId", accountId)
+    setProgress(null)
 
+    let recorded = 0
+    let parts = 1
     try {
-      const response = await fetch("/api/v1/ledger-files", { method: "POST", body: form })
-      const body = await response.json()
-      if (!response.ok) {
-        setOutcome({ kind: "refused", error: body.error ?? "The file could not be recorded.", problems: body.problems ?? [] })
-      } else {
-        setOutcome({ kind: "recorded", ...body })
-        router.refresh()
+      const total = { rows: 0, transactions: 0, settlements: 0, payouts: 0, issues: 0, unmapped: 0 }
+      let allDuplicate = true
+      let last: Record<string, unknown> = {}
+
+      for (let part = 0; part < parts; part++) {
+        const form = new FormData()
+        form.append("file", file)
+        form.append("marketplaceAccountId", accountId)
+        form.append("part", String(part))
+
+        const response = await fetch("/api/v1/ledger-files", { method: "POST", body: form })
+        const body = await response.json()
+        if (!response.ok) {
+          const earlier =
+            recorded > 0
+              ? ` Part${recorded === 1 ? "" : "s"} 1${recorded > 1 ? `–${recorded}` : ""} of ${body.parts ?? parts} ${recorded === 1 ? "is" : "are"} recorded. ` +
+                "Upload the same file again to carry on: what is already recorded is skipped."
+              : ""
+          setOutcome({
+            kind: "refused",
+            error: `${body.error ?? "The file could not be recorded."}${earlier}`,
+            problems: body.problems ?? [],
+          })
+          return
+        }
+
+        parts = body.parts ?? 1
+        recorded = part + 1
+        setProgress({ part: recorded, parts })
+        allDuplicate = allDuplicate && body.duplicate
+        for (const key of Object.keys(total) as (keyof typeof total)[]) total[key] += body[key] ?? 0
+        last = body
       }
+
+      setOutcome({
+        kind: "recorded",
+        sourceFileId: String(last.sourceFileId),
+        duplicate: allDuplicate,
+        format: String(last.format),
+        parts,
+        ...total,
+        // The same for every part: counted over the whole file.
+        errors: Number(last.errors ?? 0),
+        warnings: Number(last.warnings ?? 0),
+      })
+      router.refresh()
     } catch {
-      setOutcome({ kind: "refused", error: "The upload did not reach BizMind. Check your connection and try again.", problems: [] })
+      setOutcome({
+        kind: "refused",
+        error:
+          recorded > 0
+            ? `The connection dropped after ${recorded} of ${parts} parts. Upload the same file again to carry on: what is already recorded is skipped.`
+            : "The upload did not reach BizMind. Check your connection and try again.",
+        problems: [],
+      })
     } finally {
       setPending(false)
+      setProgress(null)
     }
   }
 
@@ -126,7 +180,11 @@ export function SettlementUploader({
         <div>
           <Button className="rounded-4xl" disabled={pending || !fileName || !accountId} onClick={upload}>
             <Upload className="size-4" aria-hidden />
-            {pending ? "Reading and recording…" : "Upload and record"}
+            {pending
+              ? progress && progress.parts > 1
+                ? `Recording part ${Math.min(progress.part + 1, progress.parts)} of ${progress.parts}…`
+                : "Reading and recording…"
+              : "Upload and record"}
           </Button>
         </div>
       </div>
@@ -167,6 +225,12 @@ export function SettlementUploader({
                   settlement{outcome.settlements === 1 ? "" : "s"} · {outcome.payouts} payout
                   {outcome.payouts === 1 ? "" : "s"}
                 </p>
+                {outcome.parts > 1 && (
+                  <p className="text-sm text-muted-foreground">
+                    This is a large file, so it was recorded in {outcome.parts} parts. They are listed
+                    separately under Import data.
+                  </p>
+                )}
                 {outcome.unmapped > 0 && (
                   <p className="text-sm text-warning-strong">
                     {outcome.unmapped} line{outcome.unmapped === 1 ? " uses" : "s use"} a code BizMind
@@ -183,7 +247,11 @@ export function SettlementUploader({
             )}
             <div>
               <Button asChild size="sm" variant="outline" className="rounded-4xl">
-                <Link href={`/imports/${outcome.sourceFileId}`}>See the file</Link>
+                {outcome.parts > 1 ? (
+                  <Link href="/imports">See the files</Link>
+                ) : (
+                  <Link href={`/imports/${outcome.sourceFileId}`}>See the file</Link>
+                )}
               </Button>
             </div>
           </div>

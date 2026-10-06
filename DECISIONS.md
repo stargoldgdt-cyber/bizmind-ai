@@ -2458,3 +2458,49 @@ it reads as premium.
 
 **Cost to change:** Low. Remove `<ScrollReveal />` from `src/app/page.tsx` and
 every section shows normally, because nothing is hidden without it.
+
+---
+
+## 2026-10-06 — Large settlement files are recorded in parts (noon February, 4,600+ orders, timed out)
+
+**Context.** Uploading the February noon Transaction View (4,600+ orders, about
+10,000 rows) on the live site failed with "canceling statement due to statement
+timeout". `ledger_apply_file()` validates and writes a whole file in one
+statement and the API allows a statement about 8 seconds.
+
+**Measured** (throwaway business, the January noon file's real shape scaled up):
+about 3 ms of database work per source row, roughly 1,000 rows in 3 s. A file of
+a few thousand rows is borderline; 10,000 rows can never fit in one statement,
+however the function is tuned.
+
+**Decision.**
+- **Record big files in parts, one request each, through the same single writer.**
+  `splitLedgerFilePayload()` (pure, deterministic) cuts the payload into parts of
+  at most 800 source rows. Each part is a complete, valid file of its own, so no
+  ledger rule changes and **no migration is needed**.
+- **Rows that belong together are never separated:** a ledger line and the
+  payout or settlement it names, and rows whose raw values are identical (the
+  overlap check would otherwise refuse the second as a repeat of the first). A
+  file tied together from every row, such as an Amazon settlement, stays one part
+  exactly as before.
+- **A failed upload is repeated by sending the same file again.** Each part has
+  its own fingerprint derived from the file's, so a part already recorded is
+  skipped by the database's existing "same file again" no-op and never written
+  twice. The screen says which parts are recorded.
+- **The client sends the same file once per part** (`part` = 0, 1, 2 ...); the
+  server re-reads and re-splits it each time (about 0.2 s) and records only that
+  part. Each request therefore stays well inside the host's function time limit.
+  Automatic SKU matching runs after the last part.
+- **Parts are separate files in the ledger.** They are named "(part 2 of 11)" and
+  listed separately under Import data; withdrawing one withdraws only that part.
+  A single "withdraw all parts" is not built.
+- **Checked live:** a 10,500-row file (21,262 ledger lines) recorded in 11 parts,
+  every row and line present exactly once, each part 3-6 s including the upload,
+  and sending the same parts again skipped all of them.
+
+**Not done, and why.** Speeding up the function itself would only move the
+limit, not remove it, and cannot be profiled without direct database access.
+Raising the database timeout would let every slow query run longer for everyone.
+Splitting is the one change that holds for any file size.
+
+**Cost to change:** Low. The part size is one constant (`LEDGER_PART_ROWS`).

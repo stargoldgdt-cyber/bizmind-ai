@@ -102,7 +102,7 @@ check(
 check(
   "src/services/marketplaces holds the contract, filter, builder, registry, door and the Amazon and noon adapters",
   JSON.stringify(readdirSync("src/services/marketplaces").sort()) ===
-    JSON.stringify(["adapters.ts", "amazon", "apply.ts", "contract.ts", "customer-data.ts", "index.ts", "ledger-file.ts", "noon", "registry.ts"]),
+    JSON.stringify(["adapters.ts", "amazon", "apply.ts", "contract.ts", "customer-data.ts", "index.ts", "ledger-file-parts.ts", "ledger-file.ts", "noon", "registry.ts"]),
   readdirSync("src/services/marketplaces").join(", ")
 )
 
@@ -485,7 +485,8 @@ check(
 )
 check(
   "no new module inserts, updates or deletes a table directly",
-  newFiles.every((file) => !/\.(insert|update|upsert|delete)\(/.test(readFileSync(file, "utf8")))
+  // A SHA-256 hash is not a table write: `createHash("sha256").update(text)` is the one call allowed.
+  newFiles.every((file) => !/(?<!createHash\("sha256"\))\.(insert|update|upsert|delete)\(/.test(readFileSync(file, "utf8")))
 )
 
 const apply = readFileSync("src/services/marketplaces/apply.ts", "utf8")

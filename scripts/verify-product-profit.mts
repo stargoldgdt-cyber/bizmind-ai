@@ -136,6 +136,28 @@ check("top profitable: only products that made money, largest first (2250, 100, 
 const leaks = biggestLeaks(items)
 check("biggest leaks: losses and thin margins, the biggest loss first", leaks.map((i) => i.name).join(",") === "Beta,Gamma", leaks.map((i) => i.name).join(","))
 check("a product with no final profit is never ranked", ![...top, ...leaks].some((i) => i.grossProfit === null))
+
+// The shapes seen on the real August page: refund-only products (0 units, negative net sales) and sold-and-refunded
+// ones (units, net sales exactly 0). Their profit is negative because of marketplace fees, never a product leak.
+const refundOnly = row({ product_name: "RefundOnly", units_sold: "0.0000", net_sales: "-512.0000", gross_profit: "-146.6400", gross_margin_percent: null })
+const soldAndRefunded = row({ product_name: "SoldAndRefunded", units_sold: "1.0000", net_sales: "0.0000", gross_profit: "-40.0000", gross_margin_percent: null })
+const realLoss = row({ product_name: "RealLoss", units_sold: "4.0000", net_sales: "200.0000", gross_profit: "-30.0000", gross_margin_percent: "-15.0" })
+const realThin = row({ product_name: "RealThin", units_sold: "2.0000", net_sales: "100.0000", gross_profit: "2.0000", gross_margin_percent: "2.0" })
+check("no net sales is 'Refunded', not a loss: refund-only and sold-and-refunded",
+  statusOf(refundOnly) === "REFUNDED" && statusOf(soldAndRefunded) === "REFUNDED")
+check("a product that really sold at a loss is still a loss", statusOf(realLoss) === "LOSS")
+const refundItems = buildProfitRows([refundOnly, soldAndRefunded, realLoss, realThin], new Map())
+check("biggest leaks list only real sales (units sold and net sales above zero): the two refunded products stay out",
+  biggestLeaks(refundItems).map((i) => i.name).join(",") === "RealLoss,RealThin", biggestLeaks(refundItems).map((i) => i.name).join(","))
+check("a list of only refunded products leaves the leaks empty instead of showing fees as leaks",
+  biggestLeaks(buildProfitRows([refundOnly, soldAndRefunded], new Map())).length === 0)
+check("unmatched SKUs and lines no product owns never reach the leaks, whatever their amounts",
+  biggestLeaks(buildProfitRows([row({ row_kind: "UNMAPPED_SKU", product_id: null, raw_sku: "X", cogs_status: "NO_PRODUCT", net_sales: "50.0000", units_sold: "2.0000", gross_profit: "-9.0000", gross_margin_percent: "-18.0" }), row({ row_kind: "NOT_ALLOCATED", units_sold: "0.0000", net_sales: "0.0000", gross_profit: "-300.0000" })], new Map())).length === 0)
+check("refunded products are not counted as loss-making or needing attention, and have their own count and filter",
+  attentionOf(refundItems).loss === 1 && attentionOf(refundItems).needAttention === 2 && attentionOf(refundItems).refunded === 2
+    && filterCounts(refundItems).refunded === 2 && filterCounts(refundItems).loss === 1)
+check("a refunded product with no known cost is still 'Missing cost' (setup first)",
+  statusOf(row({ units_sold: "1.0000", net_sales: "0.0000", cogs_status: "NO_COST", cogs: null, gross_profit: null, gross_margin_percent: null })) === "MISSING_COST")
 const exact = buildProfitRows(
   [row({ product_name: "Small", gross_profit: "9.5000", gross_margin_percent: "30" }), row({ product_name: "Large", gross_profit: "10.0000", gross_margin_percent: "30" })],
   new Map()

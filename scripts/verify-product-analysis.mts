@@ -130,6 +130,16 @@ check("a healthy product is told to keep going, not to fix anything", healthy.ac
 const unfinished = buildInsights(parseProductAnalysis(document({ current: period({ cogs: null, gross_profit: null, margin: null, cogs_pct: null, cogs_status: "NO_COST" }), price: null })), "MISSING_COST")
 check("an incomplete product shows no profit figure and asks for the cost",
   /needs the product's cost/i.test(unfinished.summary) && unfinished.actions.some((a) => a.key === "add-cost") && !/gross profit of/.test(unfinished.summary))
+const refunded = buildInsights(parseProductAnalysis(document({
+  current: period({ units: "1.0000", net_sales: "0.0000", costs: "-40.0000", cogs: "-290.0000", gross_profit: "-330.0000", margin: null, costs_pct: null, cogs_pct: null }),
+  marketplaces: [], price: null,
+})), "LOSS")
+check("units sold but net sales zero is called what it is: every sale was refunded",
+  refunded.headline === "Every sale this period was refunded." && /refunded/.test(refunded.summary))
+check("a refunded product's gross profit is shown, never 'needs the cost' (the cost is known)",
+  /330\.00/.test(refunded.summary) && !/needs the product's cost/.test(refunded.summary))
+check("a refund is not blamed on price or cost: no price or cost action, and the returned item is what to check",
+  refunded.actions.length === 1 && refunded.actions[0].key === "refund" && /returned item/.test(refunded.actions[0].title) && refunded.reasons[0].key === "refund")
 check("no sales: the page says so instead of inventing a verdict",
   buildInsights(parseProductAnalysis(document({ current: null })), "GOOD").headline === "No sales for this product in this period.")
 

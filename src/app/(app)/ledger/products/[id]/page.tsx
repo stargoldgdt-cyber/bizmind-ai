@@ -81,7 +81,12 @@ export default async function ProductAnalysisPage(props: PageProps<"/ledger/prod
   const previousLabel = month ? previousLedgerMonth(month).label : ""
 
   const status = current
-    ? statusOfFigures({ cogsStatus: current.cogs_status, margin: current.margin, grossProfit: current.gross_profit })
+    ? statusOfFigures({
+        cogsStatus: current.cogs_status,
+        margin: current.margin,
+        grossProfit: current.gross_profit,
+        netSales: current.net_sales,
+      })
     : null
   const insights = analysis && status ? buildInsights(analysis, status) : null
 

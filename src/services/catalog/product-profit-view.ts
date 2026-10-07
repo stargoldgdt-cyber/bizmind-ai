@@ -32,6 +32,7 @@ export type ProfitStatus =
   | "LOW_MARGIN"
   | "GOOD"
   | "HIGH_MARGIN"
+  | "REFUNDED"
   | "MISSING_COST"
   | "NEEDS_MAPPING"
 
@@ -40,6 +41,7 @@ export const STATUS_LABEL: Record<ProfitStatus, string> = {
   LOW_MARGIN: "Low margin",
   GOOD: "Good",
   HIGH_MARGIN: "High margin",
+  REFUNDED: "Refunded",
   MISSING_COST: "Missing cost",
   NEEDS_MAPPING: "Needs mapping",
 }
@@ -51,7 +53,21 @@ export const STATUS_LABEL: Record<ProfitStatus, string> = {
 export function statusOf(row: ProfitRow): ProfitStatus | null {
   if (row.row_kind === "NOT_ALLOCATED") return null
   if (row.row_kind === "UNMAPPED_SKU") return "NEEDS_MAPPING"
-  return statusOfFigures({ cogsStatus: row.cogs_status, margin: row.gross_margin_percent, grossProfit: row.gross_profit })
+  return statusOfFigures({
+    cogsStatus: row.cogs_status,
+    margin: row.gross_margin_percent,
+    grossProfit: row.gross_profit,
+    netSales: row.net_sales,
+  })
+}
+
+/**
+ * Whether a row is a real sale in the period: units were sold AND something was kept after refunds and
+ * discounts. A row with no net sales is a refund (or a sale refunded in full), whose amounts are the
+ * marketplace's fees and the returned cost, not a product that sells badly.
+ */
+export function hasRealSales(row: Pick<ProfitViewRow, "units" | "netSales">): boolean {
+  return compareMoney(row.units, "0") > 0 && compareMoney(row.netSales, "0") > 0
 }
 
 /**
@@ -62,8 +78,14 @@ export function statusOfFigures(figures: {
   cogsStatus: string
   margin: string | null
   grossProfit: string | null
+  /** Net sales after refunds and discounts. When it is zero or less, nothing was kept: the group is "Refunded". */
+  netSales?: string
 }): ProfitStatus {
   if (figures.cogsStatus !== "COSTED") return "MISSING_COST"
+
+  // Nothing was kept from the sales: whatever the profit looks like comes from refunds (the marketplace keeps
+  // its fees), not from the price or the product's cost. It is not a "loss-making" product and not a leak.
+  if (figures.netSales !== undefined && compareMoney(figures.netSales, "0") <= 0) return "REFUNDED"
 
   // Costed, but a margin does not exist when net sales are zero (everything
   // refunded). The sign of the gross profit still says which side it is on.
@@ -83,6 +105,7 @@ const RECOMMENDATION: Record<ProfitStatus, string> = {
   LOW_MARGIN: "The margin is thin. Check whether the price can rise or the cost can fall.",
   GOOD: "A healthy margin. Keep it in stock and watch the marketplace costs.",
   HIGH_MARGIN: "A strong margin. Worth promoting and keeping in stock.",
+  REFUNDED: "Every sale was refunded, so only the marketplace's fees remain. Check why customers returned it.",
   MISSING_COST: "Add this product's cost for the sale dates so its profit can be worked out.",
   NEEDS_MAPPING: "Match this SKU to a product so it gets a cost and a margin.",
 }
@@ -109,6 +132,7 @@ function actionOf(status: ProfitStatus, productId: string | null, scope: ProfitS
       return { label: "Review price", href: analysis }
     case "GOOD":
     case "HIGH_MARGIN":
+    case "REFUNDED":
       return { label: "View product", href: analysis }
     case "MISSING_COST":
       return { label: "Add cost", href: catalog }
@@ -193,7 +217,7 @@ function rowKey(row: ProfitRow): string {
  * Every filter a row can match. "profitable" has no chip of its own (the owner
  * keeps the bar to five), but the health bar's "Good" segment still uses it.
  */
-export const FILTER_KEYS = ["all", "loss", "low", "high", "setup", "profitable"] as const
+export const FILTER_KEYS = ["all", "loss", "low", "high", "setup", "profitable", "refunded"] as const
 export type FilterKey = (typeof FILTER_KEYS)[number]
 
 /** The chips shown above the table, in the owner's order. */
@@ -206,6 +230,7 @@ export const FILTER_LABEL: Record<FilterKey, string> = {
   high: `High margin (${HIGH_MARGIN_FROM}%+)`,
   setup: "Needs setup",
   profitable: "Profitable",
+  refunded: "Refunded",
 }
 
 /** "Needs setup" is anything the seller must finish before the profit is final: a missing cost or an unmatched SKU. */
@@ -216,6 +241,7 @@ const FILTER_TEST: Record<FilterKey, (row: ProfitViewRow) => boolean> = {
   high: (row) => row.status === "HIGH_MARGIN",
   setup: (row) => row.status === "MISSING_COST" || row.status === "NEEDS_MAPPING",
   profitable: (row) => row.status === "LOW_MARGIN" || row.status === "GOOD" || row.status === "HIGH_MARGIN",
+  refunded: (row) => row.status === "REFUNDED",
 }
 
 export function matchesFilter(row: ProfitViewRow, filter: FilterKey): boolean {
@@ -240,10 +266,20 @@ export function topProfitable(rows: readonly ProfitViewRow[], limit = 5): Profit
     .slice(0, limit)
 }
 
-/** Products losing money or earning very little, largest loss first. */
+/**
+ * Products that SELL but lose money or earn very little, largest loss first. Only real sales qualify (units sold
+ * and net sales above zero): a refund-only product, or one whose every sale was refunded, is shown as "Refunded"
+ * and never here, and neither are fees, expenses or other lines no product owns (they are not rows at all).
+ */
 export function biggestLeaks(rows: readonly ProfitViewRow[], limit = 5): ProfitViewRow[] {
   return rows
-    .filter((row) => (row.status === "LOSS" || row.status === "LOW_MARGIN") && row.grossProfit !== null)
+    .filter(
+      (row) =>
+        row.kind === "PRODUCT" &&
+        hasRealSales(row) &&
+        (row.status === "LOSS" || row.status === "LOW_MARGIN") &&
+        row.grossProfit !== null
+    )
     .sort((a, b) => compareMoney(a.grossProfit!, b.grossProfit!))
     .slice(0, limit)
 }
@@ -255,6 +291,8 @@ export type Attention = {
   lowMarginHighSales: number
   missingCost: number
   needsMapping: number
+  /** Products with no net sales in the period (every sale refunded, or only refunds). Not a product problem. */
+  refunded: number
 }
 
 export function attentionOf(rows: readonly ProfitViewRow[]): Attention {
@@ -266,6 +304,7 @@ export function attentionOf(rows: readonly ProfitViewRow[]): Attention {
     lowMarginHighSales: rows.filter((row) => row.highSales && (row.status === "LOW_MARGIN" || row.status === "LOSS")).length,
     missingCost: rows.filter((row) => row.status === "MISSING_COST").length,
     needsMapping: rows.filter((row) => row.status === "NEEDS_MAPPING").length,
+    refunded: rows.filter((row) => row.status === "REFUNDED").length,
   }
 }
 
@@ -316,6 +355,14 @@ export function insightsOf(
       tone: "success",
       title: `${best.name} made the most profit`,
       body: `${money(best.grossProfit!)} gross profit${best.margin ? ` at a ${percent(best.margin)} margin` : ""}. Keep it in stock.`,
+    })
+  }
+
+  if (attention.refunded > 0) {
+    out.push({
+      tone: "info",
+      title: `${plural(attention.refunded, "product had", "products had")} no net sales`,
+      body: "Every sale was refunded, so only marketplace fees remain. They are listed as Refunded, not as losses, and the fees stay in the Marketplace P&L.",
     })
   }
 

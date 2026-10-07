@@ -58,6 +58,7 @@ const HEADLINE: Record<ProfitStatus, string> = {
   LOW_MARGIN: "This product's margin is thin.",
   GOOD: "This product earns a healthy margin.",
   HIGH_MARGIN: "This product earns a strong margin.",
+  REFUNDED: "No net sales this period: every sale was refunded.",
   MISSING_COST: "This product's profit is not final yet.",
   NEEDS_MAPPING: "This SKU is not matched to a product yet.",
 }
@@ -70,16 +71,27 @@ export function buildInsights(analysis: ProductAnalysis, status: ProfitStatus): 
   const current = analysis.current
   const currency = analysis.currency
   const priority = priorityOf(status)
-  const headline = HEADLINE[status]
 
   if (!current) {
     return { priority, headline: "No sales for this product in this period.", summary: "Pick another month or marketplace.", reasons: [], actions: [] }
   }
 
+  // Units were sold but nothing was kept: the sales were refunded in the same period. The cost is known, so
+  // the loss is real in the figures, but it comes from a refund (the marketplace keeps its fulfilment fee and
+  // charges a refund fee, and the unit's cost still counts), not from the price or the product cost.
+  const allRefunded = compareMoney(current.net_sales, "0") === 0 && compareMoney(current.units, "0") > 0
+  const headline = allRefunded ? "Every sale this period was refunded." : HEADLINE[status]
+
   const summary =
     current.gross_profit !== null && current.margin !== null
       ? `It sold ${formatMoney(current.net_sales, currency)} in this period and made a gross profit of ${formatMoney(current.gross_profit, currency)} (${formatPercent(current.margin)}).`
-      : `It sold ${formatMoney(current.net_sales, currency)} in this period. Gross profit needs the product's cost for every unit sold.`
+      : current.gross_profit !== null
+        ? `Net sales were ${formatMoney(current.net_sales, currency)}, so there is no margin. ${
+            allRefunded
+              ? "The sales were refunded, but the marketplace's fees and the unit's cost still count, which leaves a gross profit of "
+              : "Gross profit is "
+          }${formatMoney(current.gross_profit, currency)}.`
+        : `It sold ${formatMoney(current.net_sales, currency)} in this period. Gross profit needs the product's cost for every unit sold.`
 
   const price = analysis.price
   // "High" and "significant" are warnings: only a product that needs attention gets them.
@@ -173,6 +185,30 @@ export function buildInsights(analysis: ProductAnalysis, status: ProfitStatus): 
       title: status === "HIGH_MARGIN" ? "Worth promoting" : "Keep an eye on it",
       detail: "Nothing needs fixing now. Check back when marketplace costs or the product cost change.",
     })
+  }
+
+  if (allRefunded) {
+    // A refund is not a price or product-cost problem, so those reasons and actions would mislead.
+    return {
+      priority,
+      headline,
+      summary,
+      reasons: [
+        {
+          key: "refund",
+          title: "The sales were refunded",
+          detail: `Net sales ${formatMoney(current.net_sales, currency)}; the marketplace's fees and the unit's cost still count`,
+        },
+      ],
+      actions: [
+        {
+          key: "refund",
+          title: "Check what happened to the returned item",
+          detail:
+            "If the customer sent it back and it went into sellable stock, its cost is still in your stock and the real loss is only the marketplace's fees. If it was damaged or never returned, the cost is lost, as shown here.",
+        },
+      ],
+    }
   }
 
   return {

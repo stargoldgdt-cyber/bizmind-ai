@@ -11,6 +11,7 @@ const TONE: Record<ProfitStatus, string> = {
   LOW_MARGIN: "bg-warning-subtle text-warning-strong",
   GOOD: "bg-success-subtle text-success-strong",
   HIGH_MARGIN: "bg-success-subtle text-success-strong",
+  REFUNDED: "text-muted-foreground",
   MISSING_COST: "text-muted-foreground",
   NEEDS_MAPPING: "text-muted-foreground",
 }

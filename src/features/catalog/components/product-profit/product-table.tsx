@@ -61,12 +61,13 @@ const LOOK: Record<ProfitStatus, { row: string; edge: string; bar: string; segme
   LOW_MARGIN: { row: "bg-warning-subtle/40", edge: "border-l-warning", bar: "shadow-[inset_3px_0_0_var(--color-warning)]", segment: "bg-warning", filter: "low" },
   GOOD: { row: "", edge: "border-l-transparent", bar: "", segment: "bg-success/50", filter: "profitable" },
   HIGH_MARGIN: { row: "", edge: "border-l-transparent", bar: "", segment: "bg-success", filter: "high" },
+  REFUNDED: { row: "", edge: "border-l-border", bar: "shadow-[inset_3px_0_0_var(--color-border)]", segment: "bg-info/60", filter: "refunded" },
   MISSING_COST: { row: "", edge: "border-l-border", bar: "shadow-[inset_3px_0_0_var(--color-border)]", segment: "bg-muted-foreground/40", filter: "setup" },
   NEEDS_MAPPING: { row: "", edge: "border-l-border", bar: "shadow-[inset_3px_0_0_var(--color-border)]", segment: "bg-muted-foreground/20", filter: "setup" },
 }
 /** Healthy products stay quiet: only these groups get a sentence under their name. */
 const NEEDS_WORDS = new Set<ProfitStatus>(["LOSS", "LOW_MARGIN", "MISSING_COST", "NEEDS_MAPPING"])
-const HEALTH_ORDER: ProfitStatus[] = ["LOSS", "LOW_MARGIN", "GOOD", "HIGH_MARGIN", "MISSING_COST", "NEEDS_MAPPING"]
+const HEALTH_ORDER: ProfitStatus[] = ["LOSS", "LOW_MARGIN", "GOOD", "HIGH_MARGIN", "REFUNDED", "MISSING_COST", "NEEDS_MAPPING"]
 
 function profitTone(row: ProfitViewRow): string {
   if (row.grossProfit === null) return "text-muted-foreground"

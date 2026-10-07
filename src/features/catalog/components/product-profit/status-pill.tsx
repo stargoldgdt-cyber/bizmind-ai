@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, CircleDashed, Link2, TrendingDown, TrendingUp } from "lucide-react"
+import { CircleAlert, CircleCheck, CircleDashed, Link2, Undo2, TrendingDown, TrendingUp } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
 import { STATUS_LABEL, type ProfitStatus } from "@/services/catalog/product-profit-view"
@@ -13,6 +13,7 @@ const STYLE: Record<ProfitStatus, { icon: LucideIcon; className: string }> = {
   LOW_MARGIN: { icon: CircleAlert, className: "bg-warning-subtle text-warning-strong" },
   GOOD: { icon: CircleCheck, className: "bg-success-subtle text-success-strong" },
   HIGH_MARGIN: { icon: TrendingUp, className: "bg-success-subtle text-success-strong" },
+  REFUNDED: { icon: Undo2, className: "bg-info-subtle text-info-strong" },
   MISSING_COST: { icon: CircleDashed, className: "bg-muted text-muted-foreground" },
   NEEDS_MAPPING: { icon: Link2, className: "bg-muted text-muted-foreground" },
 }

@@ -2527,3 +2527,64 @@ Raising the database timeout would let every slow query run longer for everyone.
 Splitting is the one change that holds for any file size.
 
 **Cost to change:** Low. The part size is one constant (`LEDGER_PART_ROWS`).
+
+## 2026-10-07 — Refunded orders return to stock (0071, 0073) and the performance pass (0076, 0083)
+
+**Refund rule (owner, final).** A product refunded in full goes back into stock:
+its cost of goods is reversed in the month of the refund, so a fully refunded
+order is not shown as a loss of the product's cost. A partial refund keeps the
+cost. Marketplace fees stay deducted exactly once, in the Marketplace P&L; they
+are only listed, read-only, in Expenses. Product Profit shows product figures
+and, separately, a Marketplace fees section (fee breakdown, Profit after fees,
+Net margin after fees). `ledger_product_lines` gives the credit on the refund
+line (0071); the credit look-up runs only for refund lines (0073, same figures,
+10-20x less work). `product_performance()` and `refund_fees()` were added;
+`pnl_by_product()` stays for the deployed app until the app moves over, with its
+margin rule fixed (a margin needs positive net sales). Rollbacks:
+`supabase/rollbacks/0071_revert.sql`, `0073_revert.sql`.
+
+**Performance pass (owner: faster pages, no change to any figure or rule).**
+Measured on the real ledger with throwaway tools, every candidate proven against
+the live function line for line before it replaced anything:
+
+- **Done, identical figures, about 30% faster on long ranges:** `pnl_summary()`
+  (0076) read every line with all its columns into a temporary table that was
+  read twice and spilled to disk on a long range; it now reads the lines once with
+  only the columns the totals use. Checked for all 10 months, accounts separate
+  and combined, and Jul-Aug / Apr-Aug / Jan-Aug: 0 differing rows in any column.
+  January-August 6.6 s to 4.5 s. `dashboard_accounts()` (0083) had the same shape
+  in its five quality checks and now reads the few hundred distinct line groups
+  once: 0 differing rows in 26 comparisons (both currencies), 15-25% faster.
+  Undo scripts: `supabase/rollbacks/0076_revert.sql`, `0083_revert.sql`.
+- **Tried, identical but NOT faster, dropped:** classifying each line type once
+  (0075 inside the P&L; 0078-0081 as a function over the period). Same lines, every
+  column, but about twice as slow as the view in every month: the cost per line is
+  spread over the joins every line goes through, not over the rule look-up.
+  (0065 had tried the same inside the view and was reverted in 0069 because a view
+  cannot be told the period.) Do not retry this without new evidence.
+- **Where the time goes:** EXPLAIN (ANALYZE, BUFFERS) showed everything is already in
+  memory (the slow Free-plan disk is not the limit); reading the stored lines of
+  Jan-Aug takes 35 ms and the rest is per-line work in views. `pnl_by_product()` and
+  `product_performance()` already read the lines in one pass, so there is no copy
+  to remove. Going meaningfully further needs stored monthly totals (not approved)
+  or the larger Supabase compute add-on (recommended: Pro + Small).
+- **Lesson kept:** time a single month AND a wide range on real data, and compare
+  every column, before and after (see the 0065/0069 history). The measuring helpers
+  (0072, 0074, 0075, 0077-0082) were temporary and are removed in 0084; their
+  migration files remain as history.
+
+## 2026-10-07 — "Biggest profit leaks" lists real sales only; products with no net sales are "Refunded"
+
+**Problem (owner screenshot, August, Amazon.ae).** The leaks list showed products with
+0 units and negative net sales (refunds of earlier months) and products whose every sale
+was refunded (net sales 0.00). Their negative profit is marketplace fees, not a product
+that sells badly. The earlier fix only stopped the margin being worked out for them.
+
+**Decision.** A product row with no net sales (zero or less) gets the status **Refunded**
+(not Loss, not Low margin) unless its cost is missing (setup comes first). The leaks list
+takes only product rows with units sold above zero AND net sales above zero that are Loss
+or Low margin. Refunded products have their own group in Portfolio health, their own filter
+and an insight line; the banner no longer counts them as "losing money". The marketplace
+fees they carry stay in the Marketplace P&L exactly as before. Display grouping only: no
+figure changes. The product analysis page uses the same rule (`statusOfFigures` takes net
+sales), so the table and the page agree. Tests: `npm run test:product-profit` (71 checks).

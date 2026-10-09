@@ -2588,3 +2588,35 @@ and an insight line; the banner no longer counts them as "losing money". The mar
 fees they carry stay in the Marketplace P&L exactly as before. Display grouping only: no
 figure changes. The product analysis page uses the same rule (`statusOfFigures` takes net
 sales), so the table and the page agree. Tests: `npm run test:product-profit` (71 checks).
+
+## 2026-10-08 — Noon sales posted as Order Updates count one unit; an order needs a sale to count (0085)
+
+**Found by cross-checking August and September 2026 against the noon portal and noon's
+own files** (Transaction View, Statements, Invoices and Credit Notes; Noon.ae, AED). Money
+matched to the cent: every Transaction View line type and column against the ledger (same
+line counts and sums), Net Proceeds against the Statement of Account (103,226.16 for August,
+66,091.75 for September), advertising, payouts, transfers and customer VAT. Remaining
+differences, all understood: Import VAT Recovery (-103.28 August, -83.13 September) is
+treated as input VAT by the documented noon rule, and noon's own files differ by AED 0.52
+(August) and 0.94 (September) of VAT rounding.
+
+**Two real problems, fixed in 0085** (owner approved after checking seven orders in the
+noon portal, one with two products):
+
+1. **Units.** noon books some real sales on delivery as an "order update" row; the earlier
+   "order" row carries zero Net Proceeds and so adds no line. Order updates had no unit
+   count, so the sale counted but its cost did not (gross profit overstated, still "Final").
+   Rule: a **positive item-level product-sales line of a NOON order update, with a SKU, is
+   one unit** (`quantity_basis` DERIVED_LINE_COUNT), exactly like noon's order rows. Applied
+   when lines are read (`ledger_classified_lines`), so it covers lines already recorded and
+   later uploads without a re-import; the ledger is not touched. Negative lines (returns)
+   stay without units, the refund rule (0071) returns their cost. About 53 lines, AED 9,127
+   of sales, January to September 2026.
+2. **Orders count.** `pnl_summary().orders` counted a noon return posted as a negative line
+   in a later period as an order of that period (9 of 521 in August, 3 of 393 in
+   September). An order now counts when at least one gross-sales line of it is positive.
+   An order with several products is still one order.
+
+Amazon is untouched. Not verifiable from the Transaction View: units against noon's own
+count need the Sales report (noon's Transaction View carries no quantity). Undo:
+`supabase/rollbacks/0085_revert.sql`.

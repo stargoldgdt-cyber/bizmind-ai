@@ -56,7 +56,7 @@ for orders and order updates):
 | Column | Category · line | Confidence | VAT inside |
 | --- | --- | --- | --- |
 | Net Proceeds (order) | Product sales · Net proceeds (one unit per item line) | High | — |
-| Net Proceeds (order update) | Product sales · Order updates (returns and changes, signed) | Medium | — |
+| Net Proceeds (order update) | Product sales · Order updates (returns and changes, signed). A positive item-level line with a SKU counts as one unit (0085) | Medium | — |
 | Referral Fee including VAT | Marketplace fees · Referral fee | High | Yes |
 | Fullfilment & Logistics Fees including VAT | Fulfillment · Fulfilment and logistics | High | Yes |
 | Shipping Credits including VAT | Shipping income · Shipping credits | Medium | — |

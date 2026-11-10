@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next"
 import { cn } from "cn"
+import { Analytics } from "@vercel/analytics/next"
 
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { fontVariables } from "@/config/fonts"
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           loads; this silences that one mismatch on this element only. */}
       <body className="min-h-dvh antialiased" suppressHydrationWarning>
         <TooltipProvider>{children}</TooltipProvider>
+        <Analytics />
       </body>
     </html>
   )
